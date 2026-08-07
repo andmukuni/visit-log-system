@@ -11,6 +11,15 @@ const ACCENT_STYLES = {
   orange: 'bg-orange-400 text-white shadow-sm shadow-orange-400/30',
 };
 
+const ACCENT_BG_STYLES = {
+  amber: 'bg-amber-400 shadow-sm shadow-amber-400/30',
+  emerald: 'bg-emerald-500 shadow-sm shadow-emerald-500/30',
+  sky: 'bg-sky-400 shadow-sm shadow-sky-400/30',
+  violet: 'bg-violet-500 shadow-sm shadow-violet-500/30',
+  rose: 'bg-rose-400 shadow-sm shadow-rose-400/30',
+  orange: 'bg-orange-400 shadow-sm shadow-orange-400/30',
+};
+
 const ACCENT_CYCLE = ['amber', 'emerald', 'sky', 'violet', 'rose', 'orange'];
 
 /** Rotate accent colors for KPI icon badges (reference dashboard style). */
@@ -26,6 +35,11 @@ export function kpiTone(index) {
 /** Colored badge class for a KPI / nav icon by index. */
 export function getKpiAccentClass(index) {
   return ACCENT_STYLES[kpiAccent(index)] || ACCENT_STYLES.sky;
+}
+
+/** Background-only accent (for icons with dark stroke on colored badges). */
+export function getKpiAccentBgClass(index) {
+  return ACCENT_BG_STYLES[kpiAccent(index)] || ACCENT_BG_STYLES.sky;
 }
 
 function formatTrend(value) {

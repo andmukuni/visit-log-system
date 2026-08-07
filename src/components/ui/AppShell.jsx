@@ -4,7 +4,7 @@ import { ChevronDown, Menu, X } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import NavIcon from './NavIcon';
 import Breadcrumbs from './Breadcrumbs';
-import { getKpiAccentClass } from './PortalKpiCard';
+import { getKpiAccentBgClass } from './PortalKpiCard';
 import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
@@ -27,7 +27,7 @@ function SidebarNavIcon({ iconKey, isActive, accentIndex = 0 }) {
     <span
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm transition-colors ${
         isActive
-          ? getKpiAccentClass(accentIndex)
+          ? `${getKpiAccentBgClass(accentIndex)} text-navy-950`
           : 'border border-navy-700 bg-navy-900 text-navy-400 group-hover:border-navy-600 group-hover:bg-navy-800 group-hover:text-navy-200'
       }`}
     >

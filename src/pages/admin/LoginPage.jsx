@@ -96,7 +96,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gray-950/50" />
         <div className="relative z-10 flex min-h-screen w-full flex-1 flex-col items-center justify-center px-10 py-14 xl:px-14">
           <div className="flex w-full max-w-2xl flex-col items-center text-center lg:-translate-x-4 xl:-translate-x-5">
-            <div className="mb-6 rounded-2xl bg-white/95 p-3 shadow-lg">
+            <div className="mb-6">
               <img
                 src={LOGO_SRC}
                 alt="Visitors Log System"
@@ -119,7 +119,7 @@ export default function LoginPage() {
       <main className="relative z-0 flex flex-1 items-center justify-center bg-gray-950 lg:bg-white px-6 py-12 sm:px-10 lg:-ml-14 lg:px-16 xl:-ml-[4.5rem]">
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden text-center">
-            <div className="inline-flex rounded-2xl bg-white/95 p-2.5 shadow-lg">
+            <div className="inline-flex">
               <img
                 src={LOGO_SRC}
                 alt="Visitors Log System"
