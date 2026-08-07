@@ -1,5 +1,5 @@
 import { Suspense, lazy, Component } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, createBrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import PortalLayout from './layouts/PortalLayout';
@@ -8,7 +8,6 @@ import TopProgressBar from './components/ui/TopProgressBar';
 import { useAuth } from './context/AuthContext';
 import { purgeInvalidAuthState } from './utils/authHeaders';
 import { APP_NAME_SHORT } from '../shared/branding.js';
-import { PORTALS } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
@@ -149,38 +148,38 @@ class ErrorBoundary extends Component {
 }
 
 function StationPortalLayout() {
-  return <PortalLayout portalId="station" title={`${APP_NAME_SHORT} Station`} />;
+  return <PortalLayout key="station" portalId="station" title={`${APP_NAME_SHORT} Station`} />;
 }
 
 function AdminPortalLayout() {
-  return <PortalLayout portalId="admin" title={`${APP_NAME_SHORT} Admin`} />;
+  return <PortalLayout key="admin" portalId="admin" title={`${APP_NAME_SHORT} Admin`} />;
 }
 
 function SecurityPortalLayout() {
-  return <PortalLayout portalId="security" title={`${APP_NAME_SHORT} Security`} />;
+  return <PortalLayout key="security" portalId="security" title={`${APP_NAME_SHORT} Security`} />;
 }
 
 function HostPortalLayout() {
-  return <PortalLayout portalId="host" title={`${APP_NAME_SHORT} Host`} />;
+  return <PortalLayout key="host" portalId="host" title={`${APP_NAME_SHORT} Host`} />;
 }
 
 function ManagementPortalLayout() {
-  return <PortalLayout portalId="management" title={`${APP_NAME_SHORT} Management`} />;
+  return <PortalLayout key="management" portalId="management" title={`${APP_NAME_SHORT} Management`} />;
 }
 
 function CompliancePortalLayout() {
-  return <PortalLayout portalId="compliance" title={`${APP_NAME_SHORT} Compliance`} />;
+  return <PortalLayout key="compliance" portalId="compliance" title={`${APP_NAME_SHORT} Compliance`} />;
 }
 
 function EmergencyPortalLayout() {
-  return <PortalLayout portalId="emergency" title={`${APP_NAME_SHORT} Emergency`} />;
+  return <PortalLayout key="emergency" portalId="emergency" title={`${APP_NAME_SHORT} Emergency`} />;
 }
 
 function PlatformPortalLayout() {
-  return <PortalLayout portalId="platform" title={`${APP_NAME_SHORT} Platform`} />;
+  return <PortalLayout key="platform" portalId="platform" title={`${APP_NAME_SHORT} Platform`} />;
 }
 
-export default function App() {
+function AppRoot() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -200,119 +199,7 @@ export default function App() {
       <TopProgressBar />
       <ErrorBoundary resetKey={location.pathname}>
         <Suspense fallback={<RouteLoader />}>
-          <Routes>
-            <Route path="/" element={<LoginPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/admin/login" element={<LoginPage />} />
-
-            <Route path="/kiosk" element={<KioskLayout />}>
-              <Route index element={<KioskWelcomePage />} />
-              <Route path="check-in" element={<KioskCheckInPage />} />
-              <Route path="check-out" element={<KioskCheckOutPage />} />
-            </Route>
-            <Route path="/visit/invite/:token" element={<VisitInvitePage />} />
-
-            <Route path="/station" element={<ProtectedRoute><StationPortalLayout /></ProtectedRoute>}>
-              <Route index element={<StationDashboardPage />} />
-              <Route path="visitors/new" element={<NewVisitorPage />} />
-              <Route path="vehicles/new" element={<NewVehiclePage />} />
-              <Route path="expected" element={<LazyPendingApprovals variant="expected" />} />
-              <Route path="pending" element={<LazyPendingApprovals variant="pending" />} />
-              <Route path="check-in" element={<CheckInPage />} />
-              <Route path="check-out" element={<CheckOutPage />} />
-              <Route path="visitors" element={<VisitorLogsPage />} />
-              <Route path="visitors/:id" element={<VisitDetailPage />} />
-              <Route path="vehicles" element={<VehicleLogsPage />} />
-              <Route path="occupancy" element={<OccupancyPage />} />
-              <Route path="*" element={<PlaceholderPage title="Station" portalLabel="Station" />} />
-            </Route>
-
-            <Route path="/admin" element={<ProtectedRoute><AdminPortalLayout /></ProtectedRoute>}>
-              <Route index element={<AdminDashboardPage />} />
-              <Route path="sites" element={<LazyAdminOrgPage page="sites" />} />
-              <Route path="stations" element={<LazyAdminOrgPage page="stations" />} />
-              <Route path="departments" element={<LazyAdminOrgPage page="departments" />} />
-              <Route path="hosts" element={<LazyAdminOrgPage page="hosts" />} />
-              <Route path="categories" element={<LazyAdminOrgPage page="categories" />} />
-              <Route path="badges" element={<LazyAdminOrgPage page="badges" />} />
-              <Route path="notifications" element={<AdminNotificationsPage />} />
-              <Route path="users" element={<DemoUsersPage />} />
-              <Route path="settings" element={<AdminSettingsPage />} />
-              <Route path="access-control" element={<DemoAccessControlPage />} />
-              <Route path="*" element={<PlaceholderPage title="Administration" portalLabel="Administration" />} />
-            </Route>
-
-            <Route path="/security" element={<ProtectedRoute><SecurityPortalLayout /></ProtectedRoute>}>
-              <Route index element={<SecurityDashboardPage />} />
-              <Route path="occupancy" element={<SecurityOccupancyPage />} />
-              <Route path="approvals" element={<SecurityApprovalsPage />} />
-              <Route path="exceptions" element={<SecurityExceptionsPage />} />
-              <Route path="visitors" element={<SecurityVisitorsPage />} />
-              <Route path="overdue" element={<SecurityOverduePage />} />
-              <Route path="watchlist" element={<SecurityWatchlistPage />} />
-              <Route path="incidents" element={<SecurityIncidentsPage />} />
-              <Route path="roll-call" element={<SecurityRollCallPage />} />
-              <Route path="roll-call/:id" element={<SecurityRollCallDetailPage />} />
-              <Route path="reports" element={<SecurityReportsPage />} />
-              <Route path="*" element={<PlaceholderPage title="Security" portalLabel="Security" />} />
-            </Route>
-
-            <Route path="/host" element={<ProtectedRoute><HostPortalLayout /></ProtectedRoute>}>
-              <Route index element={<HostDashboardPage />} />
-              <Route path="invite" element={<HostInvitePage />} />
-              <Route path="visitors" element={<HostVisitorsPage />} />
-              <Route path="visitors/:id" element={<HostVisitDetailPage />} />
-              <Route path="approvals" element={<HostApprovalsPage />} />
-              <Route path="on-site" element={<HostOnSitePage />} />
-              <Route path="notifications" element={<HostNotificationsPage />} />
-              <Route path="*" element={<PlaceholderPage title="Host" portalLabel="Host" />} />
-            </Route>
-
-            <Route path="/management" element={<ProtectedRoute><ManagementPortalLayout /></ProtectedRoute>}>
-              <Route index element={<ManagementDashboardPage />} />
-              <Route path="occupancy" element={<ManagementOccupancyPage />} />
-              <Route path="reports" element={<ManagementReportsPage />} />
-              <Route path="exports" element={<ManagementExportHistoryPage />} />
-              <Route path="*" element={<PlaceholderPage title="Management" portalLabel="Management" />} />
-            </Route>
-
-            <Route path="/compliance" element={<ProtectedRoute><CompliancePortalLayout /></ProtectedRoute>}>
-              <Route index element={<ComplianceDashboardPage />} />
-              <Route path="audit" element={<ComplianceAuditPage />} />
-              <Route path="approvals" element={<ComplianceApprovalsPage />} />
-              <Route path="access" element={<ComplianceAccessPage />} />
-              <Route path="incidents" element={<ComplianceIncidentsPage />} />
-              <Route path="privacy" element={<CompliancePrivacyPage />} />
-              <Route path="retention" element={<ComplianceRetentionPage />} />
-              <Route path="exports" element={<ComplianceExportLogsPage />} />
-              <Route path="reports" element={<ComplianceReportsPage />} />
-              <Route path="*" element={<PlaceholderPage title="Compliance" portalLabel="Compliance" />} />
-            </Route>
-
-            <Route path="/emergency" element={<ProtectedRoute><EmergencyPortalLayout /></ProtectedRoute>}>
-              <Route index element={<EmergencyDashboardPage />} />
-              <Route path="occupancy" element={<EmergencyOccupancyPage />} />
-              <Route path="unresolved" element={<EmergencyUnresolvedPage />} />
-              <Route path="roll-call" element={<EmergencyRollCallPage />} />
-              <Route path="roll-call/new" element={<EmergencyRollCallPage />} />
-              <Route path="roll-call/:id" element={<EmergencyRollCallDetailPage />} />
-              <Route path="*" element={<PlaceholderPage title="Emergency" portalLabel="Emergency" />} />
-            </Route>
-
-            <Route path="/platform" element={<ProtectedRoute><PlatformPortalLayout /></ProtectedRoute>}>
-              <Route index element={<PlatformDashboardPage />} />
-              <Route path="calendar" element={<PlatformCalendarPage />} />
-              <Route path="log-book" element={<PlatformLogBookPage />} />
-              <Route path="organisations" element={<PlatformOrganisationsPage />} />
-              <Route path="users" element={<PlatformUsersPage />} />
-              <Route path="health" element={<PlatformHealthPage />} />
-              <Route path="integrations" element={<PlaceholderPage title="Integrations" portalLabel="Platform" />} />
-              <Route path="support" element={<PlaceholderPage title="Support Access" portalLabel="Platform" />} />
-              <Route path="audit" element={<PlatformAuditPage />} />
-              <Route path="settings" element={<AdminSettingsPage />} />
-              <Route path="*" element={<PlaceholderPage title="Platform" portalLabel="Platform" />} />
-            </Route>
-          </Routes>
+          <Outlet />
         </Suspense>
       </ErrorBoundary>
 
@@ -336,3 +223,160 @@ export default function App() {
     </>
   );
 }
+
+export const router = createBrowserRouter([
+  {
+    element: <AppRoot />,
+    children: [
+      { path: '/', element: <LoginPage /> },
+      { path: 'login', element: <LoginPage /> },
+      { path: 'admin/login', element: <LoginPage /> },
+
+      {
+        path: 'kiosk',
+        element: <KioskLayout />,
+        children: [
+          { index: true, element: <KioskWelcomePage /> },
+          { path: 'check-in', element: <KioskCheckInPage /> },
+          { path: 'check-out', element: <KioskCheckOutPage /> },
+        ],
+      },
+      { path: 'visit/invite/:token', element: <VisitInvitePage /> },
+
+      {
+        path: 'station',
+        element: <ProtectedRoute><StationPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <StationDashboardPage /> },
+          { path: 'visitors/new', element: <NewVisitorPage /> },
+          { path: 'vehicles/new', element: <NewVehiclePage /> },
+          { path: 'expected', element: <LazyPendingApprovals variant="expected" /> },
+          { path: 'pending', element: <LazyPendingApprovals variant="pending" /> },
+          { path: 'check-in', element: <CheckInPage /> },
+          { path: 'check-out', element: <CheckOutPage /> },
+          { path: 'visitors', element: <VisitorLogsPage /> },
+          { path: 'visitors/:id', element: <VisitDetailPage /> },
+          { path: 'vehicles', element: <VehicleLogsPage /> },
+          { path: 'occupancy', element: <OccupancyPage /> },
+          { path: '*', element: <PlaceholderPage title="Station" portalLabel="Station" /> },
+        ],
+      },
+
+      {
+        path: 'admin',
+        element: <ProtectedRoute><AdminPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <AdminDashboardPage /> },
+          { path: 'sites', element: <LazyAdminOrgPage page="sites" /> },
+          { path: 'stations', element: <LazyAdminOrgPage page="stations" /> },
+          { path: 'departments', element: <LazyAdminOrgPage page="departments" /> },
+          { path: 'hosts', element: <LazyAdminOrgPage page="hosts" /> },
+          { path: 'categories', element: <LazyAdminOrgPage page="categories" /> },
+          { path: 'badges', element: <LazyAdminOrgPage page="badges" /> },
+          { path: 'notifications', element: <AdminNotificationsPage /> },
+          { path: 'users', element: <DemoUsersPage /> },
+          { path: 'settings', element: <AdminSettingsPage /> },
+          { path: 'access-control', element: <DemoAccessControlPage /> },
+          { path: '*', element: <PlaceholderPage title="Administration" portalLabel="Administration" /> },
+        ],
+      },
+
+      {
+        path: 'security',
+        element: <ProtectedRoute><SecurityPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <SecurityDashboardPage /> },
+          { path: 'occupancy', element: <SecurityOccupancyPage /> },
+          { path: 'approvals', element: <SecurityApprovalsPage /> },
+          { path: 'exceptions', element: <SecurityExceptionsPage /> },
+          { path: 'visitors', element: <SecurityVisitorsPage /> },
+          { path: 'overdue', element: <SecurityOverduePage /> },
+          { path: 'watchlist', element: <SecurityWatchlistPage /> },
+          { path: 'incidents', element: <SecurityIncidentsPage /> },
+          { path: 'roll-call', element: <SecurityRollCallPage /> },
+          { path: 'roll-call/:id', element: <SecurityRollCallDetailPage /> },
+          { path: 'reports', element: <SecurityReportsPage /> },
+          { path: '*', element: <PlaceholderPage title="Security" portalLabel="Security" /> },
+        ],
+      },
+
+      {
+        path: 'host',
+        element: <ProtectedRoute><HostPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <HostDashboardPage /> },
+          { path: 'invite', element: <HostInvitePage /> },
+          { path: 'visitors', element: <HostVisitorsPage /> },
+          { path: 'visitors/:id', element: <HostVisitDetailPage /> },
+          { path: 'approvals', element: <HostApprovalsPage /> },
+          { path: 'on-site', element: <HostOnSitePage /> },
+          { path: 'notifications', element: <HostNotificationsPage /> },
+          { path: '*', element: <PlaceholderPage title="Host" portalLabel="Host" /> },
+        ],
+      },
+
+      {
+        path: 'management',
+        element: <ProtectedRoute><ManagementPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <ManagementDashboardPage /> },
+          { path: 'occupancy', element: <ManagementOccupancyPage /> },
+          { path: 'reports', element: <ManagementReportsPage /> },
+          { path: 'exports', element: <ManagementExportHistoryPage /> },
+          { path: '*', element: <PlaceholderPage title="Management" portalLabel="Management" /> },
+        ],
+      },
+
+      {
+        path: 'compliance',
+        element: <ProtectedRoute><CompliancePortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <ComplianceDashboardPage /> },
+          { path: 'audit', element: <ComplianceAuditPage /> },
+          { path: 'approvals', element: <ComplianceApprovalsPage /> },
+          { path: 'access', element: <ComplianceAccessPage /> },
+          { path: 'incidents', element: <ComplianceIncidentsPage /> },
+          { path: 'privacy', element: <CompliancePrivacyPage /> },
+          { path: 'retention', element: <ComplianceRetentionPage /> },
+          { path: 'exports', element: <ComplianceExportLogsPage /> },
+          { path: 'reports', element: <ComplianceReportsPage /> },
+          { path: '*', element: <PlaceholderPage title="Compliance" portalLabel="Compliance" /> },
+        ],
+      },
+
+      {
+        path: 'emergency',
+        element: <ProtectedRoute><EmergencyPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <EmergencyDashboardPage /> },
+          { path: 'occupancy', element: <EmergencyOccupancyPage /> },
+          { path: 'unresolved', element: <EmergencyUnresolvedPage /> },
+          { path: 'roll-call', element: <EmergencyRollCallPage /> },
+          { path: 'roll-call/new', element: <EmergencyRollCallPage /> },
+          { path: 'roll-call/:id', element: <EmergencyRollCallDetailPage /> },
+          { path: '*', element: <PlaceholderPage title="Emergency" portalLabel="Emergency" /> },
+        ],
+      },
+
+      {
+        path: 'platform',
+        element: <ProtectedRoute><PlatformPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <PlatformDashboardPage /> },
+          { path: 'calendar', element: <PlatformCalendarPage /> },
+          { path: 'log-book', element: <PlatformLogBookPage /> },
+          { path: 'organisations', element: <PlatformOrganisationsPage /> },
+          { path: 'users', element: <PlatformUsersPage /> },
+          { path: 'health', element: <PlatformHealthPage /> },
+          { path: 'integrations', element: <PlaceholderPage title="Integrations" portalLabel="Platform" /> },
+          { path: 'support', element: <PlaceholderPage title="Support Access" portalLabel="Platform" /> },
+          { path: 'audit', element: <PlatformAuditPage /> },
+          { path: 'settings', element: <AdminSettingsPage /> },
+          { path: '*', element: <PlaceholderPage title="Platform" portalLabel="Platform" /> },
+        ],
+      },
+    ],
+  },
+]);
+
+export default AppRoot;
