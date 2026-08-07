@@ -9,6 +9,7 @@ export { default as CategoryBarChart } from './CategoryBarChart';
 export { default as HighlightBalanceCard } from './HighlightBalanceCard';
 export { default as QuickActionList } from './QuickActionList';
 export { default as DashboardOverviewLayout } from './DashboardOverviewLayout';
+export { default as PortalDashboardLayout } from './PortalDashboardLayout';
 export { default as DashboardInfoCard } from './DashboardInfoCard';
 export { default as RollCallBanner } from './RollCallBanner';
 export { buildWeeklySeries, metricTarget } from './utils';

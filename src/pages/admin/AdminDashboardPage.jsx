@@ -83,6 +83,7 @@ export default function AdminDashboardPage() {
       <PageHeader
         title="Admin Dashboard"
         subtitle={orgName ? `${orgName} — organisation overview and operational metrics` : 'Organisation overview and operational metrics'}
+        breadcrumbs={[{ label: 'Administration', to: '/admin' }, { label: 'Dashboard' }]}
         actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
       />
 

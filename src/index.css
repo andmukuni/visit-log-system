@@ -253,3 +253,13 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Hide scrollbars while keeping scroll behaviour */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

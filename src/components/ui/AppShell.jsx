@@ -1,6 +1,6 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import NavIcon from './NavIcon';
 import Breadcrumbs from './Breadcrumbs';
@@ -54,7 +54,10 @@ function SidebarNavLink({ item, onNavigate, accentIndex = 0 }) {
       {({ isActive }) => (
         <>
           <SidebarNavIcon iconKey={item.key} isActive={isActive} accentIndex={accentIndex} />
-          <span className="truncate">{item.name}</span>
+          <span className="min-w-0 flex-1 truncate">{item.name}</span>
+          {isActive ? (
+            <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-cyan-400" aria-hidden="true" />
+          ) : null}
         </>
       )}
     </NavLink>
@@ -106,6 +109,92 @@ function SidebarNavSection({ label, items, onNavigate, bordered = false }) {
   );
 }
 
+function SidebarScrollNav({ children }) {
+  const navRef = useRef(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+
+  const updateScrollHint = useCallback(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const hasOverflow = el.scrollHeight > el.clientHeight + 4;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 12;
+    setCanScrollDown(hasOverflow && !atBottom);
+  }, []);
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return undefined;
+
+    updateScrollHint();
+    el.addEventListener('scroll', updateScrollHint, { passive: true });
+    window.addEventListener('resize', updateScrollHint);
+
+    const observer = new ResizeObserver(updateScrollHint);
+    observer.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', updateScrollHint);
+      window.removeEventListener('resize', updateScrollHint);
+      observer.disconnect();
+    };
+  }, [updateScrollHint, children]);
+
+  const scrollDown = () => {
+    const el = navRef.current;
+    if (!el) return;
+    el.scrollBy({ top: Math.max(el.clientHeight * 0.75, 120), behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <nav
+        ref={navRef}
+        className="scrollbar-hide flex-1 space-y-1 overflow-y-auto px-4 py-4"
+      >
+        {children}
+      </nav>
+
+      {canScrollDown && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-gradient-to-t from-navy-950 from-40% via-navy-950/80 to-transparent px-4 pb-2 pt-10"
+        >
+          <button
+            type="button"
+            onClick={scrollDown}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-navy-700/90 bg-navy-900/95 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300 shadow-lg backdrop-blur-sm transition-colors hover:border-cyan-600/40 hover:bg-navy-800 hover:text-cyan-300"
+            aria-label="Scroll to more navigation links"
+          >
+            <ChevronDown size={14} className="shrink-0 animate-bounce text-cyan-400" aria-hidden="true" />
+            <span>More links below</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getShellBreadcrumbs(pageHeader, portalId) {
+  if (pageHeader.breadcrumbs?.length > 0) {
+    return pageHeader.breadcrumbs;
+  }
+  if (!pageHeader.title) return [];
+
+  const portalMeta = PORTALS[portalId];
+  if (!portalMeta) {
+    return [{ label: pageHeader.title }];
+  }
+
+  const portalLabel = portalMeta.label.replace(/ Portal$/, '');
+  const pageLabel = pageHeader.title.endsWith(' Dashboard')
+    ? 'Dashboard'
+    : pageHeader.title;
+
+  return [
+    { label: portalLabel, to: portalMeta.routePrefix },
+    { label: pageLabel },
+  ];
+}
+
 function ShellBody({ portalId, title }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, hasPermission } = useAuth();
@@ -117,8 +206,8 @@ function ShellBody({ portalId, title }) {
   const { primary, system, settings } = groupNavItems(navItems);
   const closeSidebar = () => setSidebarOpen(false);
   const portalMeta = PORTALS[portalId];
-  const portalLabel = portalMeta?.label || title;
   const sectionLabels = portalMeta?.navSections || { primary: 'Overview', system: 'System' };
+  const shellBreadcrumbs = getShellBreadcrumbs(pageHeader, portalId);
 
   useEffect(() => {
     if (!sidebarOpen) {
@@ -134,30 +223,25 @@ function ShellBody({ portalId, title }) {
   return (
     <div className="min-h-screen bg-navy-50">
       <aside
-        className={`theme-fixed fixed inset-y-0 left-0 z-50 flex w-[var(--sidebar-width)] flex-col bg-navy-950 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`theme-fixed fixed inset-y-0 left-0 z-50 flex min-h-0 w-[var(--sidebar-width)] flex-col bg-navy-950 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-navy-800">
           <Link to={PORTALS[portalId]?.routePrefix || '/'} aria-label={title} className="flex items-center gap-2.5 min-w-0">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/95 p-1">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center">
               <img
                 src="/images/logo.png"
                 alt=""
-                width={32}
-                height={32}
+                width={40}
+                height={40}
                 decoding="async"
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain brightness-0 invert"
               />
             </span>
-            <div className="min-w-0">
-              <span className="text-white font-semibold text-sm block leading-tight truncate">
-                Visitors Log
-              </span>
-              <span className="text-navy-400 text-[10px] block leading-tight truncate">
-                {portalLabel}
-              </span>
-            </div>
+            <span className="truncate text-base font-black leading-tight tracking-tight text-white">
+              Visitors Log
+            </span>
           </Link>
           <button
             type="button"
@@ -169,7 +253,7 @@ function ShellBody({ portalId, title }) {
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+        <SidebarScrollNav>
           <SidebarNavSection label={sectionLabels.primary} items={primary} onNavigate={closeSidebar} />
           {sectionLabels.system && (
             <SidebarNavSection
@@ -184,7 +268,7 @@ function ShellBody({ portalId, title }) {
             hasPermission={hasPermission}
             onNavigate={closeSidebar}
           />
-        </nav>
+        </SidebarScrollNav>
 
         {settings.length > 0 && (
           <div className="shrink-0 border-t border-navy-800 p-4 space-y-1">
@@ -210,12 +294,8 @@ function ShellBody({ portalId, title }) {
             >
               <Menu size={20} />
             </button>
-            {pageHeader.breadcrumbs?.length > 0 ? (
-              <Breadcrumbs items={pageHeader.breadcrumbs} variant="shell" className="min-w-0 flex-1" />
-            ) : pageHeader.title ? (
-              <h1 className="truncate text-lg font-bold tracking-tight text-navy-900">
-                {pageHeader.title}
-              </h1>
+            {shellBreadcrumbs.length > 0 ? (
+              <Breadcrumbs items={shellBreadcrumbs} variant="shell" className="min-w-0 flex-1" />
             ) : (
               <div className="hidden md:block">
                 <p className="text-sm text-navy-400">

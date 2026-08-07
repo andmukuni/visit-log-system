@@ -5,6 +5,7 @@ const EMPTY_HEADER = {
   subtitle: '',
   breadcrumbs: [],
   actions: null,
+  iconKey: '',
 };
 
 const PageHeaderContext = createContext({
@@ -28,7 +29,7 @@ export function usePageHeaderState() {
   return useContext(PageHeaderContext);
 }
 
-export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions }) {
+export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions, iconKey }) {
   const { setHeader } = usePageHeaderState();
 
   useEffect(() => {
@@ -37,7 +38,8 @@ export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions })
       subtitle: subtitle || '',
       breadcrumbs: breadcrumbs || [],
       actions: actions ?? null,
+      iconKey: iconKey || '',
     });
     return () => setHeader(EMPTY_HEADER);
-  }, [title, subtitle, breadcrumbs, actions, setHeader]);
+  }, [title, subtitle, breadcrumbs, actions, iconKey, setHeader]);
 }
