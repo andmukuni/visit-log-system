@@ -1,6 +1,5 @@
 # Coolify deployment — single app container (API + SPA on one port).
-# Environment variables: set in Coolify UI (Environment Variables tab).
-# Do NOT bind host ports here — Coolify proxy routes to expose:4000.
+# Secrets and DATABASE_URL: set in Coolify UI (Environment Variables tab).
 
 services:
   node-template:
@@ -11,11 +10,26 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      DATABASE_URL: ${DATABASE_URL}
+      DB_SSL: ${DB_SSL:-0}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET}
+      APP_URL: ${APP_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@template.dev}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Visit Log Admin}
     volumes:
       - node_template_uploads:/app/uploads
     expose:
       - "4000"
-    # Local dev only — do not use on Coolify (host 4000 is often already taken):
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    # Local dev only:
     # ports:
     #   - "4000:4000"
 

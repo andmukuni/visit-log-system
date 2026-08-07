@@ -32,12 +32,13 @@ import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminSettingsRouter } from './routes/adminSettings.js';
 import { createKioskRouter } from './routes/kiosk.js';
 import pool from './db.js';
+import { waitForDatabase } from './waitForDatabase.js';
 import { retryFailedDeliveries } from './notificationService.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+dotenv.config({ quiet: true });
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT || 4000);
@@ -204,6 +205,7 @@ async function startHttpServer() {
 }
 
 async function main() {
+  await waitForDatabase();
   await bootstrapDatabase();
   startNotificationRetryWorker();
   await startHttpServer();

@@ -10,8 +10,8 @@ import {
 } from './sqlDialect.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+dotenv.config({ quiet: true });
 
 const driver = resolveDbDriver();
 
