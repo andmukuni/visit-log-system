@@ -10,6 +10,7 @@ import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/Analyti
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { PORTALS, getVisibleNavItems, groupNavItems, getAccessiblePortals } from '../../../shared/portalNavigation.js';
 import { PORTAL_ICONS } from '../../../shared/navIcons.js';
+import { APP_NAME, APP_NAME_SHORT, LOGO_PATH } from '../../../shared/branding.js';
 
 function PortalOutletLoader() {
   return (
@@ -228,19 +229,19 @@ function ShellBody({ portalId, title }) {
         }`}
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-navy-800">
-          <Link to={PORTALS[portalId]?.routePrefix || '/'} aria-label={title} className="flex items-center gap-2.5 min-w-0">
+          <Link to={PORTALS[portalId]?.routePrefix || '/'} aria-label={title || APP_NAME} className="flex items-center gap-2.5 min-w-0">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center">
               <img
-                src="/images/logo.png"
+                src={LOGO_PATH}
                 alt=""
                 width={40}
                 height={40}
                 decoding="async"
-                className="h-full w-full object-contain brightness-0 invert"
+                className="h-full w-full object-contain"
               />
             </span>
             <span className="truncate text-2xl font-black uppercase leading-tight tracking-tight text-white">
-              Visitors Log
+              {APP_NAME_SHORT}
             </span>
           </Link>
           <button

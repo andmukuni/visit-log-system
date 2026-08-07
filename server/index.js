@@ -35,6 +35,7 @@ import pool from './db.js';
 import { waitForDatabase } from './waitForDatabase.js';
 import { retryFailedDeliveries } from './notificationService.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
+import { APP_NAME } from '../shared/branding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
@@ -200,7 +201,7 @@ async function startHttpServer() {
 
   const listenTarget = process.env.PASSENGER === '1' ? 'passenger' : '0.0.0.0';
   app.listen(listenTarget === 'passenger' ? PORT : PORT, listenTarget === 'passenger' ? undefined : '0.0.0.0', () => {
-    console.log(`[server] NODE TEMPLATE API listening on port ${PORT}`);
+    console.log(`[server] ${APP_NAME} API listening on port ${PORT}`);
   });
 }
 

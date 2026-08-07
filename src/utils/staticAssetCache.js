@@ -1,9 +1,11 @@
-const STATIC_ASSET_CACHE = 'vm360-static-assets-v1';
+import { LOGO_PATH } from '../../shared/branding.js';
+
+const STATIC_ASSET_CACHE = 'visitors-log-static-assets-v1';
 
 /** Known long-lived public assets to warm in the browser Cache Storage layer. */
 export const CACHED_STATIC_ASSETS = Object.freeze({
   loginHero: '/images/login-hero.webp',
-  logo: '/images/logo.png',
+  logo: LOGO_PATH,
 });
 
 /**

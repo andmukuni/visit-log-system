@@ -24,8 +24,8 @@ describe('admin settings defaults', () => {
     assert.equal(DEFAULT_SECURITY.mfa_enabled, true);
   });
 
-  it('has VM360 general defaults', () => {
-    assert.match(DEFAULT_GENERAL.app_name, /VM360/i);
+  it('has Visitors Log general defaults', () => {
+    assert.match(DEFAULT_GENERAL.app_name, /Visitors Log/i);
   });
 
   it('detects SMTP configuration state', () => {
@@ -48,7 +48,7 @@ describe('admin settings defaults', () => {
       enabled: true,
       provider: 'ontech',
       access_id: 'key',
-      sender_id: 'VM360',
+      sender_id: 'Visitors Log',
       source: 'database',
     }), true);
   });

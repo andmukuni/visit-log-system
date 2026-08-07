@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import pool from './db.js';
 import { generateId } from './visitorSchema.js';
+import { APP_NAME, SMS_SENDER_PREFIX } from '../shared/branding.js';
 
 export function generateInviteToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -114,71 +115,71 @@ const DEFAULT_TEMPLATES = [
     key: 'visit.pending_approval',
     subject: 'Approval required',
     inApp: 'Visitor {{visitor_name}} is awaiting your approval.',
-    email: 'Hello {{host_name}},\n\nVisitor {{visitor_name}} requires your approval before check-in.\n\nPass code: {{pass_code}}\n\n— VM360',
-    sms: 'VM360: {{visitor_name}} needs approval. Pass code {{pass_code}}.',
+    email: `Hello {{host_name}},\n\nVisitor {{visitor_name}} requires your approval before check-in.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} needs approval. Pass code {{pass_code}}.`,
   },
   {
     key: 'visit.approved',
     subject: 'Visit approved',
     inApp: 'Your visit for {{visitor_name}} has been approved.',
-    email: 'Hello {{visitor_name}},\n\nYour visit has been approved.\n\nPass code: {{pass_code}}\nConfirm details: {{invite_url}}\n\n— VM360',
-    sms: 'VM360: Visit approved. Pass code {{pass_code}}. {{invite_url}}',
+    email: `Hello {{visitor_name}},\n\nYour visit has been approved.\n\nPass code: {{pass_code}}\nConfirm details: {{invite_url}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit approved. Pass code {{pass_code}}. {{invite_url}}`,
   },
   {
     key: 'visit.rejected',
     subject: 'Visit rejected',
     inApp: 'The visit for {{visitor_name}} was rejected.',
-    email: 'Hello {{visitor_name}},\n\nUnfortunately your visit request was not approved.\n\n— VM360',
-    sms: 'VM360: Your visit request was not approved.',
+    email: `Hello {{visitor_name}},\n\nUnfortunately your visit request was not approved.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Your visit request was not approved.`,
   },
   {
     key: 'visit.checked_in',
     subject: 'Visitor arrived',
     inApp: '{{visitor_name}} has checked in at reception.',
-    email: 'Hello {{host_name}},\n\n{{visitor_name}} has checked in.\n\n— VM360',
-    sms: 'VM360: {{visitor_name}} has checked in.',
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked in.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked in.`,
   },
   {
     key: 'visit.checked_out',
     subject: 'Visitor departed',
     inApp: '{{visitor_name}} has checked out.',
-    email: 'Hello {{host_name}},\n\n{{visitor_name}} has checked out.\n\n— VM360',
-    sms: 'VM360: {{visitor_name}} has checked out.',
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked out.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked out.`,
   },
   {
     key: 'visit.invite_sent',
     subject: 'Visitor invitation',
     inApp: 'An invitation was sent to {{visitor_name}}.',
-    email: 'Hello {{visitor_name}},\n\nYou are invited to visit. Please confirm your details:\n{{invite_url}}\n\nYour pass code: {{pass_code}}\n\n— VM360',
-    sms: 'VM360 invite: confirm at {{invite_url}} Pass code {{pass_code}}',
+    email: `Hello {{visitor_name}},\n\nYou are invited to visit. Please confirm your details:\n{{invite_url}}\n\nYour pass code: {{pass_code}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX} invite: confirm at {{invite_url}} Pass code {{pass_code}}`,
   },
   {
     key: 'visit.arrived_at_gate',
     subject: 'Visitor at gate',
     inApp: '{{visitor_name}} has arrived at the gate.',
     email: '{{visitor_name}} has arrived at the gate.\n\nPass code: {{pass_code}}',
-    sms: 'VM360: {{visitor_name}} at gate. Code {{pass_code}}',
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} at gate. Code {{pass_code}}`,
   },
   {
     key: 'visit.vip_arrival',
     subject: 'VIP visitor arrival',
     inApp: 'VIP/VVIP visitor {{visitor_name}} has arrived.',
     email: 'VIP/VVIP visitor {{visitor_name}} has arrived.\n\nHost: {{host_name}}',
-    sms: 'VM360 VIP arrival: {{visitor_name}}',
+    sms: `${SMS_SENDER_PREFIX} VIP arrival: {{visitor_name}}`,
   },
   {
     key: 'visit.cancelled',
     subject: 'Visit cancelled',
     inApp: 'The visit for {{visitor_name}} was cancelled.',
     email: 'The visit for {{visitor_name}} has been cancelled.',
-    sms: 'VM360: Visit for {{visitor_name}} cancelled.',
+    sms: `${SMS_SENDER_PREFIX}: Visit for {{visitor_name}} cancelled.`,
   },
   {
     key: 'visit.rescheduled',
     subject: 'Visit rescheduled',
     inApp: 'The visit for {{visitor_name}} was rescheduled.',
     email: 'The visit for {{visitor_name}} was rescheduled to {{expected_at}}.',
-    sms: 'VM360: Visit rescheduled for {{visitor_name}}.',
+    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled for {{visitor_name}}.`,
   },
 ];
 

@@ -1,5 +1,5 @@
 /**
- * VM360 RBAC permission catalog — shared by API and UI.
+ * Visitors Log RBAC permission catalog — shared by API and UI.
  */
 
 export const RBAC_SUPER_ADMIN_SLUG = 'super_admin';

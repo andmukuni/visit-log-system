@@ -1,5 +1,6 @@
 import pool from '../db.js';
 import { writeAuditLog } from '../auditService.js';
+import { APP_NAME, EMAIL_FROM_NAME_DEFAULT } from '../../shared/branding.js';
 
 export const SETTING_KEYS = {
   NOTIFICATIONS: 'notifications',
@@ -46,8 +47,8 @@ export const DEFAULT_SECURITY = {
 };
 
 export const DEFAULT_GENERAL = {
-  app_name: 'VM360 Visitor Management',
-  support_email: 'support@vm360.local',
+  app_name: APP_NAME,
+  support_email: 'support@visitors.local',
   support_phone: '',
 };
 
@@ -59,7 +60,7 @@ export const DEFAULT_SMTP = {
   user: '',
   pass: '',
   from: '',
-  from_name: 'VM360 Visitor Management',
+  from_name: EMAIL_FROM_NAME_DEFAULT,
 };
 
 export const DEFAULT_DOJAH = {
@@ -147,8 +148,8 @@ function envSmtpConfig() {
     secure: String(process.env.SMTP_SECURE || '').trim() === '1',
     user: String(process.env.SMTP_USER || '').trim(),
     pass: String(process.env.SMTP_PASS || ''),
-    from: String(process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@vm360.local').trim(),
-    from_name: String(process.env.EMAIL_FROM_NAME || 'VM360 Visitor Management').trim(),
+    from: String(process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@visitors.local').trim(),
+    from_name: String(process.env.EMAIL_FROM_NAME || EMAIL_FROM_NAME_DEFAULT).trim(),
     source: 'env',
   };
 }

@@ -57,7 +57,7 @@ describe('sms adapter', () => {
 
     const result = await sendSms({
       to: '+260971000001',
-      body: 'VM360 test message',
+      body: 'Visitors Log test message',
     });
     assert.equal(result.provider, 'console');
     assert.ok(result.messageId);

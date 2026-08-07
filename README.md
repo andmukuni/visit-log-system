@@ -1,4 +1,4 @@
-# Visit Log System
+# Visitors Log System
 
 Secure, mobile-responsive visitor and vehicle management for reception desks and security gates. Replaces manual registers with searchable visit history, role-based access control, live occupancy, and management reports.
 

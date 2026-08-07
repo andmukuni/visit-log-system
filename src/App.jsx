@@ -7,6 +7,8 @@ import { Modal, IconButton } from './components/ui';
 import TopProgressBar from './components/ui/TopProgressBar';
 import { useAuth } from './context/AuthContext';
 import { purgeInvalidAuthState } from './utils/authHeaders';
+import { APP_NAME_SHORT } from '../shared/branding.js';
+import { PORTALS } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
@@ -147,35 +149,35 @@ class ErrorBoundary extends Component {
 }
 
 function StationPortalLayout() {
-  return <PortalLayout portalId="station" title="VM360 Station" />;
+  return <PortalLayout portalId="station" title={`${APP_NAME_SHORT} Station`} />;
 }
 
 function AdminPortalLayout() {
-  return <PortalLayout portalId="admin" title="VM360 Admin" />;
+  return <PortalLayout portalId="admin" title={`${APP_NAME_SHORT} Admin`} />;
 }
 
 function SecurityPortalLayout() {
-  return <PortalLayout portalId="security" title="VM360 Security" />;
+  return <PortalLayout portalId="security" title={`${APP_NAME_SHORT} Security`} />;
 }
 
 function HostPortalLayout() {
-  return <PortalLayout portalId="host" title="VM360 Host" />;
+  return <PortalLayout portalId="host" title={`${APP_NAME_SHORT} Host`} />;
 }
 
 function ManagementPortalLayout() {
-  return <PortalLayout portalId="management" title="VM360 Management" />;
+  return <PortalLayout portalId="management" title={`${APP_NAME_SHORT} Management`} />;
 }
 
 function CompliancePortalLayout() {
-  return <PortalLayout portalId="compliance" title="VM360 Compliance" />;
+  return <PortalLayout portalId="compliance" title={`${APP_NAME_SHORT} Compliance`} />;
 }
 
 function EmergencyPortalLayout() {
-  return <PortalLayout portalId="emergency" title="VM360 Emergency" />;
+  return <PortalLayout portalId="emergency" title={`${APP_NAME_SHORT} Emergency`} />;
 }
 
 function PlatformPortalLayout() {
-  return <PortalLayout portalId="platform" title="VM360 Platform" />;
+  return <PortalLayout portalId="platform" title={`${APP_NAME_SHORT} Platform`} />;
 }
 
 export default function App() {

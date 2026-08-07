@@ -5,12 +5,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { LoadingButton, IconButton } from '../../components/ui';
 import { purgeInvalidAuthState } from '../../utils/authHeaders';
+import { APP_NAME, APP_NAME_SHORT, APP_TAGLINE, LOGO_PATH } from '../../../shared/branding.js';
 import { CACHED_STATIC_ASSETS, warmLoginHeroAsset, warmLogoAsset } from '../../utils/staticAssetCache';
 import { resolvePrimaryPortal, PORTALS } from '../../../shared/portalNavigation.js';
 import { permissionMatches } from '../../../shared/rbacPermissions.js';
 
 const LOGIN_HERO_SRC = CACHED_STATIC_ASSETS.loginHero;
-const LOGO_SRC = CACHED_STATIC_ASSETS.logo;
+const LOGO_SRC = LOGO_PATH;
 
 function portalRouteForPermissions(permissions = []) {
   const hasPermission = (key) => permissionMatches(permissions, key);
@@ -99,7 +100,7 @@ export default function LoginPage() {
             <div className="mb-6">
               <img
                 src={LOGO_SRC}
-                alt="Visitors Log System"
+                alt={APP_NAME}
                 width={200}
                 height={80}
                 decoding="async"
@@ -107,10 +108,10 @@ export default function LoginPage() {
               />
             </div>
             <h1 className="whitespace-nowrap text-[clamp(1.5rem,2.6vw,2.75rem)] font-black text-white uppercase leading-none tracking-tight">
-              Visitors Log System
+              {APP_NAME}
             </h1>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-gray-300">
-              Gate & reception — appointments, vehicles, and access control in one place.
+              {APP_TAGLINE}
             </p>
           </div>
         </div>
@@ -122,14 +123,14 @@ export default function LoginPage() {
             <div className="inline-flex">
               <img
                 src={LOGO_SRC}
-                alt="Visitors Log System"
+                alt={APP_NAME}
                 width={160}
                 height={64}
                 decoding="async"
                 className="h-14 max-w-[160px] w-auto object-contain sm:h-16 sm:max-w-[200px]"
               />
             </div>
-            <p className="text-gray-400 text-sm mt-3">VM360 Portal</p>
+            <p className="text-gray-400 text-sm mt-3">{APP_NAME_SHORT}</p>
           </div>
 
           <div className="mb-8">

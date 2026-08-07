@@ -1,4 +1,5 @@
 import express from 'express';
+import { API_SERVICE_NAME } from '../../shared/branding.js';
 
 export function createHealthRouter() {
   const router = express.Router();
@@ -6,7 +7,7 @@ export function createHealthRouter() {
   router.get('/health', (_req, res) => {
     res.json({
       ok: true,
-      service: 'node-template-api',
+      service: API_SERVICE_NAME,
       version: '1.0.0',
     });
   });

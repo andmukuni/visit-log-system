@@ -1,3 +1,5 @@
+import { EMAIL_FROM_NAME_DEFAULT } from '../../shared/branding.js';
+
 function truthy(value) {
   return value === '1' || value === 'true' || value === 'yes';
 }
@@ -8,8 +10,8 @@ export function getAppBaseUrl() {
 
 export function getEmailConfig() {
   const provider = String(process.env.EMAIL_PROVIDER || 'console').toLowerCase();
-  const from = process.env.EMAIL_FROM || 'noreply@vm360.local';
-  const fromName = process.env.EMAIL_FROM_NAME || 'VM360 Visitor Management';
+  const from = process.env.EMAIL_FROM || 'noreply@visitors.local';
+  const fromName = process.env.EMAIL_FROM_NAME || EMAIL_FROM_NAME_DEFAULT;
 
   const sendgrid = {
     apiKey: process.env.SENDGRID_API_KEY || '',
