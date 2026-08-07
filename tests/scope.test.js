@@ -1,0 +1,83 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  canTransition,
+  visitMatchesScope,
+  visitMatchesHost,
+  VISIT_TRANSITIONS,
+} from '../server/scopeService.js';
+import { permissionMatches } from '../shared/rbacPermissions.js';
+
+describe('visit state transitions', () => {
+  it('allows approved → reception check-in', () => {
+    assert.equal(canTransition('approved', 'reception_check_in'), true);
+  });
+
+  it('allows expected → arrived_at_gate', () => {
+    assert.equal(canTransition('expected', 'arrived_at_gate'), true);
+  });
+
+  it('blocks pending_approval → reception_check_in', () => {
+    assert.equal(canTransition('pending_approval', 'reception_check_in'), false);
+  });
+
+  it('blocks completed → any transition', () => {
+    assert.equal(canTransition('completed', 'checked_in'), false);
+  });
+
+  it('defines all expected statuses', () => {
+    assert.ok(VISIT_TRANSITIONS.approved.includes('reception_check_in'));
+    assert.ok(VISIT_TRANSITIONS.expected.includes('arrived_at_gate'));
+    assert.ok(VISIT_TRANSITIONS.pending_approval.includes('rejected'));
+  });
+});
+
+describe('tenant scope', () => {
+  const scope = { organisation_id: 'org-1', site_id: 'site-1' };
+
+  it('allows visit in same org and site', () => {
+    const visit = { organisation_id: 'org-1', site_id: 'site-1' };
+    assert.equal(visitMatchesScope(visit, scope), true);
+  });
+
+  it('denies cross-organisation access', () => {
+    const visit = { organisation_id: 'org-2', site_id: 'site-1' };
+    assert.equal(visitMatchesScope(visit, scope), false);
+  });
+
+  it('denies cross-site access when site scoped', () => {
+    const visit = { organisation_id: 'org-1', site_id: 'site-2' };
+    assert.equal(visitMatchesScope(visit, scope), false);
+  });
+});
+
+describe('host record scope', () => {
+  it('allows visit assigned to host', () => {
+    const visit = { host_id: 'host-1', created_by: 'user-2' };
+    assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), true);
+  });
+
+  it('allows visit created by user', () => {
+    const visit = { host_id: 'host-2', created_by: 'user-1' };
+    assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), true);
+  });
+
+  it('denies unrelated host visit', () => {
+    const visit = { host_id: 'host-2', created_by: 'user-3' };
+    assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), false);
+  });
+});
+
+describe('RBAC permissionMatches', () => {
+  it('grants super_admin slug all permissions', () => {
+    assert.equal(permissionMatches(['super_admin'], 'station.visitors.checkin'), true);
+  });
+
+  it('denies missing permission', () => {
+    assert.equal(permissionMatches(['host.dashboard'], 'station.visitors.checkin'), false);
+  });
+
+  it('allows exact permission match', () => {
+    assert.equal(permissionMatches(['station.visitors.checkin'], 'station.visitors.checkin'), true);
+  });
+});

@@ -1,0 +1,16 @@
+services:
+  node-template:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+    volumes:
+      - node_template_uploads:/app/uploads
+    ports:
+      - "4000:4000"
+
+volumes:
+  node_template_uploads:

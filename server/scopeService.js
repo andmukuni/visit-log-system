@@ -1,0 +1,165 @@
+/**
+ * Tenant and record scope enforcement — deny by default.
+ */
+
+export async function getUserScope(pool, userId) {
+  const [[scope]] = await pool.query(
+    `SELECT us.*, o.name AS organisation_name, s.name AS site_name, st.name AS station_name
+     FROM user_scopes us
+     LEFT JOIN organisations o ON o.id = us.organisation_id
+     LEFT JOIN sites s ON s.id = us.site_id
+     LEFT JOIN stations st ON st.id = us.station_id
+     WHERE us.user_id = ?
+     LIMIT 1`,
+    [userId],
+  );
+  return scope || null;
+}
+
+export function isSuperAdmin(claims = {}) {
+  const perms = claims.permissions || [];
+  return claims.role === 'admin' && perms.length === 0
+    || perms.includes('super_admin')
+    || perms.includes('*');
+}
+
+/**
+ * Returns { ok: true, scope } or { ok: false, status, message }
+ */
+export async function requireUserScope(pool, userId, claims = {}) {
+  if (isSuperAdmin(claims)) {
+    const [[org]] = await pool.query('SELECT id FROM organisations LIMIT 1');
+    if (org) {
+      const scope = await getUserScope(pool, userId);
+      if (scope?.organisation_id) return { ok: true, scope, elevated: true };
+    }
+    return { ok: true, scope: null, elevated: true };
+  }
+
+  const scope = await getUserScope(pool, userId);
+  if (!scope?.organisation_id) {
+    return { ok: false, status: 403, message: 'No organisation scope assigned to this account.' };
+  }
+  return { ok: true, scope, elevated: false };
+}
+
+export function visitMatchesScope(visit, scope, { elevated = false } = {}) {
+  if (elevated || !scope?.organisation_id) return true;
+  if (visit.organisation_id !== scope.organisation_id) return false;
+  if (scope.site_id && visit.site_id !== scope.site_id) return false;
+  return true;
+}
+
+export async function loadVisitScoped(pool, visitId, scope, { elevated = false } = {}) {
+  const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
+  if (!visit) return { ok: false, status: 404, message: 'Visit not found.' };
+  if (!visitMatchesScope(visit, scope, { elevated })) {
+    return { ok: false, status: 403, message: 'Access denied for this visit record.' };
+  }
+  return { ok: true, visit };
+}
+
+export const VISIT_TRANSITIONS = {
+  pre_registered: ['pending_approval', 'approved', 'expected', 'cancelled'],
+  pending_approval: ['approved', 'expected', 'rejected', 'cancelled'],
+  approved: ['expected', 'arrived_at_gate', 'checked_in', 'reception_check_in', 'cancelled', 'expired'],
+  expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'cancelled', 'expired'],
+  arrived_at_gate: ['entered_premises', 'cancelled'],
+  entered_premises: ['reception_check_in', 'checked_in', 'cancelled'],
+  reception_check_in: ['waiting', 'in_meeting', 'checked_in', 'checked_out'],
+  checked_in: ['waiting', 'in_meeting', 'checked_out', 'overdue', 'completed'],
+  waiting: ['in_meeting', 'checked_out'],
+  in_meeting: ['checked_out'],
+  overdue: ['checked_out', 'completed'],
+  checked_out: ['left_premises', 'completed'],
+  left_premises: ['completed'],
+  rejected: [],
+  cancelled: [],
+  denied: [],
+  expired: [],
+  completed: [],
+};
+
+export function canTransition(fromStatus, toStatus) {
+  const allowed = VISIT_TRANSITIONS[fromStatus] || [];
+  return allowed.includes(toStatus);
+}
+
+/** Resolve the employee/host record linked to a user account */
+export async function resolveHostForUser(pool, userId, userEmail = '') {
+  const uid = String(userId || '').trim();
+  if (uid) {
+    const [[byUserId]] = await pool.query(
+      `SELECT * FROM hosts WHERE user_id = ? AND status = 'active' LIMIT 1`,
+      [uid],
+    );
+    if (byUserId) return byUserId;
+  }
+
+  const email = String(userEmail || '').trim().toLowerCase();
+  if (email) {
+    const [[byEmail]] = await pool.query(
+      `SELECT * FROM hosts WHERE LOWER(email) = ? AND status = 'active' LIMIT 1`,
+      [email],
+    );
+    if (byEmail) return byEmail;
+  }
+
+  return null;
+}
+
+export function visitMatchesHost(visit, { hostId, userId, elevated = false } = {}) {
+  if (elevated) return true;
+  if (!visit) return false;
+  if (hostId && visit.host_id === hostId) return true;
+  if (userId && visit.created_by === userId) return true;
+  return false;
+}
+
+export async function requireHostContext(pool, userId, userEmail, claims = {}) {
+  const scopeResult = await requireUserScope(pool, userId, claims);
+  if (!scopeResult.ok) {
+    return { ok: false, status: scopeResult.status, message: scopeResult.message };
+  }
+
+  const host = await resolveHostForUser(pool, userId, userEmail);
+  if (!host && !scopeResult.elevated) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'No host profile is linked to this account. Contact your administrator.',
+    };
+  }
+
+  return {
+    ok: true,
+    scope: scopeResult.scope,
+    host,
+    elevated: scopeResult.elevated,
+  };
+}
+
+export async function loadVisitForHost(pool, visitId, hostContext) {
+  const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
+  if (!visit) return { ok: false, status: 404, message: 'Visit not found.' };
+
+  if (!visitMatchesHost(visit, {
+    hostId: hostContext.host?.id,
+    userId: hostContext.userId,
+    elevated: hostContext.elevated,
+  })) {
+    return { ok: false, status: 403, message: 'You can only access visits assigned to you.' };
+  }
+
+  if (hostContext.scope?.organisation_id && visit.organisation_id !== hostContext.scope.organisation_id) {
+    return { ok: false, status: 403, message: 'Access denied for this organisation.' };
+  }
+
+  return { ok: true, visit };
+}
+
+/** SQL fragment: restrict visits to a host's own records */
+export function hostVisitFilter(alias = 'vis') {
+  return `(${alias}.host_id = ? OR ${alias}.created_by = ?)`;
+}
+
