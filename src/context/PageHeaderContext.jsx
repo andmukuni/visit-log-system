@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+const EMPTY_BREADCRUMBS = [];
 
 const EMPTY_HEADER = {
   title: '',
   subtitle: '',
-  breadcrumbs: [],
+  breadcrumbs: EMPTY_BREADCRUMBS,
   actions: null,
   iconKey: '',
 };
@@ -13,10 +15,27 @@ const PageHeaderContext = createContext({
   setHeader: () => {},
 });
 
-export function PageHeaderProvider({ children }) {
-  const [header, setHeader] = useState(EMPTY_HEADER);
+function headersEqual(a, b) {
+  return (
+    a.title === b.title
+    && a.subtitle === b.subtitle
+    && a.iconKey === b.iconKey
+    && a.actions === b.actions
+    && JSON.stringify(a.breadcrumbs) === JSON.stringify(b.breadcrumbs)
+  );
+}
 
-  const value = useMemo(() => ({ header, setHeader }), [header]);
+export function PageHeaderProvider({ children }) {
+  const [header, setHeaderState] = useState(EMPTY_HEADER);
+
+  const setHeader = useCallback((next) => {
+    setHeaderState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      return headersEqual(prev, resolved) ? prev : resolved;
+    });
+  }, []);
+
+  const value = useMemo(() => ({ header, setHeader }), [header, setHeader]);
 
   return (
     <PageHeaderContext.Provider value={value}>
@@ -31,15 +50,20 @@ export function usePageHeaderState() {
 
 export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions, iconKey }) {
   const { setHeader } = usePageHeaderState();
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  const resolvedBreadcrumbs = breadcrumbs ?? EMPTY_BREADCRUMBS;
+  const breadcrumbsKey = JSON.stringify(resolvedBreadcrumbs);
 
   useEffect(() => {
     setHeader({
       title: title || '',
       subtitle: subtitle || '',
-      breadcrumbs: breadcrumbs || [],
-      actions: actions ?? null,
+      breadcrumbs: JSON.parse(breadcrumbsKey),
+      actions: actionsRef.current ?? null,
       iconKey: iconKey || '',
     });
     return () => setHeader(EMPTY_HEADER);
-  }, [title, subtitle, breadcrumbs, iconKey, setHeader, actions]);
+  }, [title, subtitle, breadcrumbsKey, iconKey, setHeader]);
 }

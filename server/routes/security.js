@@ -14,6 +14,12 @@ import {
 } from '../rollCallService.js';
 import { applyVisitListMasking } from '../visitResponseService.js';
 import { permissionsFromRequest } from '../classificationService.js';
+import {
+  buildWeeklyTrend,
+  fetchWeeklySecurityEvents,
+  fetchSecurityEventsByType,
+  fetchSecurityEventsTodayYesterday,
+} from '../dashboardStats.js';
 
 function todayStart() {
   const d = new Date();
@@ -31,20 +37,26 @@ function maskVisitRowsForRequest(req, rows) {
 }
 
 function visitListSql(scope, elevated, extraWhere = '', orderBy = 'vis.created_at DESC') {
-  const params = [scope.organisation_id];
+  const params = [];
+  let orgFilter = '';
+  if (!elevated && scope?.organisation_id) {
+    orgFilter = ' AND vis.organisation_id = ?';
+    params.push(scope.organisation_id);
+  }
   const { sql, params: siteParams } = scopeSiteFilter(scope, elevated);
   params.push(...siteParams);
   return {
     sql: `
       SELECT vis.*, v.full_name, v.phone, v.email, v.company,
              vc.name AS category_name, COALESCE(vc.classification, 'standard') AS classification,
-             h.name AS host_name, s.name AS site_name
+             h.name AS host_name, s.name AS site_name, o.name AS organisation_name
       FROM visits vis
       INNER JOIN visitors v ON v.id = vis.visitor_id
+      INNER JOIN organisations o ON o.id = vis.organisation_id
       LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
       LEFT JOIN hosts h ON h.id = vis.host_id
       LEFT JOIN sites s ON s.id = vis.site_id
-      WHERE vis.organisation_id = ?${sql}${extraWhere}
+      WHERE 1=1${orgFilter}${sql}${extraWhere}
       ORDER BY ${orderBy}
       LIMIT 200
     `,
@@ -108,6 +120,10 @@ export function createSecurityRouter() {
         params,
       );
 
+      const weeklyEvents = await fetchWeeklySecurityEvents(pool, orgId, siteSql, siteParams);
+      const { eventsToday, eventTrend } = await fetchSecurityEventsTodayYesterday(pool, orgId, siteSql, siteParams);
+      const eventsByType = await fetchSecurityEventsByType(pool, orgId, siteSql, siteParams);
+
       res.json({
         ok: true,
         data: {
@@ -117,6 +133,10 @@ export function createSecurityRouter() {
           exceptionsToday: await countVisits(` AND vis.status IN ('rejected', 'denied') AND vis.created_at >= ?`, [start]),
           openIncidents: Number(openIncidents?.count || 0),
           watchlistEntries: Number(watchlistCount?.count || 0),
+          eventsToday,
+          eventTrend,
+          weeklyTrend: buildWeeklyTrend(weeklyEvents),
+          eventsByType,
           activeRollCall: activeRollCall ? { id: activeRollCall.id, startedAt: activeRollCall.started_at } : null,
           recentActivity,
           scope: {
@@ -225,6 +245,45 @@ export function createSecurityRouter() {
       const { sql, params } = visitListSql(ctx.scope, ctx.elevated, extra);
       const [rows] = await pool.query(sql, [...params, ...extraParams]);
       res.json({ ok: true, data: maskVisitRowsForRequest(req, rows) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/vehicles', async (req, res) => {
+    try {
+      const ctx = await getContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const search = String(req.query.q || req.query.search || '').trim();
+      const status = String(req.query.status || '').trim();
+      const params = [];
+      let sql = `
+        SELECT veh.id, veh.plate_number, veh.vehicle_type, veh.make, veh.colour,
+               veh.driver_name, veh.status, veh.entered_at, veh.exited_at, veh.created_at,
+               o.name AS organisation_name
+        FROM vehicles veh
+        INNER JOIN organisations o ON o.id = veh.organisation_id
+        WHERE 1=1
+      `;
+
+      if (!ctx.elevated && ctx.scope?.organisation_id) {
+        sql += ' AND veh.organisation_id = ?';
+        params.push(ctx.scope.organisation_id);
+      }
+      if (status) {
+        sql += ' AND veh.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        sql += ` AND (veh.plate_number LIKE ? OR veh.driver_name LIKE ? OR veh.make LIKE ? OR o.name LIKE ?)`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+
+      sql += ' ORDER BY veh.created_at DESC LIMIT 200';
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

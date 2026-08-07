@@ -169,6 +169,85 @@ export function createPlatformRouter() {
     }
   });
 
+  router.get('/visitors', async (req, res) => {
+    try {
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || req.query.q || '').trim();
+
+      let sql = `
+        SELECT v.id, v.full_name, v.phone, v.email, v.company, v.created_at,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM visits vis WHERE vis.visitor_id = v.id) AS visit_count,
+               (SELECT MAX(vis.created_at) FROM visits vis WHERE vis.visitor_id = v.id) AS last_visit_at
+        FROM visitors v
+        INNER JOIN organisations o ON o.id = v.organisation_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (search) {
+        sql += ` AND (
+          v.full_name LIKE ?
+          OR v.phone LIKE ?
+          OR v.email LIKE ?
+          OR v.company LIKE ?
+          OR o.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term, term);
+      }
+
+      sql += ' ORDER BY last_visit_at DESC, v.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/vehicles', async (req, res) => {
+    try {
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || req.query.q || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      let sql = `
+        SELECT veh.id, veh.plate_number, veh.vehicle_type, veh.make, veh.colour,
+               veh.driver_name, veh.status, veh.entered_at, veh.exited_at, veh.created_at,
+               o.name AS organisation_name
+        FROM vehicles veh
+        INNER JOIN organisations o ON o.id = veh.organisation_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (status) {
+        sql += ' AND veh.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        sql += ` AND (
+          veh.plate_number LIKE ?
+          OR veh.driver_name LIKE ?
+          OR veh.make LIKE ?
+          OR o.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+
+      sql += ' ORDER BY veh.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/organisations', async (_req, res) => {
     try {
       const [rows] = await pool.query(

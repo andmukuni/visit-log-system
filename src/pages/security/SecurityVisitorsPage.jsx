@@ -26,11 +26,15 @@ export default function SecurityVisitorsPage() {
     search('');
   }, [search]);
 
+  const showOrganisation = visits.some((row) => row.organisation_name);
+
   const columns = [
     { key: 'full_name', label: 'Visitor' },
     { key: 'phone', label: 'Phone' },
     { key: 'company', label: 'Company' },
     { key: 'host_name', label: 'Host' },
+    ...(showOrganisation ? [{ key: 'organisation_name', label: 'Organisation' }] : []),
+    { key: 'site_name', label: 'Site' },
     {
       key: 'status',
       label: 'Status',
@@ -44,11 +48,13 @@ export default function SecurityVisitorsPage() {
   ];
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl">
       <PageHeader
-        title="Visitor Search"
-        subtitle="Search visits across your security scope"
-        breadcrumbs={[{ label: 'Security', to: '/security' }, { label: 'Visitors' }]}
+        title="Visitors"
+        subtitle={showOrganisation
+          ? 'Search visits across all organisations'
+          : 'Search visits within your security scope'}
+        iconKey="visitors"
       />
       <Card className="mb-6">
         <form
@@ -72,7 +78,17 @@ export default function SecurityVisitorsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={searched ? `${visits.length} result${visits.length === 1 ? '' : 's'}` : 'Recent visits'}>
-          <DataTable columns={columns} data={visits} emptyTitle="No matches" emptyDescription="Try a different search term." />
+          <DataTable
+            embedded
+            columns={columns}
+            data={visits}
+            emptyTitle="No matches"
+            emptyDescription="Try a different search term."
+            toolbar={{
+              placeholder: 'Filter results…',
+              searchKeys: ['full_name', 'phone', 'company', 'host_name', 'organisation_name', 'site_name'],
+            }}
+          />
         </Card>
       )}
     </div>

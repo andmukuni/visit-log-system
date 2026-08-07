@@ -1,19 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Siren, AlertTriangle, Shield, Search, Users, Clock } from 'lucide-react';
-import { RefreshAction, ActionToolbar } from '../../components/ui';
+import { Clock, AlertTriangle, ShieldAlert, UserCheck, Shield } from 'lucide-react';
 import {
-  PortalDashboardLayout,
-  ActivityFeedPanel,
-  MetricsSection,
-  WeeklyBarChart,
-  HighlightBalanceCard,
-  QuickActionList,
-  DashboardInfoCard,
-  RollCallBanner,
-  buildWeeklySeries,
-  metricTarget,
-} from '../../components/dashboard';
+  PageHeader,
+  Card,
+  DataTable,
+  Spinner,
+  RefreshAction,
+  ActionToolbar,
+  ViewAllAction,
+  StatusBadge,
+} from '../../components/ui';
+import { DashboardOverviewLayout, RollCallBanner, metricTarget } from '../../components/dashboard';
+import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
+
+const EVENT_LABELS = {
+  registered: 'Registered',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  checked_in: 'Check-in',
+  checked_out: 'Check-out',
+};
+
+function formatEventType(type) {
+  return EVENT_LABELS[type] || String(type || '').replace(/_/g, ' ');
+}
 
 export default function SecurityDashboardPage() {
   const [data, setData] = useState(null);
@@ -26,7 +37,8 @@ export default function SecurityDashboardPage() {
     try {
       setData(await securityApi.getDashboard());
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || 'Unable to load dashboard.');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -36,60 +48,136 @@ export default function SecurityDashboardPage() {
     load();
   }, [load]);
 
-  const weeklyData = useMemo(
-    () => buildWeeklySeries(data?.recentActivity, data?.currentlyInside),
-    [data],
+  const metricsSection = data ? {
+    title: 'Security metrics',
+    variant: 'overview',
+    cards: [
+      {
+        title: 'Pending approvals',
+        value: data.pendingApprovals,
+        target: metricTarget(data.pendingApprovals),
+        accent: 'charcoal',
+        icon: Clock,
+      },
+      {
+        title: 'Overdue visits',
+        value: data.overdueVisits,
+        target: metricTarget(data.overdueVisits),
+        accent: 'light',
+        icon: AlertTriangle,
+      },
+      {
+        title: 'Open incidents',
+        value: data.openIncidents,
+        target: metricTarget(data.openIncidents),
+        accent: 'charcoal',
+        icon: ShieldAlert,
+      },
+      {
+        title: 'On site now',
+        value: data.currentlyInside,
+        target: metricTarget(data.currentlyInside, 5, 20),
+        accent: 'light',
+        icon: UserCheck,
+      },
+    ],
+  } : null;
+
+  const donutData = useMemo(
+    () => (data?.eventsByType || []).map((row) => ({
+      ...row,
+      event_label: formatEventType(row.event_type),
+    })),
+    [data?.eventsByType],
   );
 
+  const activityColumns = [
+    {
+      key: 'created_at',
+      label: 'Time',
+      render: (_, row) => formatDateTime(row.created_at),
+    },
+    { key: 'visitor_name', label: 'Visitor' },
+    {
+      key: 'event_type',
+      label: 'Event',
+      render: (_, row) => formatEventType(row.event_type),
+    },
+    {
+      key: 'visit_status',
+      label: 'Status',
+      render: (_, row) => <StatusBadge status={row.visit_status} />,
+    },
+  ];
+
   return (
-    <PortalDashboardLayout
-      title="Overview"
-      subtitle={data?.scope?.siteName ? `${data.scope.siteName} — live security overview` : undefined}
-      actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
-      loading={loading}
-      error={error}
-      left={<ActivityFeedPanel items={data?.recentActivity || []} tabs={['History', 'Pending', 'Today']} />}
-      center={
-        data && (
-          <>
-            {data.activeRollCall && (
+    <div className="mx-auto w-full max-w-7xl">
+      <PageHeader
+        title="Security Dashboard"
+        subtitle={data?.scope?.siteName ? `${data.scope.siteName} — live security overview` : 'Live security overview'}
+        iconKey="dashboard"
+        actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
+      />
+
+      {loading && (
+        <div className="flex justify-center py-16">
+          <Spinner size={32} />
+        </div>
+      )}
+
+      {!loading && error && (
+        <Card title="Dashboard error" className="mb-6">
+          <p className="text-sm text-red-600">{error}</p>
+        </Card>
+      )}
+
+      {!loading && data && (
+        <>
+          {data.activeRollCall && (
+            <div className="mb-6">
               <RollCallBanner rollCall={data.activeRollCall} to={`/security/roll-call/${data.activeRollCall.id}`} />
-            )}
-            <MetricsSection
-              title="Security metrics"
-              cards={[
-                { title: 'Pending approvals', value: data.pendingApprovals, target: metricTarget(data.pendingApprovals), accent: 'purple' },
-                { title: 'Overdue visits', value: data.overdueVisits, target: metricTarget(data.overdueVisits), accent: 'orange' },
-              ]}
+            </div>
+          )}
+
+          <DashboardOverviewLayout
+            metricsSection={metricsSection}
+            lineChart={{
+              title: 'Security activity',
+              data: data.weeklyTrend,
+              trend: data?.eventTrend,
+              emptyLabel: 'No security events this week yet.',
+            }}
+            donutChart={{
+              title: 'Recent month',
+              subtitle: 'Events',
+              centerTitle: 'Event mix',
+              centerIcon: Shield,
+              data: donutData,
+              nameKey: 'event_label',
+              valueKey: 'total',
+              emptyLabel: 'No event data yet.',
+            }}
+          />
+
+          <Card
+            title="Recent activity"
+            subtitle="Latest visitor and security events"
+            actions={<ViewAllAction to="/security/audit" label="View all activity" />}
+          >
+            <DataTable
+              embedded
+              toolbar={{
+                placeholder: 'Search activity…',
+                searchKeys: ['visitor_name', 'event_type', 'visit_status'],
+              }}
+              columns={activityColumns}
+              data={data.recentActivity || []}
+              emptyTitle="No activity yet"
+              emptyDescription="Visitor check-ins, approvals, and security events will appear here."
             />
-            <WeeklyBarChart title="Activity this week" subtitle="Security events" data={weeklyData} />
-          </>
-        )
-      }
-      right={
-        data && (
-          <>
-            <HighlightBalanceCard
-              title="On site now"
-              value={data.currentlyInside}
-              subtitle={`${data.exceptionsToday} exceptions today · ${data.openIncidents} open incidents`}
-            />
-            <QuickActionList
-              items={[
-                { label: 'Emergency roll call', icon: Siren, to: '/security/roll-call' },
-                { label: 'Report incident', icon: AlertTriangle, to: '/security/incidents' },
-                { label: 'Watchlist', icon: Shield, to: '/security/watchlist' },
-                { label: 'Search visitors', icon: Search, to: '/security/visitors' },
-                { label: 'Pending approvals', icon: Clock, to: '/security/approvals' },
-                { label: 'Occupancy', icon: Users, to: '/security/occupancy' },
-              ]}
-            />
-            <DashboardInfoCard title="Watchlist & incidents">
-              {data.watchlistEntries} active watchlist entries · Review exceptions and overdue visits promptly.
-            </DashboardInfoCard>
-          </>
-        )
-      }
-    />
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

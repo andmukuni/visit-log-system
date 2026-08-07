@@ -16,7 +16,9 @@ function buildSidebarSnapshot(portalId, hasPermission, extraItems = []) {
   for (const item of extraItems) {
     if (!item?.key) continue;
     if (mergedItems.some((existing) => existing.key === item.key)) continue;
-    if (item.permission && !hasPermission(item.permission)) continue;
+    if (item.permissions?.length) {
+      if (!item.permissions.some((key) => hasPermission(key))) continue;
+    } else if (item.permission && !hasPermission(item.permission)) continue;
     mergedItems.push({
       section: 'primary',
       ...item,

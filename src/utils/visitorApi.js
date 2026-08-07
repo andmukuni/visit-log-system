@@ -42,6 +42,18 @@ export const visitorApi = {
   registerVehicle: (body) => apiFetch('/admin/vehicles', { method: 'POST', body: JSON.stringify(body) }),
   checkOutVehicle: (id) => apiFetch(`/admin/vehicles/${id}/check-out`, { method: 'POST' }),
   getOrgDashboard: () => apiFetch('/admin/org/dashboard'),
+  getOrgVisitors: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/visitors${qs ? `?${qs}` : ''}`);
+  },
+  getOrgVehicles: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/vehicles${qs ? `?${qs}` : ''}`);
+  },
+  getOrgVisits: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/visits${qs ? `?${qs}` : ''}`);
+  },
   getSites: () => apiFetch('/admin/org/sites'),
   getStations: () => apiFetch('/admin/org/stations'),
   getDepartments: () => apiFetch('/admin/org/departments'),
@@ -72,6 +84,10 @@ export const securityApi = {
   getExceptions: () => apiFetch('/admin/security/exceptions'),
   getOverdue: () => apiFetch('/admin/security/overdue'),
   getVisitors: (q) => apiFetch(`/admin/security/visitors${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  getVehicles: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/security/vehicles${qs ? `?${qs}` : ''}`);
+  },
   getWatchlist: () => apiFetch('/admin/security/watchlist'),
   createWatchlistEntry: (body) => apiFetch('/admin/security/watchlist', { method: 'POST', body: JSON.stringify(body) }),
   updateWatchlistEntry: (id, body) => apiFetch(`/admin/security/watchlist/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -172,6 +188,14 @@ export const platformApi = {
   getLogBook: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/platform/log-book${qs ? `?${qs}` : ''}`);
+  },
+  getVisitors: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/platform/visitors${qs ? `?${qs}` : ''}`);
+  },
+  getVehicles: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/platform/vehicles${qs ? `?${qs}` : ''}`);
   },
   getOrganisations: () => apiFetch('/admin/platform/organisations'),
   updateOrganisation: (id, body) => apiFetch(`/admin/platform/organisations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

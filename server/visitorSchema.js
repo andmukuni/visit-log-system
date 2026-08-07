@@ -295,10 +295,22 @@ export async function seedVisitorData() {
   );
 
   const site2Id = generateId('site');
+  const site3Id = generateId('site');
+  const site4Id = generateId('site');
   const station2Id = generateId('stn');
+  const station3Id = generateId('stn');
+  const station4Id = generateId('stn');
   await pool.query(
     `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
     [site2Id, orgId, 'Warehouse Branch', 'WH', 'Ndola, Zambia'],
+  );
+  await pool.query(
+    `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
+    [site3Id, orgId, 'Regional Office', 'RO', 'Kitwe, Zambia'],
+  );
+  await pool.query(
+    `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
+    [site4Id, orgId, 'Distribution Centre', 'DC', 'Livingstone, Zambia'],
   );
 
   await pool.query(
@@ -309,6 +321,16 @@ export async function seedVisitorData() {
   await pool.query(
     `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'gate', 'active')`,
     [station2Id, site2Id, 'Warehouse Gate'],
+  );
+
+  await pool.query(
+    `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
+    [station3Id, site3Id, 'Regional Office Reception'],
+  );
+
+  await pool.query(
+    `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
+    [station4Id, site4Id, 'Distribution Centre Reception'],
   );
 
   await pool.query(

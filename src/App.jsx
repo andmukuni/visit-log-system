@@ -1,5 +1,5 @@
 import { Suspense, lazy, Component } from 'react';
-import { Outlet, createBrowserRouter, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import PortalLayout from './layouts/PortalLayout';
@@ -13,6 +13,10 @@ const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminVisitorsPage = lazy(() => import('./pages/admin/AdminVisitorsPage'));
+const AdminVehiclesPage = lazy(() => import('./pages/admin/AdminVehiclesPage'));
+const AdminWalkingVisitsPage = lazy(() => import('./pages/admin/AdminWalkingVisitsPage'));
+const AdminVehicleVisitsPage = lazy(() => import('./pages/admin/AdminVehicleVisitsPage'));
 const DemoUsersPage = lazy(() => import('./pages/admin/DemoUsersPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const DemoAccessControlPage = lazy(() => import('./pages/admin/DemoAccessControlPage'));
@@ -41,6 +45,7 @@ const SecurityOccupancyPage = lazy(() => import('./pages/security/SecurityOccupa
 const SecurityApprovalsPage = lazy(() => import('./pages/security/SecurityApprovalsPage'));
 const SecurityExceptionsPage = lazy(() => import('./pages/security/SecurityExceptionsPage'));
 const SecurityVisitorsPage = lazy(() => import('./pages/security/SecurityVisitorsPage'));
+const SecurityVehiclesPage = lazy(() => import('./pages/security/SecurityVehiclesPage'));
 const SecurityOverduePage = lazy(() => import('./pages/security/SecurityOverduePage'));
 const SecurityWatchlistPage = lazy(() => import('./pages/security/SecurityWatchlistPage'));
 const SecurityIncidentsPage = lazy(() => import('./pages/security/SecurityIncidentsPage'));
@@ -72,9 +77,10 @@ const SecurityReportsPage = lazy(() => import('./pages/security/SecurityReportsP
 
 const PlatformDashboardPage = lazy(() => import('./pages/platform/PlatformDashboardPage'));
 const PlatformOrganisationsPage = lazy(() => import('./pages/platform/PlatformOrganisationsPage'));
-const PlatformHealthPage = lazy(() => import('./pages/platform/PlatformHealthPage'));
 const PlatformCalendarPage = lazy(() => import('./pages/platform/PlatformCalendarPage'));
 const PlatformLogBookPage = lazy(() => import('./pages/platform/PlatformLogBookPage'));
+const PlatformVisitorsPage = lazy(() => import('./pages/platform/PlatformVisitorsPage'));
+const PlatformVehiclesPage = lazy(() => import('./pages/platform/PlatformVehiclesPage'));
 const PlatformAuditPage = lazy(() => import('./pages/platform/PlatformAuditPage'));
 const PlatformUsersPage = lazy(() => import('./pages/platform/PlatformUsersPage'));
 
@@ -272,6 +278,10 @@ export const router = createBrowserRouter([
           { path: 'departments', element: <LazyAdminOrgPage page="departments" /> },
           { path: 'hosts', element: <LazyAdminOrgPage page="hosts" /> },
           { path: 'categories', element: <LazyAdminOrgPage page="categories" /> },
+          { path: 'visitors', element: <AdminVisitorsPage /> },
+          { path: 'walking-visits', element: <AdminWalkingVisitsPage /> },
+          { path: 'vehicles', element: <AdminVehiclesPage /> },
+          { path: 'vehicle-visits', element: <AdminVehicleVisitsPage /> },
           { path: 'badges', element: <LazyAdminOrgPage page="badges" /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },
           { path: 'users', element: <DemoUsersPage /> },
@@ -290,6 +300,7 @@ export const router = createBrowserRouter([
           { path: 'approvals', element: <SecurityApprovalsPage /> },
           { path: 'exceptions', element: <SecurityExceptionsPage /> },
           { path: 'visitors', element: <SecurityVisitorsPage /> },
+          { path: 'vehicles', element: <SecurityVehiclesPage /> },
           { path: 'overdue', element: <SecurityOverduePage /> },
           { path: 'watchlist', element: <SecurityWatchlistPage /> },
           { path: 'incidents', element: <SecurityIncidentsPage /> },
@@ -365,9 +376,11 @@ export const router = createBrowserRouter([
           { index: true, element: <PlatformDashboardPage /> },
           { path: 'calendar', element: <PlatformCalendarPage /> },
           { path: 'log-book', element: <PlatformLogBookPage /> },
+          { path: 'visitors', element: <PlatformVisitorsPage /> },
+          { path: 'vehicles', element: <PlatformVehiclesPage /> },
           { path: 'organisations', element: <PlatformOrganisationsPage /> },
           { path: 'users', element: <PlatformUsersPage /> },
-          { path: 'health', element: <PlatformHealthPage /> },
+          { path: 'health', element: <Navigate to="/platform/settings?tab=health" replace /> },
           { path: 'integrations', element: <PlaceholderPage title="Integrations" portalLabel="Platform" /> },
           { path: 'support', element: <PlaceholderPage title="Support Access" portalLabel="Platform" /> },
           { path: 'audit', element: <PlatformAuditPage /> },

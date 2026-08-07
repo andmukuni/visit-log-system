@@ -96,3 +96,60 @@ export function buildWeeklyTrend(weeklyVisits, weeklyWalking = [], weeklyDriveIn
     driveIn: weeklyDriveIn[index] || 0,
   }));
 }
+
+export async function fetchWeeklySecurityEvents(pool, organisationId, siteSql = '', siteParams = []) {
+  const params = [organisationId, ...siteParams];
+  const [rows] = await pool.query(
+    `SELECT DATE(ve.created_at) AS visit_date, COUNT(*) AS count
+     FROM visit_events ve
+     INNER JOIN visits vis ON vis.id = ve.visit_id
+     WHERE vis.organisation_id = ?${siteSql}
+       AND ve.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+     GROUP BY DATE(ve.created_at)`,
+    params,
+  );
+  return mapRowsToWeeklySeries(rows);
+}
+
+export async function fetchSecurityEventsByType(pool, organisationId, siteSql = '', siteParams = []) {
+  const params = [organisationId, ...siteParams];
+  const [rows] = await pool.query(
+    `SELECT ve.event_type AS event_type, COUNT(*) AS total
+     FROM visit_events ve
+     INNER JOIN visits vis ON vis.id = ve.visit_id
+     WHERE vis.organisation_id = ?${siteSql}
+       AND ve.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+     GROUP BY ve.event_type
+     ORDER BY total DESC
+     LIMIT 8`,
+    params,
+  );
+  return rows.map((row) => ({
+    event_type: row.event_type,
+    total: Number(row.total || 0),
+  }));
+}
+
+export async function fetchSecurityEventsTodayYesterday(pool, organisationId, siteSql = '', siteParams = []) {
+  const params = [organisationId, ...siteParams];
+  const [[todayRow]] = await pool.query(
+    `SELECT COUNT(*) AS count
+     FROM visit_events ve
+     INNER JOIN visits vis ON vis.id = ve.visit_id
+     WHERE vis.organisation_id = ?${siteSql}
+       AND ve.created_at >= CURDATE()`,
+    params,
+  );
+  const [[yesterdayRow]] = await pool.query(
+    `SELECT COUNT(*) AS count
+     FROM visit_events ve
+     INNER JOIN visits vis ON vis.id = ve.visit_id
+     WHERE vis.organisation_id = ?${siteSql}
+       AND ve.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+       AND ve.created_at < CURDATE()`,
+    params,
+  );
+  const eventsToday = Number(todayRow?.count || 0);
+  const eventsYesterday = Number(yesterdayRow?.count || 0);
+  return { eventsToday, eventsYesterday, eventTrend: calcVisitTrend(eventsToday, eventsYesterday) };
+}

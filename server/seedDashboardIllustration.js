@@ -24,6 +24,14 @@ const VEHICLE_COLOURS = ['White', 'Silver', 'Black', 'Blue', 'Red', 'Grey'];
 const PLATE_PREFIXES = ['ABC', 'CAB', 'BAX', 'LUS', 'NDL', 'KTW'];
 
 const WEEKLY_WEIGHTS = [3, 5, 4, 8, 6, 2, 7];
+const SITE_SHARE_WEIGHTS = [52, 28, 13, 7];
+
+const DEMO_ORG_EXTRA_SITES = [
+  { name: 'Regional Office', code: 'RO', address: 'Kitwe, Zambia' },
+  { name: 'Distribution Centre', code: 'DC', address: 'Livingstone, Zambia' },
+];
+
+const DEMO_SITE_SHARE_ORDER = ['Head Office', 'Warehouse Branch', 'Regional Office', 'Distribution Centre'];
 
 const AUDIT_ACTIONS = [
   'user.login',
@@ -69,6 +77,86 @@ async function resolveGateStationId(pool, siteId, fallbackStationId) {
     [siteId],
   );
   return gate?.id || fallbackStationId || null;
+}
+
+function sortSitesForShare(sites) {
+  return [...sites].sort((left, right) => {
+    const leftIndex = DEMO_SITE_SHARE_ORDER.indexOf(left.name);
+    const rightIndex = DEMO_SITE_SHARE_ORDER.indexOf(right.name);
+    if (leftIndex === -1 && rightIndex === -1) return left.name.localeCompare(right.name);
+    if (leftIndex === -1) return 1;
+    if (rightIndex === -1) return -1;
+    return leftIndex - rightIndex;
+  });
+}
+
+function buildSiteAssignmentPlan(sites, totalVisits) {
+  if (!sites?.length || totalVisits <= 0) return [];
+  if (sites.length === 1) return Array.from({ length: totalVisits }, () => sites[0]);
+
+  const weights = SITE_SHARE_WEIGHTS.slice(0, sites.length);
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  const counts = weights.map((weight) => Math.floor((weight / weightSum) * totalVisits));
+  let remainder = totalVisits - counts.reduce((sum, count) => sum + count, 0);
+
+  for (let index = 0; remainder > 0; index += 1) {
+    counts[index % sites.length] += 1;
+    remainder -= 1;
+  }
+
+  const buckets = counts.map((count, index) => Array.from({ length: count }, () => sites[index]));
+  const plan = [];
+  let added = true;
+
+  while (added) {
+    added = false;
+    for (const bucket of buckets) {
+      if (bucket.length) {
+        plan.push(bucket.shift());
+        added = true;
+      }
+    }
+  }
+
+  return plan;
+}
+
+async function ensureDemoOrganisationSites(pool, orgId, existingSites) {
+  const sitesByName = new Map(existingSites.map((site) => [site.name, site]));
+  let changed = false;
+
+  for (const siteDef of DEMO_ORG_EXTRA_SITES) {
+    if (sitesByName.has(siteDef.name)) continue;
+
+    const siteId = generateId('site');
+    await pool.query(
+      `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
+      [siteId, orgId, siteDef.name, siteDef.code, siteDef.address],
+    );
+    await pool.query(
+      `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
+      [generateId('stn'), siteId, `${siteDef.name} Reception`],
+    );
+    sitesByName.set(siteDef.name, { id: siteId, name: siteDef.name });
+    changed = true;
+  }
+
+  if (!changed) return sortSitesForShare(existingSites);
+
+  const [rows] = await pool.query(
+    'SELECT id, name FROM sites WHERE organisation_id = ? ORDER BY name',
+    [orgId],
+  );
+  return sortSitesForShare(rows);
+}
+
+async function resolveSiteStationId(pool, siteId, fallbackStationId) {
+  if (!siteId) return fallbackStationId || null;
+  const [[station]] = await pool.query(
+    'SELECT id FROM stations WHERE site_id = ? LIMIT 1',
+    [siteId],
+  );
+  return station?.id || fallbackStationId || null;
 }
 
 async function seedDriveInVehicle(pool, {
@@ -165,10 +253,12 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
     throw new Error('Demo organisation not found. Run server bootstrap first (npm run server:dev).');
   }
 
-  const [demoSites] = await pool.query(
-    'SELECT id, name FROM sites WHERE organisation_id = ? ORDER BY name',
-    [demoOrg.id],
-  );
+  const demoSites = await ensureDemoOrganisationSites(pool, demoOrg.id, (
+    await pool.query(
+      'SELECT id, name FROM sites WHERE organisation_id = ? ORDER BY name',
+      [demoOrg.id],
+    )
+  )[0]);
   const [demoHosts] = await pool.query(
     'SELECT id, name FROM hosts WHERE organisation_id = ? LIMIT 5',
     [demoOrg.id],
@@ -190,7 +280,7 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
 
   orgProfiles.push({
     orgId: demoOrg.id,
-    sites: demoSites,
+    sites: sortSitesForShare(demoSites),
     hosts: demoHosts,
     categoryId: demoCategory?.id,
     stationId: demoStation?.id,
@@ -272,6 +362,7 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
   let visitsCreated = 0;
   let driveInCreated = 0;
   const gateStationCache = new Map();
+  const siteStationCache = new Map();
 
   for (const profile of orgProfiles) {
     if (!profile.sites?.length || !profile.hosts?.length) continue;
@@ -280,6 +371,8 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
       ? WEEKLY_WEIGHTS.reduce((sum, weight) => sum + weight, 0)
       : Math.max(3, Math.round(WEEKLY_WEIGHTS.reduce((sum, weight) => sum + weight, 0) * profile.visitMultiplier));
 
+    const sitePlan = buildSiteAssignmentPlan(profile.sites, totalForOrg);
+    let sitePlanIndex = 0;
     let assigned = 0;
 
     for (let dayOffset = 6; dayOffset >= 0; dayOffset -= 1) {
@@ -336,6 +429,19 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
           checkedInAt = null;
         }
 
+        const selectedSite = sitePlan[sitePlanIndex] || profile.sites[0];
+        sitePlanIndex += 1;
+        const selectedSiteId = selectedSite?.id || profile.sites[0]?.id;
+        let selectedStationId = profile.stationId;
+        if (selectedSiteId) {
+          let cachedStationId = siteStationCache.get(selectedSiteId);
+          if (cachedStationId === undefined) {
+            cachedStationId = await resolveSiteStationId(pool, selectedSiteId, profile.stationId);
+            siteStationCache.set(selectedSiteId, cachedStationId);
+          }
+          selectedStationId = cachedStationId;
+        }
+
         await pool.query(
           `INSERT INTO visits (
             id, organisation_id, site_id, station_id, visitor_id, host_id, category_id,
@@ -344,8 +450,8 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
           [
             visitId,
             profile.orgId,
-            profile.sites[0].id,
-            profile.stationId,
+            selectedSiteId,
+            selectedStationId,
             visitorId,
             profile.hosts[0].id,
             profile.categoryId,
@@ -373,7 +479,7 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
         );
 
         if (shouldSeedDriveIn(dayOffset, i, visitorIndex)) {
-          const siteId = profile.sites[0]?.id;
+          const siteId = selectedSiteId;
           let gateStationId = gateStationCache.get(siteId);
           if (gateStationId === undefined) {
             gateStationId = await resolveGateStationId(pool, siteId, profile.stationId);
@@ -406,6 +512,7 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
     [demoOrg.id],
   );
   if (Number(pendingBefore?.count || 0) < 2) {
+    const pendingSitePlan = buildSiteAssignmentPlan(demoSites, 2);
     for (let i = 0; i < 2; i += 1) {
       const visitorId = generateId('vis');
       const visitId = generateId('visit');
@@ -420,7 +527,7 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
         [
           visitId,
           demoOrg.id,
-          demoSites[0].id,
+          pendingSitePlan[i]?.id || demoSites[0].id,
           visitorId,
           demoHosts[0].id,
           demoCategory?.id,

@@ -1,8 +1,8 @@
 import { useRegisterPageHeader } from '../../context/PageHeaderContext';
-import Breadcrumbs from './Breadcrumbs';
 import NavIcon from './NavIcon';
 
 const PAGE_TITLE_ICON_CLASS = 'border border-navy-200 bg-white text-navy-600';
+const EMPTY_BREADCRUMBS = [];
 
 function PageTitleIcon({ icon: Icon, iconKey, compact = false, tall = false, className = '' }) {
   if (!Icon && !iconKey) return null;
@@ -26,18 +26,17 @@ function PageTitleIcon({ icon: Icon, iconKey, compact = false, tall = false, cla
 export default function PageHeader({
   title,
   subtitle,
-  breadcrumbs = [],
+  breadcrumbs: _breadcrumbs = EMPTY_BREADCRUMBS,
   actions,
   icon,
   iconKey,
 }) {
-  useRegisterPageHeader({ title, subtitle, breadcrumbs, actions, iconKey });
+  useRegisterPageHeader({ title, subtitle, breadcrumbs: EMPTY_BREADCRUMBS, actions, iconKey });
 
   const hasTitleBlock = Boolean(title || subtitle);
 
   return (
     <div className="mb-6">
-      <Breadcrumbs items={breadcrumbs} variant="page" />
       {hasTitleBlock && (
         <div
           className={`mt-1 grid gap-x-3 gap-y-0.5 ${

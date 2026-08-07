@@ -6,6 +6,7 @@ import {
   requireUserScope,
   loadVisitScoped,
   canTransition,
+  isSuperAdmin,
 } from '../scopeService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
@@ -22,6 +23,11 @@ function todayStart() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function hasPlatformWideAccess(claims = {}) {
+  const perms = claims.permissions || [];
+  return isSuperAdmin(claims) || perms.some((p) => String(p).startsWith('platform.'));
 }
 
 export function createStationRouter() {
@@ -1461,6 +1467,166 @@ export function createOrgAdminRouter() {
           recentVisits,
         },
       });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/visitors', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const viewAll = hasPlatformWideAccess(req.adminClaims);
+      const orgId = viewAll ? null : scope?.organisation_id;
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || req.query.q || '').trim();
+
+      let sql = `
+        SELECT v.id, v.full_name, v.phone, v.email, v.company, v.created_at,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM visits vis WHERE vis.visitor_id = v.id) AS visit_count,
+               (SELECT MAX(vis.created_at) FROM visits vis WHERE vis.visitor_id = v.id) AS last_visit_at
+        FROM visitors v
+        INNER JOIN organisations o ON o.id = v.organisation_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (orgId) {
+        sql += ' AND v.organisation_id = ?';
+        params.push(orgId);
+      }
+      if (search) {
+        sql += ` AND (
+          v.full_name LIKE ?
+          OR v.phone LIKE ?
+          OR v.email LIKE ?
+          OR v.company LIKE ?
+          OR o.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term, term);
+      }
+
+      sql += ' ORDER BY last_visit_at DESC, v.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/vehicles', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const viewAll = hasPlatformWideAccess(req.adminClaims);
+      const orgId = viewAll ? null : scope?.organisation_id;
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || req.query.q || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      let sql = `
+        SELECT veh.id, veh.plate_number, veh.vehicle_type, veh.make, veh.colour,
+               veh.driver_name, veh.status, veh.entered_at, veh.exited_at, veh.created_at,
+               o.name AS organisation_name
+        FROM vehicles veh
+        INNER JOIN organisations o ON o.id = veh.organisation_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (orgId) {
+        sql += ' AND veh.organisation_id = ?';
+        params.push(orgId);
+      }
+      if (status) {
+        sql += ' AND veh.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        sql += ` AND (
+          veh.plate_number LIKE ?
+          OR veh.driver_name LIKE ?
+          OR veh.make LIKE ?
+          OR o.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+
+      sql += ' ORDER BY veh.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/visits', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const viewAll = hasPlatformWideAccess(req.adminClaims);
+      const orgId = viewAll ? null : scope?.organisation_id;
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || req.query.q || '').trim();
+      const status = String(req.query.status || '').trim();
+      const visitType = String(req.query.type || 'walking').toLowerCase();
+
+      let sql = `
+        SELECT vis.id, vis.reference_number, vis.status, vis.created_at, vis.check_in_at, vis.check_out_at,
+               v.full_name AS visitor_name,
+               u.name AS host_name,
+               o.name AS organisation_name,
+               s.name AS site_name,
+               vc.name AS category_name,
+               (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+        FROM visits vis
+        INNER JOIN visitors v ON v.id = vis.visitor_id
+        INNER JOIN organisations o ON o.id = vis.organisation_id
+        LEFT JOIN users u ON u.id = vis.host_id
+        LEFT JOIN sites s ON s.id = vis.site_id
+        LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (orgId) {
+        sql += ' AND vis.organisation_id = ?';
+        params.push(orgId);
+      }
+      if (visitType === 'walking') {
+        sql += ' AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      } else if (visitType === 'vehicle') {
+        sql += ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      }
+      if (status) {
+        sql += ' AND vis.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        sql += ` AND (
+          v.full_name LIKE ?
+          OR vis.reference_number LIKE ?
+          OR u.name LIKE ?
+          OR o.name LIKE ?
+          OR s.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term, term);
+      }
+
+      sql += ' ORDER BY vis.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

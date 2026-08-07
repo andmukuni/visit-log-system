@@ -5,6 +5,14 @@
 
 import { resolveNavIcon } from './navIcons.js';
 
+function navItemVisible(item, hasPermission) {
+  if (item.permissions?.length) {
+    return item.permissions.some((key) => hasPermission(key));
+  }
+  if (!item.permission) return true;
+  return hasPermission(item.permission);
+}
+
 export const PORTALS = {
   platform: {
     id: 'platform',
@@ -61,9 +69,10 @@ export const PORTAL_NAVIGATION = {
     { key: 'dashboard', name: 'Dashboard', to: '/platform', permission: 'platform.dashboard', end: true, section: 'primary' },
     { key: 'calendar', name: 'Calendar', to: '/platform/calendar', permission: 'platform.calendar', section: 'primary' },
     { key: 'log-book', name: 'Log Book', to: '/platform/log-book', permission: 'platform.logbook', section: 'primary' },
+    { key: 'visitors', name: 'Visitors', to: '/platform/visitors', permissions: ['platform.visitors', 'platform.logbook', 'platform.dashboard'], section: 'primary' },
+    { key: 'vehicles', name: 'Vehicles', to: '/platform/vehicles', permissions: ['platform.vehicles', 'platform.logbook', 'platform.dashboard'], section: 'primary' },
     { key: 'organisations', name: 'Organisations', to: '/platform/organisations', permission: 'platform.organisations', section: 'primary' },
     { key: 'platform-users', name: 'Platform Users', to: '/platform/users', permission: 'platform.users', section: 'primary' },
-    { key: 'system-health', name: 'System Health', to: '/platform/health', permission: 'platform.health', section: 'system' },
     { key: 'integrations', name: 'Integrations', to: '/platform/integrations', permission: 'platform.integrations', section: 'system' },
     { key: 'support-access', name: 'Support Access', to: '/platform/support', permission: 'platform.support', section: 'system' },
     { key: 'audit-logs', name: 'Global Audit Logs', to: '/platform/audit', permission: 'platform.audit', section: 'system' },
@@ -77,8 +86,11 @@ export const PORTAL_NAVIGATION = {
     { key: 'departments', name: 'Departments', to: '/admin/departments', permission: 'admin.departments', section: 'primary' },
     { key: 'hosts', name: 'Employees & Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'primary' },
     { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'primary' },
-    { key: 'roles', name: 'Roles & Permissions', to: '/admin/access-control', permission: 'admin.rbac', section: 'primary' },
     { key: 'categories', name: 'Visitor Categories', to: '/admin/categories', permission: 'admin.categories', section: 'primary' },
+    { key: 'visitors', name: 'Visitors', to: '/admin/visitors', permission: 'admin.visitors', section: 'primary' },
+    { key: 'walking-visits', name: 'Walking Visits', to: '/admin/walking-visits', permission: 'admin.visitors', section: 'primary' },
+    { key: 'vehicles', name: 'Vehicles', to: '/admin/vehicles', permission: 'admin.vehicles', section: 'primary' },
+    { key: 'vehicle-visits', name: 'Vehicle Visits', to: '/admin/vehicle-visits', permission: 'admin.vehicles', section: 'primary' },
     { key: 'workflows', name: 'Approval Workflows', to: '/admin/workflows', permission: 'admin.workflows', section: 'primary' },
     { key: 'badges', name: 'Badge Inventory', to: '/admin/badges', permission: 'admin.badges', section: 'primary' },
     { key: 'notifications', name: 'Notifications', to: '/admin/notifications', permission: 'admin.notifications', section: 'system' },
@@ -86,6 +98,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'privacy', name: 'Privacy & Retention', to: '/admin/privacy', permission: 'admin.privacy', section: 'system' },
     { key: 'integrations', name: 'Integrations', to: '/admin/integrations', permission: 'admin.integrations', section: 'system' },
     { key: 'audit', name: 'Audit Logs', to: '/admin/audit', permission: 'admin.audit', section: 'system' },
+    { key: 'roles', name: 'Roles & Permissions', to: '/admin/access-control', permission: 'admin.rbac', section: 'settings' },
     { key: 'settings', name: 'Settings', to: '/admin/settings', permission: 'admin.settings', section: 'settings' },
   ],
   security: [
@@ -190,10 +203,7 @@ export const PORTAL_PRIORITY = [
 export function getVisibleNavItems(portalId, hasPermission) {
   const items = PORTAL_NAVIGATION[portalId] || [];
   return items
-    .filter((item) => {
-      if (!item.permission) return true;
-      return hasPermission(item.permission);
-    })
+    .filter((item) => navItemVisible(item, hasPermission))
     .map((item) => ({
       ...item,
       section: item.section || (item.key === 'settings' ? 'settings' : 'primary'),

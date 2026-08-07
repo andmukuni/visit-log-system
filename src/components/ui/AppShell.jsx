@@ -8,7 +8,6 @@ import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
-import { PORTALS } from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
   return (
@@ -21,26 +20,8 @@ function PortalOutletLoader() {
   );
 }
 
-function getShellBreadcrumbs(pageHeader, portalId) {
-  if (pageHeader.breadcrumbs?.length > 0) {
-    return pageHeader.breadcrumbs;
-  }
-  if (!pageHeader.title) return [];
-
-  const portalMeta = PORTALS[portalId];
-  if (!portalMeta) {
-    return [{ label: pageHeader.title }];
-  }
-
-  const portalLabel = portalMeta.label.replace(/ Portal$/, '');
-  const pageLabel = pageHeader.title.endsWith(' Dashboard')
-    ? 'Dashboard'
-    : pageHeader.title;
-
-  return [
-    { label: portalLabel, to: portalMeta.routePrefix },
-    { label: pageLabel },
-  ];
+function getShellBreadcrumbs() {
+  return [];
 }
 
 function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
@@ -48,7 +29,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
   const { user } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
-  const shellBreadcrumbs = getShellBreadcrumbs(pageHeader, portalId);
+  const shellBreadcrumbs = getShellBreadcrumbs();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });

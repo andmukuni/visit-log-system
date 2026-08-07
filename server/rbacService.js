@@ -91,6 +91,22 @@ export async function seedRbac(pool) {
         [roleRow.id, permKey],
       );
     }
+
+    // Ensure system roles pick up newly added permission keys on restart.
+    if (roleDef.is_system) {
+      const [existing] = await pool.query(
+        'SELECT permission_key FROM admin_role_permissions WHERE role_id = ?',
+        [roleRow.id],
+      );
+      const existingKeys = new Set(existing.map((row) => row.permission_key));
+      const missing = roleDef.permissions.filter((key) => !existingKeys.has(key));
+      for (const permKey of missing) {
+        await pool.query(
+          'INSERT INTO admin_role_permissions (role_id, permission_key) VALUES (?, ?)',
+          [roleRow.id, permKey],
+        );
+      }
+    }
   }
 
   const [[superRole]] = await pool.query(
@@ -162,6 +178,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/security/exceptions')) return 'security.exceptions';
   if (path.includes('/security/overdue')) return 'security.overdue';
   if (path.includes('/security/visitors')) return 'security.visitors';
+  if (path.includes('/security/vehicles')) return 'security.vehicles';
   if (path.includes('/security/watchlist')) return 'security.watchlist';
   if (path.includes('/security/incidents')) return 'security.incidents';
   if (path.includes('/security/roll-call')) return 'security.rollcall';
@@ -185,6 +202,15 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/compliance/privacy')) return 'compliance.privacy';
   if (path.includes('/compliance/retention')) return 'compliance.retention';
 
+  if (path.includes('/platform/visitors')) return 'platform.visitors';
+  if (path.includes('/platform/vehicles')) return 'platform.vehicles';
+  if (path.includes('/platform/log-book')) return 'platform.logbook';
+  if (path.includes('/platform/calendar')) return 'platform.calendar';
+  if (path.includes('/platform/organisations')) return 'platform.organisations';
+  if (path.includes('/platform/subscriptions')) return 'platform.subscriptions';
+  if (path.includes('/platform/users')) return 'platform.users';
+  if (path.includes('/platform/health')) return 'platform.health';
+  if (path.includes('/platform/audit')) return 'platform.audit';
   if (path.includes('/platform/')) return 'platform.dashboard';
   if (path.includes('/notifications/templates') || path.includes('/notifications/org')) return 'admin.notifications';
   if (path.includes('/notifications')) return 'host.notifications';
@@ -210,6 +236,9 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/org/hosts')) return 'admin.hosts';
   if (path.includes('/org/categories')) return 'admin.categories';
   if (path.includes('/org/badges')) return 'admin.badges';
+  if (path.includes('/org/visitors')) return 'admin.visitors';
+  if (path.includes('/org/vehicles')) return 'admin.vehicles';
+  if (path.includes('/org/visits')) return 'admin.visitors';
 
   if (path.includes('/users')) return 'admin.users';
   if (path.includes('/items')) return 'admin.dashboard';

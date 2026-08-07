@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   PageHeader,
   FormField,
@@ -8,10 +8,11 @@ import {
   FilterPills,
   useToast,
 } from '../../components/ui';
+import PlatformHealthPanel from '../../components/platform/PlatformHealthPanel';
 import { useAuth } from '../../context/AuthContext';
 import { settingsApi } from '../../utils/settingsApi';
 
-const TABS = [
+const BASE_TABS = [
   { value: 'general', label: 'General' },
   { value: 'account', label: 'Account' },
   { value: 'security', label: 'Security' },
@@ -20,6 +21,8 @@ const TABS = [
   { value: 'dojah', label: 'Dojah KYC' },
   { value: 'sms', label: 'SMS' },
 ];
+
+const HEALTH_TAB = { value: 'health', label: 'System Health' };
 
 const NOTIFICATION_CATEGORIES = [
   { key: 'visit_registered', label: 'Visit registered', description: 'When a new visit is logged at a station or kiosk.' },
@@ -83,10 +86,20 @@ function ToggleRow({ label, description, checked, onChange }) {
 
 export default function AdminSettingsPage() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isPlatform = location.pathname.startsWith('/platform');
-  const { user, updateSession } = useAuth();
+  const { user, updateSession, hasPermission } = useAuth();
   const toast = useToast();
-  const [tab, setTab] = useState('general');
+  const tabs = useMemo(() => {
+    if (isPlatform && hasPermission('platform.health')) {
+      return [...BASE_TABS, HEALTH_TAB];
+    }
+    return BASE_TABS;
+  }, [isPlatform, hasPermission]);
+  const tabFromUrl = searchParams.get('tab');
+  const [tab, setTab] = useState(() => (
+    tabFromUrl && tabs.some((item) => item.value === tabFromUrl) ? tabFromUrl : 'general'
+  ));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(null);
@@ -168,6 +181,22 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab && tabs.some((item) => item.value === urlTab)) {
+      setTab(urlTab);
+    }
+  }, [searchParams, tabs]);
+
+  const handleTabChange = (nextTab) => {
+    setTab(nextTab);
+    if (nextTab === 'general') {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({ tab: nextTab }, { replace: true });
+  };
 
   const saveAccount = async (event) => {
     event.preventDefault();
@@ -371,7 +400,7 @@ export default function AdminSettingsPage() {
         </SettingsCard>
       )}
 
-      <FilterPills options={TABS} value={tab} onChange={setTab} className="mb-4" />
+      <FilterPills options={tabs} value={tab} onChange={handleTabChange} className="mb-4" />
 
       <SettingsCard className="p-5 sm:p-6">
         {tab === 'general' && (
@@ -810,6 +839,16 @@ export default function AdminSettingsPage() {
                 </LoadingButton>
               </div>
             </TabSection>
+          </div>
+        )}
+
+        {tab === 'health' && isPlatform && (
+          <div>
+            <TabPanelHeader
+              title="System Health"
+              subtitle="API, database and notification delivery status"
+            />
+            <PlatformHealthPanel />
           </div>
         )}
       </SettingsCard>

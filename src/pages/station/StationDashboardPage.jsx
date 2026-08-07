@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserPlus, LogIn, LogOut, Car, ClipboardList, Users } from 'lucide-react';
+import { UserPlus, LogIn, LogOut, Car, ClipboardList, Users, UserCheck, Clock } from 'lucide-react';
 import { RefreshAction, ActionToolbar } from '../../components/ui';
 import {
   PortalDashboardLayout,
@@ -52,9 +52,22 @@ export default function StationDashboardPage() {
         data && (
           <>
             <MetricsSection
+              title=""
               cards={[
-                { title: 'Visitors today', value: data.visitorsToday, target: metricTarget(data.visitorsToday, 5, 20), accent: 'blue' },
-                { title: 'Pending approvals', value: data.pendingApprovals, target: metricTarget(data.pendingApprovals), accent: 'purple' },
+                {
+                  title: 'Visitors today',
+                  value: data.visitorsToday,
+                  target: metricTarget(data.visitorsToday, 5, 20),
+                  accent: 'light',
+                  icon: UserCheck,
+                },
+                {
+                  title: 'Pending approvals',
+                  value: data.pendingApprovals,
+                  target: metricTarget(data.pendingApprovals),
+                  accent: 'charcoal',
+                  icon: Clock,
+                },
               ]}
             />
             <WeeklyBarChart title="Visitor flow" subtitle="Events this week" data={weeklyData} />

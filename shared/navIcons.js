@@ -43,6 +43,8 @@ export const NAV_ICONS = {
   'check-in': 'LogIn',
   'check-out': 'LogOut',
   'visitor-logs': 'ClipboardList',
+  'walking-visits': 'Footprints',
+  'vehicle-visits': 'CarFront',
   'vehicle-logs': 'List',
   deliveries: 'Package',
   'badge-desk': 'IdCard',

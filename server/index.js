@@ -142,6 +142,19 @@ app.use('/api', (req, res, next) => {
     if (!hasAnyPermission(perms, notificationGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
+  } else if (!isLegacyAdmin && routePath.includes('/admin/org/visits')) {
+    const visitType = String(req.query?.type || 'walking').toLowerCase();
+    const visitGate = visitType === 'vehicle'
+      ? ['admin.vehicles', 'admin.dashboard']
+      : ['admin.visitors', 'admin.dashboard'];
+    if (!hasAnyPermission(perms, visitGate)) {
+      return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
+    }
+  } else if (!isLegacyAdmin && (routePath.includes('/platform/visitors') || routePath.includes('/platform/vehicles'))) {
+    const platformRegisterGate = ['platform.visitors', 'platform.vehicles', 'platform.logbook', 'platform.dashboard'];
+    if (!hasAnyPermission(perms, platformRegisterGate)) {
+      return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
+    }
   } else if (!isLegacyAdmin && !permissionMatches(perms, requiredPerm)) {
     return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
   }
