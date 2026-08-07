@@ -239,7 +239,7 @@ function ShellBody({ portalId, title }) {
                 className="h-full w-full object-contain brightness-0 invert"
               />
             </span>
-            <span className="truncate text-base font-black leading-tight tracking-tight text-white">
+            <span className="truncate text-lg font-black leading-tight tracking-tight text-white">
               Visitors Log
             </span>
           </Link>
