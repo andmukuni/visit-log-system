@@ -9,7 +9,7 @@ FROM node:20-bookworm AS build
 WORKDIR /app
 ENV NODE_ENV=development
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN NODE_ENV=development npm install
 COPY . .
 RUN NODE_ENV=production npm run build
 

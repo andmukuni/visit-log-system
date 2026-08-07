@@ -1,3 +1,7 @@
+# Coolify deployment — single app container (API + SPA on one port).
+# Environment variables: set in Coolify UI (Environment Variables tab).
+# Do NOT bind host ports here — Coolify proxy routes to expose:4000.
+
 services:
   node-template:
     build:
@@ -9,8 +13,11 @@ services:
       PORT: 4000
     volumes:
       - node_template_uploads:/app/uploads
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
+    # Local dev only — do not use on Coolify (host 4000 is often already taken):
+    # ports:
+    #   - "4000:4000"
 
 volumes:
   node_template_uploads:
