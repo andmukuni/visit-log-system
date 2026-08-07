@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
-  Plus, RefreshCw, Download, Upload, Printer, Search, Filter, ArrowLeft, Save, Check, X,
+  Plus, RefreshCw, Download, Upload, Printer, Search, Filter, ArrowLeft, ArrowRight, Save, Check, X,
 } from 'lucide-react';
 import IconButton from './IconButton';
 import LoadingButton from './LoadingButton';
@@ -88,6 +88,14 @@ export function ConfirmAction({ onClick, loading, label = 'Confirm' }) {
 
 export function CancelAction({ onClick, label = 'Cancel' }) {
   return <IconButton icon={X} label={label} tooltip={label} variant="ghost" onClick={onClick} />;
+}
+
+export function ViewAllAction({ to, onClick, label = 'View all' }) {
+  const btn = (
+    <IconButton icon={ArrowRight} label={label} tooltip={label} variant="ghost" size="sm" onClick={onClick} />
+  );
+  if (to) return <Link to={to} aria-label={label}>{btn}</Link>;
+  return btn;
 }
 
 export function ViewAction({ to, onClick, label = 'View' }) {

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Building2, Users, ClipboardList } from 'lucide-react';
 import {
   PageHeader,
@@ -8,6 +7,7 @@ import {
   Spinner,
   RefreshAction,
   ActionToolbar,
+  ViewAllAction,
 } from '../../components/ui';
 import { DashboardOverviewLayout } from '../../components/dashboard';
 import { formatDateTime } from '../../utils/helpers';
@@ -114,6 +114,7 @@ export default function PlatformDashboardPage() {
               data: data.weeklyTrend || data.weeklyVisits,
               trend: data?.visitTrend,
               emptyLabel: 'No visit data for this week yet.',
+              detailLink: '/platform/log-book',
             }}
             donutChart={{
               title: 'Recent month',
@@ -130,11 +131,7 @@ export default function PlatformDashboardPage() {
           <Card
             title="Recent audit activity"
             subtitle="Latest platform-wide security and admin actions"
-            actions={
-              <Link to="/platform/audit" className="text-xs font-medium text-blue-600 hover:text-blue-700">
-                View all
-              </Link>
-            }
+            actions={<ViewAllAction to="/platform/audit" label="View all audit logs" />}
           >
             <DataTable
               embedded

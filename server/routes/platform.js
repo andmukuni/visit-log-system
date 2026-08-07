@@ -121,6 +121,54 @@ export function createPlatformRouter() {
     }
   });
 
+  router.get('/log-book', async (req, res) => {
+    try {
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const search = String(req.query.search || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      let sql = `
+        SELECT vis.id, vis.reference_number, vis.status, vis.created_at, vis.check_in_at, vis.check_out_at,
+               CONCAT(v.first_name, ' ', v.last_name) AS visitor_name,
+               u.name AS host_name,
+               o.name AS organisation_name,
+               s.name AS site_name,
+               vc.name AS category_name
+        FROM visits vis
+        INNER JOIN visitors v ON v.id = vis.visitor_id
+        INNER JOIN organisations o ON o.id = vis.organisation_id
+        LEFT JOIN users u ON u.id = vis.host_id
+        LEFT JOIN sites s ON s.id = vis.site_id
+        LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (status) {
+        sql += ' AND vis.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        sql += ` AND (
+          CONCAT(v.first_name, ' ', v.last_name) LIKE ?
+          OR vis.reference_number LIKE ?
+          OR u.name LIKE ?
+          OR o.name LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+
+      sql += ' ORDER BY vis.created_at DESC LIMIT ?';
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/organisations', async (_req, res) => {
     try {
       const [rows] = await pool.query(

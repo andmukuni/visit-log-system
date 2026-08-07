@@ -169,6 +169,10 @@ export const platformApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/platform/calendar${qs ? `?${qs}` : ''}`);
   },
+  getLogBook: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/platform/log-book${qs ? `?${qs}` : ''}`);
+  },
   getOrganisations: () => apiFetch('/admin/platform/organisations'),
   updateOrganisation: (id, body) => apiFetch(`/admin/platform/organisations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getSubscriptions: () => apiFetch('/admin/platform/subscriptions'),

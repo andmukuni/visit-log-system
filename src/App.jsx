@@ -73,6 +73,7 @@ const PlatformDashboardPage = lazy(() => import('./pages/platform/PlatformDashbo
 const PlatformOrganisationsPage = lazy(() => import('./pages/platform/PlatformOrganisationsPage'));
 const PlatformHealthPage = lazy(() => import('./pages/platform/PlatformHealthPage'));
 const PlatformCalendarPage = lazy(() => import('./pages/platform/PlatformCalendarPage'));
+const PlatformLogBookPage = lazy(() => import('./pages/platform/PlatformLogBookPage'));
 const PlatformAuditPage = lazy(() => import('./pages/platform/PlatformAuditPage'));
 const PlatformUsersPage = lazy(() => import('./pages/platform/PlatformUsersPage'));
 
@@ -299,6 +300,7 @@ export default function App() {
             <Route path="/platform" element={<ProtectedRoute><PlatformPortalLayout /></ProtectedRoute>}>
               <Route index element={<PlatformDashboardPage />} />
               <Route path="calendar" element={<PlatformCalendarPage />} />
+              <Route path="log-book" element={<PlatformLogBookPage />} />
               <Route path="organisations" element={<PlatformOrganisationsPage />} />
               <Route path="users" element={<PlatformUsersPage />} />
               <Route path="health" element={<PlatformHealthPage />} />

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import AnimatedNumber from '../ui/AnimatedNumber';
 
@@ -140,7 +141,7 @@ function SeriesLegend({ items }) {
               strokeDasharray={item.dash || undefined}
             />
           </svg>
-          <span>{item.label}</span>
+          <span className="font-bold text-gray-600">{item.label}</span>
         </div>
       ))}
     </div>
@@ -155,8 +156,10 @@ export default function DashboardLineChart({
   onPeriodChange,
   periodOptions = PERIOD_OPTIONS,
   emptyLabel = 'No visit data yet.',
+  detailLink,
   className = '',
 }) {
+  const navigate = useNavigate();
   const svgRef = useRef(null);
   const chartId = useId().replace(/:/g, '');
   const [hoverIndex, setHoverIndex] = useState(null);
@@ -273,6 +276,10 @@ export default function DashboardLineChart({
     setHoverIndex(nearest);
   };
 
+  const openDetail = () => {
+    if (detailLink) navigate(detailLink);
+  };
+
   if (!hasData) {
     return (
       <div className={`flex h-full min-h-[22rem] flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
@@ -350,13 +357,16 @@ export default function DashboardLineChart({
           <svg
             ref={svgRef}
             viewBox={`0 0 ${chart.width} ${chart.height}`}
-            className="h-full min-h-[12rem] w-full flex-1 touch-none"
+            className={`h-full min-h-[12rem] w-full flex-1 touch-none ${detailLink ? 'cursor-pointer' : ''}`}
             onMouseMove={handlePointer}
             onMouseLeave={() => setHoverIndex(null)}
+            onClick={() => {
+              if (detailLink && hoverIndex != null) openDetail();
+            }}
             onTouchMove={(event) => handlePointer(event.touches[0])}
             onTouchEnd={() => setHoverIndex(null)}
-            role="img"
-            aria-label={`${title} line chart`}
+            role={detailLink ? 'link' : 'img'}
+            aria-label={detailLink ? `${title} line chart — click a day to open log book` : `${title} line chart`}
           >
             <defs>
               <linearGradient id={`${chartId}-area`} x1="0" y1="0" x2="0" y2="1">
@@ -413,6 +423,7 @@ export default function DashboardLineChart({
                   stroke="#d1d5db"
                   strokeWidth={1}
                   strokeDasharray="4 4"
+                  pointerEvents="none"
                 />
                 <polygon
                   points={`${activePrimaryPoint.x - 4},${chart.height - chart.padBottom + 2} ${activePrimaryPoint.x + 4},${chart.height - chart.padBottom + 2} ${activePrimaryPoint.x},${chart.height - chart.padBottom + 8}`}
@@ -438,13 +449,19 @@ export default function DashboardLineChart({
             )}
 
             {chart.primaryPoints.map((point, index) => (
-              <circle
+              <rect
                 key={point.label}
-                cx={point.x}
-                cy={point.y}
-                r={12}
+                x={point.x - 24}
+                y={chart.padTop}
+                width={48}
+                height={chart.height - chart.padTop - chart.padBottom}
                 fill="transparent"
+                className={detailLink ? 'cursor-pointer' : undefined}
                 onMouseEnter={() => setHoverIndex(index)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (detailLink) openDetail();
+                }}
               />
             ))}
 
@@ -485,6 +502,11 @@ export default function DashboardLineChart({
                   );
                 })}
               </div>
+              {detailLink && (
+                <p className="mt-2 border-t border-white/10 pt-2 text-[10px] font-medium text-cyan-300">
+                  Click to open log book
+                </p>
+              )}
             </div>
           )}
         </div>

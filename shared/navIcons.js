@@ -2,6 +2,7 @@
 export const NAV_ICONS = {
   dashboard: 'LayoutDashboard',
   calendar: 'Calendar',
+  'log-book': 'BookOpen',
   organisations: 'Building2',
   subscriptions: 'CreditCard',
   'platform-users': 'Users',

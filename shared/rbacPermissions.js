@@ -118,6 +118,7 @@ const EXECUTIVE_KEYS = EXECUTIVE_PERMISSIONS.map((p) => p.key);
 const PLATFORM_PERMISSIONS = [
   { key: 'platform.dashboard', name: 'Platform dashboard', group: 'Platform' },
   { key: 'platform.calendar', name: 'Platform calendar', group: 'Platform' },
+  { key: 'platform.logbook', name: 'Platform log book', group: 'Platform' },
   { key: 'platform.organisations', name: 'Manage organisations', group: 'Platform' },
   { key: 'platform.subscriptions', name: 'Manage subscriptions', group: 'Platform' },
   { key: 'platform.users', name: 'Platform users', group: 'Platform' },

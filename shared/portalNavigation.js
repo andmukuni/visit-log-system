@@ -60,6 +60,7 @@ export const PORTAL_NAVIGATION = {
   platform: [
     { key: 'dashboard', name: 'Dashboard', to: '/platform', permission: 'platform.dashboard', end: true, section: 'primary' },
     { key: 'calendar', name: 'Calendar', to: '/platform/calendar', permission: 'platform.calendar', section: 'primary' },
+    { key: 'log-book', name: 'Log Book', to: '/platform/log-book', permission: 'platform.logbook', section: 'primary' },
     { key: 'organisations', name: 'Organisations', to: '/platform/organisations', permission: 'platform.organisations', section: 'primary' },
     { key: 'platform-users', name: 'Platform Users', to: '/platform/users', permission: 'platform.users', section: 'primary' },
     { key: 'system-health', name: 'System Health', to: '/platform/health', permission: 'platform.health', section: 'system' },
