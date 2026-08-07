@@ -1,10 +1,10 @@
-import { LOGO_PATH } from '../../shared/branding.js';
+import { LOGO_PATH, LOGIN_HERO_BG_PATH } from '../../shared/branding.js';
 
 const STATIC_ASSET_CACHE = 'visitors-log-static-assets-v1';
 
 /** Known long-lived public assets to warm in the browser Cache Storage layer. */
 export const CACHED_STATIC_ASSETS = Object.freeze({
-  loginHero: '/images/login-hero.webp',
+  loginHero: LOGIN_HERO_BG_PATH,
   logo: LOGO_PATH,
 });
 

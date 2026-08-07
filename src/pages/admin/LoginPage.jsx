@@ -5,8 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { LoadingButton, IconButton } from '../../components/ui';
 import { purgeInvalidAuthState } from '../../utils/authHeaders';
-import { APP_NAME, APP_NAME_SHORT, APP_TAGLINE, LOGO_PATH } from '../../../shared/branding.js';
+import { APP_NAME, APP_NAME_SHORT, LOGO_PATH } from '../../../shared/branding.js';
 import { CACHED_STATIC_ASSETS, warmLoginHeroAsset, warmLogoAsset } from '../../utils/staticAssetCache';
+import LoginHeroPanel from '../../components/admin/LoginHeroPanel';
 import { resolvePrimaryPortal, PORTALS } from '../../../shared/portalNavigation.js';
 import { permissionMatches } from '../../../shared/rbacPermissions.js';
 
@@ -84,38 +85,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      <aside className="relative z-10 hidden lg:flex lg:w-1/2 xl:w-[55%] min-h-screen overflow-hidden [clip-path:polygon(0_0,100%_0,calc(100%-3.5rem)_100%,0_100%)] xl:[clip-path:polygon(0_0,100%_0,calc(100%-4.5rem)_100%,0_100%)] bg-gray-950">
-        <img
-          src={LOGIN_HERO_SRC}
-          alt=""
-          width={720}
-          height={1080}
-          decoding="async"
-          fetchPriority="high"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gray-950/50" />
-        <div className="relative z-10 flex min-h-screen w-full flex-1 flex-col items-center justify-center px-10 py-14 xl:px-14">
-          <div className="flex w-full max-w-2xl flex-col items-center text-center lg:-translate-x-4 xl:-translate-x-5">
-            <div className="mb-6">
-              <img
-                src={LOGO_SRC}
-                alt={APP_NAME}
-                width={200}
-                height={80}
-                decoding="async"
-                className="h-16 max-w-[200px] w-auto object-contain xl:h-20"
-              />
-            </div>
-            <h1 className="whitespace-nowrap text-[clamp(1.5rem,2.6vw,2.75rem)] font-black text-white uppercase leading-none tracking-tight">
-              {APP_NAME}
-            </h1>
-            <p className="mt-4 max-w-md text-sm leading-relaxed text-gray-300">
-              {APP_TAGLINE}
-            </p>
-          </div>
-        </div>
-      </aside>
+      <LoginHeroPanel />
 
       <main className="relative z-0 flex flex-1 items-center justify-center bg-gray-950 lg:bg-white px-6 py-12 sm:px-10 lg:-ml-14 lg:px-16 xl:-ml-[4.5rem]">
         <div className="w-full max-w-md">
