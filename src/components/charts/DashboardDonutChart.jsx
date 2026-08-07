@@ -140,7 +140,7 @@ export default function DashboardDonutChart({
 
   if (!hasData) {
     return (
-      <div className={`flex h-full min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
+      <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
         <ChartCardHeader title={title} subtitle={subtitle} />
         <div className="flex flex-1 flex-col p-5">
           <div className="flex h-64 flex-1 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
@@ -154,19 +154,19 @@ export default function DashboardDonutChart({
   const total = chartData.reduce((sum, row) => sum + row.value, 0);
   const resolvedCenterValue = centerValue ?? formatPercent(animatedTopPct);
 
-  const size = 280;
+  const size = 220;
   const cx = size / 2;
   const cy = size / 2;
-  const radius = 98;
-  const strokeWidth = 14;
+  const radius = 78;
+  const strokeWidth = 12;
 
   return (
-    <div className={`flex h-full min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
       <ChartCardHeader title={title} subtitle={subtitle} />
 
-      <div className="flex min-h-0 flex-1 flex-col p-5">
-        <div className="mx-auto flex flex-1 flex-col justify-center py-2">
-          <div className="relative mx-auto w-full max-w-[240px]">
+      <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+        <div className="mx-auto flex min-h-0 flex-1 flex-col justify-center py-1">
+          <div className="relative mx-auto w-full max-w-[200px]">
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block w-full" aria-hidden="true">
               <AnimatedDonutSegments
                 segments={segments}
@@ -184,14 +184,14 @@ export default function DashboardDonutChart({
                 <p className="text-sm leading-snug text-gray-400">{centerTitle}</p>
               )}
               <span className="sr-only">{centerTitle}</span>
-              <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-gray-900">
+              <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-gray-900">
                 {resolvedCenterValue}
               </p>
             </div>
           </div>
         </div>
 
-        <ul className="mt-auto space-y-3">
+        <ul className="mt-auto space-y-2">
         {legendItems.map((row, index) => {
           const LegendIcon = row.icon || LEGEND_ICONS[index % LEGEND_ICONS.length];
           const legendName = formatLegendName(row.name);

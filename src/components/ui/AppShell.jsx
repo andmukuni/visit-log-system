@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, Suspense } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useLocation, useNavigation, useOutlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
@@ -43,12 +43,33 @@ function getShellBreadcrumbs(pageHeader, portalId) {
   ];
 }
 
+function MainContent() {
+  const location = useLocation();
+  const navigation = useNavigation();
+  const outlet = useOutlet();
+  const isLoading = navigation.state === 'loading';
+
+  return (
+    <Suspense fallback={<PortalOutletLoader />}>
+      {isLoading ? (
+        <PortalOutletLoader />
+      ) : (
+        <div key={location.pathname}>{outlet}</div>
+      )}
+    </Suspense>
+  );
+}
+
 function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
   const location = useLocation();
   const { user } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
   const shellBreadcrumbs = getShellBreadcrumbs(pageHeader, portalId);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [location.pathname]);
 
   return (
     <>
@@ -91,9 +112,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
         <div className="flex flex-1">
           <main className="min-w-0 flex-1 overflow-x-clip">
             <div className="p-4 sm:p-6 lg:px-8 pb-6 pt-4">
-              <Suspense fallback={<PortalOutletLoader />}>
-                <Outlet key={location.pathname} />
-              </Suspense>
+              <MainContent />
             </div>
           </main>
 
@@ -107,6 +126,18 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
         </div>
       </div>
     </>
+  );
+}
+
+function ShellMainWithProviders(props) {
+  const location = useLocation();
+
+  return (
+    <AnalyticsPanelProvider key={location.pathname}>
+      <PageHeaderProvider key={location.pathname}>
+        <ShellMain {...props} />
+      </PageHeaderProvider>
+    </AnalyticsPanelProvider>
   );
 }
 
@@ -135,16 +166,12 @@ function ShellBody({ portalId, title }) {
           onCloseSidebar={closeSidebar}
         />
 
-        <AnalyticsPanelProvider>
-          <PageHeaderProvider>
-            <ShellMain
-              portalId={portalId}
-              sidebarOpen={sidebarOpen}
-              onOpenSidebar={openSidebar}
-              onCloseSidebar={closeSidebar}
-            />
-          </PageHeaderProvider>
-        </AnalyticsPanelProvider>
+        <ShellMainWithProviders
+          portalId={portalId}
+          sidebarOpen={sidebarOpen}
+          onOpenSidebar={openSidebar}
+          onCloseSidebar={closeSidebar}
+        />
       </div>
     </SidebarProvider>
   );

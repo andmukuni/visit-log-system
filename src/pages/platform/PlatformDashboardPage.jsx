@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, Users, ClipboardList } from 'lucide-react';
+import { Building2, Users, ClipboardList, UserCheck } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -51,13 +51,20 @@ export default function PlatformDashboardPage() {
       to: '/platform/users',
     },
     {
-      label: 'Visits today',
-      value: data?.visitsToday ?? 0,
-      icon: ClipboardList,
-      trend: data?.visitTrend,
-      trendLabel: 'vs yesterday',
+      label: 'On site now',
+      value: data?.checkedInNow ?? 0,
+      icon: UserCheck,
+      footer: 'Visitors currently checked in',
     },
   ];
+
+  const sideKpi = {
+    label: 'Visits today',
+    value: data?.visitsToday ?? 0,
+    icon: ClipboardList,
+    trend: data?.visitTrend,
+    trendLabel: 'vs yesterday',
+  };
 
   const auditColumns = [
     {
@@ -109,6 +116,7 @@ export default function PlatformDashboardPage() {
         <>
           <DashboardOverviewLayout
             kpis={kpis}
+            sideKpi={sideKpi}
             lineChart={{
               title: 'Visit statistics',
               data: data.weeklyTrend || data.weeklyVisits,

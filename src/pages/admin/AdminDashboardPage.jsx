@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MapPin, Users, ClipboardList } from 'lucide-react';
+import { MapPin, Users, ClipboardList, Clock3 } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -53,13 +53,20 @@ export default function AdminDashboardPage() {
       to: '/admin/users',
     },
     {
-      label: 'Visits today',
-      value: data?.visitsToday ?? 0,
-      icon: ClipboardList,
-      trend: data?.visitTrend,
-      trendLabel: 'vs yesterday',
+      label: 'Pending approvals',
+      value: data?.pendingApprovals ?? 0,
+      icon: Clock3,
+      footer: 'Awaiting host or admin action',
     },
   ];
+
+  const sideKpi = {
+    label: 'Visits today',
+    value: data?.visitsToday ?? 0,
+    icon: ClipboardList,
+    trend: data?.visitTrend,
+    trendLabel: 'vs yesterday',
+  };
 
   const columns = [
     {
@@ -103,6 +110,7 @@ export default function AdminDashboardPage() {
         <>
           <DashboardOverviewLayout
             kpis={kpis}
+            sideKpi={sideKpi}
             lineChart={{
               title: 'Visit statistics',
               data: data.weeklyTrend || data.weeklyVisits,

@@ -282,7 +282,7 @@ export default function DashboardLineChart({
 
   if (!hasData) {
     return (
-      <div className={`flex h-full min-h-[22rem] flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
+      <div className={`flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm text-gray-400">{title}</p>
@@ -312,7 +312,7 @@ export default function DashboardLineChart({
   const trendPositive = computedTrend >= 0;
 
   return (
-    <div className={`flex h-full min-h-[22rem] flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
+    <div className={`flex h-full min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-gray-400">{title}</p>

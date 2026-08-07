@@ -41,5 +41,5 @@ export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions, i
       iconKey: iconKey || '',
     });
     return () => setHeader(EMPTY_HEADER);
-  }, [title, subtitle, breadcrumbs, actions, iconKey, setHeader]);
+  }, [title, subtitle, breadcrumbs, iconKey, setHeader, actions]);
 }
