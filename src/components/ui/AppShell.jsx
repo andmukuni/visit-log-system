@@ -3,6 +3,8 @@ import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import NavIcon from './NavIcon';
+import Breadcrumbs from './Breadcrumbs';
+import { getKpiAccentClass } from './PortalKpiCard';
 import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
@@ -20,7 +22,21 @@ function PortalOutletLoader() {
   );
 }
 
-function SidebarNavLink({ item, onNavigate }) {
+function SidebarNavIcon({ iconKey, isActive, accentIndex = 0 }) {
+  return (
+    <span
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm transition-colors ${
+        isActive
+          ? getKpiAccentClass(accentIndex)
+          : 'border border-navy-700 bg-navy-900 text-navy-400 group-hover:border-navy-600 group-hover:bg-navy-800 group-hover:text-navy-200'
+      }`}
+    >
+      <NavIcon iconKey={iconKey} size={16} />
+    </span>
+  );
+}
+
+function SidebarNavLink({ item, onNavigate, accentIndex = 0 }) {
   return (
     <NavLink
       to={item.to}
@@ -28,15 +44,19 @@ function SidebarNavLink({ item, onNavigate }) {
       onClick={() => onNavigate?.()}
       aria-label={item.name}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+        `group flex items-center gap-3 -mx-4 py-2.5 pl-7 pr-4 text-sm font-medium transition-colors rounded-r-xl ${
           isActive
             ? 'bg-cyan-600/10 text-cyan-400'
             : 'text-navy-300 hover:bg-navy-800 hover:text-white'
         }`
       }
     >
-      <NavIcon iconKey={item.key} size={18} className="shrink-0" />
-      <span className="truncate">{item.name}</span>
+      {({ isActive }) => (
+        <>
+          <SidebarNavIcon iconKey={item.key} isActive={isActive} accentIndex={accentIndex} />
+          <span className="truncate">{item.name}</span>
+        </>
+      )}
     </NavLink>
   );
 }
@@ -56,9 +76,11 @@ function PortalSwitcher({ currentPortalId, hasPermission, onNavigate }) {
             key={portal.id}
             to={portal.routePrefix}
             onClick={() => onNavigate?.()}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:bg-navy-800 hover:text-white transition-colors"
+            className="group flex items-center gap-3 -mx-4 py-2.5 pl-7 pr-4 text-sm font-medium text-navy-300 transition-colors rounded-r-xl hover:bg-navy-800 hover:text-white"
           >
-            <NavIcon name={PORTAL_ICONS[portal.id]} size={18} className="shrink-0" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-navy-700 bg-navy-900 text-navy-400 shadow-sm transition-colors group-hover:border-navy-600 group-hover:bg-navy-800 group-hover:text-navy-200">
+              <NavIcon name={PORTAL_ICONS[portal.id]} size={16} />
+            </span>
             <span className="truncate">{portal.label.replace(/ Portal$/, '')}</span>
           </Link>
         ))}
@@ -76,8 +98,8 @@ function SidebarNavSection({ label, items, onNavigate, bordered = false }) {
         {label}
       </p>
       <div className="space-y-1">
-        {items.map((item) => (
-          <SidebarNavLink key={item.key} item={item} onNavigate={onNavigate} />
+        {items.map((item, index) => (
+          <SidebarNavLink key={item.key} item={item} accentIndex={index} onNavigate={onNavigate} />
         ))}
       </div>
     </div>
@@ -166,8 +188,8 @@ function ShellBody({ portalId, title }) {
 
         {settings.length > 0 && (
           <div className="shrink-0 border-t border-navy-800 p-4 space-y-1">
-            {settings.map((item) => (
-              <SidebarNavLink key={item.key} item={item} onNavigate={closeSidebar} />
+            {settings.map((item, index) => (
+              <SidebarNavLink key={item.key} item={item} accentIndex={index} onNavigate={closeSidebar} />
             ))}
           </div>
         )}
@@ -188,7 +210,9 @@ function ShellBody({ portalId, title }) {
             >
               <Menu size={20} />
             </button>
-            {pageHeader.title ? (
+            {pageHeader.breadcrumbs?.length > 0 ? (
+              <Breadcrumbs items={pageHeader.breadcrumbs} variant="shell" className="min-w-0 flex-1" />
+            ) : pageHeader.title ? (
               <h1 className="truncate text-lg font-bold tracking-tight text-navy-900">
                 {pageHeader.title}
               </h1>

@@ -89,6 +89,7 @@ export default function PlatformDashboardPage() {
       <PageHeader
         title="Platform Dashboard"
         subtitle="Multi-organisation overview and system health"
+        breadcrumbs={[{ label: 'Platform', to: '/platform' }, { label: 'Dashboard' }]}
         actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
       />
 

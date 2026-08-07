@@ -1,5 +1,6 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import AnimatedNumber from '../ui/AnimatedNumber';
 
 const PERIOD_OPTIONS = [
   { value: 'week', label: 'This week' },
@@ -160,12 +161,36 @@ export default function DashboardLineChart({
   const chartId = useId().replace(/:/g, '');
   const [hoverIndex, setHoverIndex] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [drawProgress, setDrawProgress] = useState(0);
 
   const series = useMemo(() => normalizeSeries(data), [data]);
   const totalValues = series.map((row) => row.visits);
   const total = totalValues.reduce((sum, value) => sum + value, 0);
   const allValues = series.flatMap((row) => CHART_SERIES.map((cfg) => readSeriesValue(row, cfg.key)));
   const hasData = series.length > 0 && allValues.some((value) => value > 0);
+
+  useEffect(() => {
+    if (!hasData) {
+      setDrawProgress(0);
+      return undefined;
+    }
+
+    let frame;
+    const start = performance.now();
+    const duration = 1100;
+
+    const tick = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      setDrawProgress(1 - (1 - progress) ** 3);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    setDrawProgress(0);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [hasData, data]);
 
   const computedTrend = useMemo(() => {
     if (trend != null && !Number.isNaN(Number(trend))) return Number(trend);
@@ -194,7 +219,7 @@ export default function DashboardLineChart({
 
     const buildPoints = (key) =>
       series.map((row, index) => {
-        const value = readSeriesValue(row, key);
+        const value = readSeriesValue(row, key) * drawProgress;
         return {
           x: padLeft + (index / Math.max(series.length - 1, 1)) * innerW,
           y: padTop + innerH - (value / yMax) * innerH,
@@ -226,7 +251,7 @@ export default function DashboardLineChart({
       lineSeries,
       primaryPoints,
     };
-  }, [allValues, series]);
+  }, [allValues, series, drawProgress]);
 
   const handlePointer = (event) => {
     const svg = svgRef.current;
@@ -285,12 +310,19 @@ export default function DashboardLineChart({
         <div>
           <p className="text-sm text-gray-400">{title}</p>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-2xl font-bold tracking-tight text-gray-900 tabular-nums">
-              {formatTotal(total)}
-            </span>
-            <span className={`text-sm font-semibold tabular-nums ${trendPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-              {formatTrend(computedTrend)}
-            </span>
+            <AnimatedNumber
+              value={total}
+              delay={120}
+              format={formatTotal}
+              className="text-2xl font-bold tracking-tight text-gray-900 tabular-nums"
+            />
+            <AnimatedNumber
+              value={computedTrend}
+              delay={220}
+              decimals={1}
+              format={formatTrend}
+              className={`text-sm font-semibold tabular-nums ${trendPositive ? 'text-emerald-500' : 'text-red-500'}`}
+            />
           </div>
         </div>
         <PeriodDropdown

@@ -23,6 +23,7 @@ export default function DashboardOverviewLayout({
           <PortalKpiCard
             key={item.key || item.label}
             accent={item.accent ?? kpiAccent(index)}
+            animateDelay={index * 80}
             {...item}
           />
         ))}

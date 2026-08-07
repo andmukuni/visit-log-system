@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 const EMPTY_HEADER = {
   title: '',
   subtitle: '',
+  breadcrumbs: [],
   actions: null,
 };
 
@@ -27,11 +28,16 @@ export function usePageHeaderState() {
   return useContext(PageHeaderContext);
 }
 
-export function useRegisterPageHeader({ title, actions }) {
+export function useRegisterPageHeader({ title, subtitle, breadcrumbs, actions }) {
   const { setHeader } = usePageHeaderState();
 
   useEffect(() => {
-    setHeader({ title: title || '', subtitle: '', actions: actions ?? null });
+    setHeader({
+      title: title || '',
+      subtitle: subtitle || '',
+      breadcrumbs: breadcrumbs || [],
+      actions: actions ?? null,
+    });
     return () => setHeader(EMPTY_HEADER);
-  }, [title, actions, setHeader]);
+  }, [title, subtitle, breadcrumbs, actions, setHeader]);
 }

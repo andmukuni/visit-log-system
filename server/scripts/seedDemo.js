@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { bootstrapDatabase } from '../schema.js';
 import { seedDashboardIllustration } from '../seedDashboardIllustration.js';
+import { isPostgresDriver, resolveDbDriver, runPostgresQuery } from '../sqlDialect.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -18,25 +19,11 @@ const targetArg = args.find((arg) => arg.startsWith('--target='));
 const urlArg = args.find((arg) => arg.startsWith('--url='));
 const target = targetArg?.split('=')[1] || 'local';
 
-function mysqlToPg(sql) {
-  let index = 0;
-  return sql
-    .replace(/\?/g, () => `$${++index}`)
-    .replace(/CURDATE\(\)/g, 'CURRENT_DATE')
-    .replace(/NOW\(\)/g, 'NOW()')
-    .replace(/DATE_SUB\(CURDATE\(\), INTERVAL (\d+) DAY\)/g, "CURRENT_DATE - INTERVAL '$1 day'")
-    .replace(/DATE_SUB\(CURDATE\(\), INTERVAL (\d+) DAY\) AND created_at < CURDATE\(\)/g, "CURRENT_DATE - INTERVAL '$1 day' AND created_at < CURRENT_DATE")
-    .replace(/TINYINT\(1\)/g, 'BOOLEAN')
-    .replace(/DATETIME/g, 'TIMESTAMP');
-}
-
 function createPgPool(connectionString) {
   const pool = new pg.Pool({ connectionString, ssl: false });
   return {
     async query(sql, params = []) {
-      const text = mysqlToPg(sql);
-      const result = await pool.query(text, params);
-      return [result.rows, result.fields];
+      return runPostgresQuery(pool, sql, params);
     },
     async end() {
       await pool.end();
@@ -71,6 +58,12 @@ async function resolvePool() {
     return createPgPool(connectionString);
   }
 
+  if (isPostgresDriver(resolveDbDriver())) {
+    const connectionString = String(process.env.DATABASE_URL || '').trim();
+    console.log('[seed:demo] Connecting to PostgreSQL…');
+    return createPgPool(connectionString);
+  }
+
   console.log('[seed:demo] Connecting to local MySQL…');
   return createMysqlPool();
 }
@@ -80,12 +73,8 @@ async function main() {
 
   try {
     if (bootstrap) {
-      if (target !== 'local') {
-        console.warn('[seed:demo] Bootstrap on PostgreSQL is not fully supported — attempting seed only.');
-      } else {
-        console.log('[seed:demo] Bootstrapping base schema…');
-        await bootstrapDatabase();
-      }
+      console.log('[seed:demo] Bootstrapping base schema…');
+      await bootstrapDatabase();
     }
 
     const result = await seedDashboardIllustration(pool, { force });

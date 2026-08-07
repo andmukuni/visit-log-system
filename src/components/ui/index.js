@@ -1,5 +1,6 @@
 export { default as Card } from './Card';
 export { default as PageHeader } from './PageHeader';
+export { default as Breadcrumbs } from './Breadcrumbs';
 export { default as AdminStatCard } from './AdminStatCard';
 export { default as PortalKpiCard, kpiAccent, kpiTone } from './PortalKpiCard';
 export { default as KpiGrid } from './KpiGrid';

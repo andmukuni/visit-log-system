@@ -6,11 +6,14 @@ import {
   Store,
   Warehouse,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import AnimatedNumber from '../ui/AnimatedNumber';
+import { useCountUp } from '../../hooks/useCountUp';
 
 const SEGMENT_COLORS = ['#6366f1', '#22d3ee', '#a3e635', '#f97316', '#8b5cf6', '#14b8a6'];
 const LEGEND_ICONS = [Building2, Landmark, Factory, Store, Warehouse, Building];
 
-const GAP_FRACTION = 0.018;
+const GAP_FRACTION = 0.035;
 
 function formatPercent(value) {
   return `${Number(value).toFixed(2).replace('.', ',')}%`;
@@ -64,6 +67,22 @@ function arcStrokePath(cx, cy, radius, startFrac, endFrac) {
   return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
 }
 
+function AnimatedDonutSegments({ segments, cx, cy, radius, strokeWidth, progress }) {
+  return segments.map((seg) => {
+    const animatedEnd = seg.start + (seg.end - seg.start) * progress;
+    return (
+      <path
+        key={seg.name}
+        d={arcStrokePath(cx, cy, radius, seg.start, animatedEnd)}
+        fill="none"
+        stroke={seg.color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    );
+  });
+}
+
 function ChartCardHeader({ title, subtitle }) {
   if (!title && !subtitle) return null;
 
@@ -89,8 +108,37 @@ export default function DashboardDonutChart({
   className = '',
 }) {
   const chartData = normalizeData(data, nameKey, valueKey);
+  const hasData = chartData.length > 0;
+  const segments = hasData ? buildSegments(chartData) : [];
+  const legendItems = segments.slice(0, maxLegendItems);
+  const topPct = hasData ? segments.reduce((max, row) => Math.max(max, row.pct), 0) : 0;
+  const animatedTopPct = useCountUp(topPct, { duration: 1000, delay: 200, decimals: 2, enabled: hasData });
+  const [arcProgress, setArcProgress] = useState(0);
 
-  if (!chartData.length) {
+  useEffect(() => {
+    if (!hasData) {
+      setArcProgress(0);
+      return undefined;
+    }
+
+    let frame;
+    const start = performance.now();
+    const duration = 1000;
+
+    const tick = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      setArcProgress(1 - (1 - progress) ** 3);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    setArcProgress(0);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [hasData, data]);
+
+  if (!hasData) {
     return (
       <div className={`flex h-full min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
         <ChartCardHeader title={title} subtitle={subtitle} />
@@ -104,16 +152,13 @@ export default function DashboardDonutChart({
   }
 
   const total = chartData.reduce((sum, row) => sum + row.value, 0);
-  const segments = buildSegments(chartData);
-  const legendItems = segments.slice(0, maxLegendItems);
-  const topPct = segments.reduce((max, row) => Math.max(max, row.pct), 0);
-  const resolvedCenterValue = centerValue ?? formatPercent(topPct);
+  const resolvedCenterValue = centerValue ?? formatPercent(animatedTopPct);
 
   const size = 280;
   const cx = size / 2;
   const cy = size / 2;
-  const radius = 96;
-  const strokeWidth = 22;
+  const radius = 98;
+  const strokeWidth = 14;
 
   return (
     <div className={`flex h-full min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`}>
@@ -123,16 +168,14 @@ export default function DashboardDonutChart({
         <div className="mx-auto flex flex-1 flex-col justify-center py-2">
           <div className="relative mx-auto w-full max-w-[240px]">
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block w-full" aria-hidden="true">
-              {segments.map((seg) => (
-                <path
-                  key={seg.name}
-                  d={arcStrokePath(cx, cy, radius, seg.start, seg.end)}
-                  fill="none"
-                  stroke={seg.color}
-                  strokeWidth={strokeWidth}
-                  strokeLinecap="round"
-                />
-              ))}
+              <AnimatedDonutSegments
+                segments={segments}
+                cx={cx}
+                cy={cy}
+                radius={radius}
+                strokeWidth={strokeWidth}
+                progress={arcProgress}
+              />
             </svg>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
               {CenterIcon ? (
@@ -165,7 +208,11 @@ export default function DashboardDonutChart({
                 {legendName}
               </span>
               <span className="shrink-0 text-sm font-bold tabular-nums text-gray-900">
-                {Math.round(row.pct)}%
+                <AnimatedNumber
+                  value={row.pct}
+                  delay={320 + index * 60}
+                  format={(n) => `${Math.round(n)}%`}
+                />
               </span>
             </li>
           );
@@ -174,7 +221,7 @@ export default function DashboardDonutChart({
 
       {segments.length > maxLegendItems && (
         <p className="mt-3 text-xs text-gray-400">
-          +{segments.length - maxLegendItems} more · {total} visits total
+          +{segments.length - maxLegendItems} more · <AnimatedNumber value={total} delay={400} /> visits total
         </p>
       )}
       </div>

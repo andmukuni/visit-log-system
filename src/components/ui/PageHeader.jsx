@@ -1,6 +1,5 @@
-import { ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { useRegisterPageHeader } from '../../context/PageHeaderContext';
+import Breadcrumbs from './Breadcrumbs';
 
 export default function PageHeader({
   title,
@@ -8,36 +7,13 @@ export default function PageHeader({
   breadcrumbs = [],
   actions,
 }) {
-  useRegisterPageHeader({ title, actions });
-
-  const hasBreadcrumbs = breadcrumbs.length > 0;
-  const hasSubtitle = Boolean(subtitle);
-
-  if (!hasBreadcrumbs && !hasSubtitle) {
-    return null;
-  }
+  useRegisterPageHeader({ title, subtitle, breadcrumbs, actions });
 
   return (
     <div className="mb-6">
-      {hasBreadcrumbs && (
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-gray-400 mb-2 overflow-x-auto whitespace-nowrap pb-1">
-          {breadcrumbs.map((crumb, idx) => (
-            <span key={idx} className="flex items-center gap-1">
-              {idx > 0 && <ChevronRight size={14} className="text-gray-300" />}
-              {crumb.to ? (
-                <Link to={crumb.to} className="hover:text-gray-700 transition-colors">
-                  {crumb.label}
-                </Link>
-              ) : (
-                <span className="text-gray-600 font-medium">{crumb.label}</span>
-              )}
-            </span>
-          ))}
-        </nav>
-      )}
-      {hasSubtitle && (
-        <p className="text-sm text-gray-500">{subtitle}</p>
-      )}
+      <Breadcrumbs items={breadcrumbs} variant="page" />
+      {title && <h1 className="text-2xl font-bold text-navy-900">{title}</h1>}
+      {subtitle && <p className="mt-1 text-sm text-navy-400">{subtitle}</p>}
     </div>
   );
 }

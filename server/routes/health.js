@@ -13,9 +13,9 @@ export function createHealthRouter() {
 
   router.get('/db-test', async (_req, res) => {
     try {
-      const { testConnection } = await import('../db.js');
+      const { testConnection, getDbDriver } = await import('../db.js');
       const info = await testConnection();
-      res.json({ ok: true, data: info });
+      res.json({ ok: true, driver: getDbDriver(), data: info });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
