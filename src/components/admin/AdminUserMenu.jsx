@@ -8,7 +8,6 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import IconButton from '../ui/IconButton';
 
 function MenuLink({ to, icon: Icon, children, onSelect, external = false }) {
   const className = 'flex items-center gap-2.5 w-full px-3 py-2 text-sm text-navy-700 hover:bg-navy-50 hover:text-navy-900 rounded-lg transition-colors text-left';
@@ -122,15 +121,16 @@ export default function AdminUserMenu() {
             )}
           </div>
 
-          <div className="mt-2 pt-2 px-2 border-t border-navy-100 flex justify-end">
-            <IconButton
-              icon={LogOut}
-              label="Sign out"
-              tooltip="Sign out"
-              variant="ghost"
-              className="text-red-600 hover:bg-red-50"
+          <div className="mt-2 pt-2 px-2 border-t border-navy-100">
+            <button
+              type="button"
+              role="menuitem"
               onClick={handleLogout}
-            />
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+            >
+              <LogOut size={16} className="shrink-0" />
+              Sign out
+            </button>
           </div>
         </div>
       )}
