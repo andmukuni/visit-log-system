@@ -10,7 +10,7 @@ import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/Analyti
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { PORTALS, getVisibleNavItems, groupNavItems, getAccessiblePortals } from '../../../shared/portalNavigation.js';
 import { PORTAL_ICONS } from '../../../shared/navIcons.js';
-import { APP_NAME, APP_NAME_SHORT, LOGO_PATH } from '../../../shared/branding.js';
+import { APP_NAME, SIDEBAR_BRAND_NAME, LOGO_PATH } from '../../../shared/branding.js';
 
 function PortalOutletLoader() {
   return (
@@ -241,7 +241,7 @@ function ShellBody({ portalId, title }) {
               />
             </span>
             <span className="truncate text-2xl font-black uppercase leading-tight tracking-tight text-white">
-              {APP_NAME_SHORT}
+              {SIDEBAR_BRAND_NAME}
             </span>
           </Link>
           <button
