@@ -159,6 +159,49 @@ async function resolveSiteStationId(pool, siteId, fallbackStationId) {
   return station?.id || fallbackStationId || null;
 }
 
+async function seedVisitTimelineEvents(pool, {
+  visitId,
+  status,
+  actorUserId,
+  createdAt,
+  approvedAt,
+  checkedInAt,
+  checkedOutAt,
+}) {
+  const timeline = [{ event_type: 'registered', created_at: createdAt }];
+
+  if (status === 'rejected') {
+    const rejectedAt = new Date(createdAt);
+    rejectedAt.setHours(rejectedAt.getHours() + 1);
+    timeline.push({ event_type: 'rejected', created_at: rejectedAt });
+  } else if (status !== 'pending_approval') {
+    if (approvedAt) {
+      timeline.push({ event_type: 'approved', created_at: approvedAt });
+    }
+    if (checkedInAt) {
+      timeline.push({ event_type: 'checked_in', created_at: checkedInAt });
+    }
+    if (checkedOutAt) {
+      timeline.push({ event_type: 'checked_out', created_at: checkedOutAt });
+    }
+  }
+
+  for (const event of timeline) {
+    await pool.query(
+      `INSERT INTO visit_events (id, visit_id, event_type, actor_user_id, details, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        generateId('evt'),
+        visitId,
+        event.event_type,
+        actorUserId,
+        JSON.stringify({ status, marker: DEMO_MARKER }),
+        event.created_at,
+      ],
+    );
+  }
+}
+
 async function seedDriveInVehicle(pool, {
   visitId,
   orgId,
@@ -466,17 +509,15 @@ export async function seedDashboardIllustration(pool, { force = false } = {}) {
           ],
         );
 
-        await pool.query(
-          `INSERT INTO visit_events (id, visit_id, event_type, actor_user_id, details, created_at)
-           VALUES (?, ?, 'registered', ?, ?, ?)`,
-          [
-            generateId('evt'),
-            visitId,
-            actorUserId,
-            JSON.stringify({ status, marker: DEMO_MARKER }),
-            createdAt,
-          ],
-        );
+        await seedVisitTimelineEvents(pool, {
+          visitId,
+          status,
+          actorUserId,
+          createdAt,
+          approvedAt,
+          checkedInAt,
+          checkedOutAt,
+        });
 
         if (shouldSeedDriveIn(dayOffset, i, visitorIndex)) {
           const siteId = selectedSiteId;

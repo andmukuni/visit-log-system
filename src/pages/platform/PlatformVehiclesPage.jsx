@@ -5,19 +5,13 @@ import {
   DataTable,
   Spinner,
   StatusBadge,
-  FilterPills,
   ActionToolbar,
   RefreshAction,
 } from '../../components/ui';
+import StatusFilterBar from '../../components/logbook/StatusFilterBar';
+import { VEHICLE_STATUS_OPTIONS } from '../../components/logbook/filterOptions';
 import { formatDateTime } from '../../utils/helpers';
 import { platformApi } from '../../utils/visitorApi';
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'on_site', label: 'On site' },
-  { value: 'checked_out', label: 'Checked out' },
-  { value: 'expected', label: 'Expected' },
-];
 
 export default function PlatformVehiclesPage() {
   const [rows, setRows] = useState([]);
@@ -73,9 +67,8 @@ export default function PlatformVehiclesPage() {
         actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
       />
 
-      <FilterPills
-        className="mb-4"
-        options={STATUS_OPTIONS}
+      <StatusFilterBar
+        options={VEHICLE_STATUS_OPTIONS}
         value={status}
         onChange={setStatus}
       />

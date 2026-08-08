@@ -7,18 +7,18 @@ import {
 } from '../../components/ui';
 import LogBookFilterBar from '../../components/logbook/LogBookFilterBar';
 import VisitLogTable from '../../components/logbook/VisitLogTable';
-import { PLATFORM_VISIT_TABS, filterVisitTabs } from '../../components/logbook/visitLogTabs';
+import { ADMIN_VISIT_TABS, filterVisitTabs } from '../../components/logbook/visitLogTabs';
 import { useAuth } from '../../context/AuthContext';
-import { platformApi } from '../../utils/visitorApi';
+import { visitorApi } from '../../utils/visitorApi';
 
-export default function PlatformLogBookPage() {
+export default function AdminLogBookPage() {
   const { hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
 
   const availableTabs = useMemo(
-    () => filterVisitTabs(PLATFORM_VISIT_TABS, hasPermission),
+    () => filterVisitTabs(ADMIN_VISIT_TABS, hasPermission),
     [hasPermission],
   );
 
@@ -41,18 +41,18 @@ export default function PlatformLogBookPage() {
   const loadRows = useCallback(async ({ visitType, status: nextStatus }) => {
     const params = { type: visitType };
     if (nextStatus) params.status = nextStatus;
-    return platformApi.getLogBook(params);
+    return visitorApi.getOrgVisits(params);
   }, []);
 
   if (availableTabs.length === 0) {
-    return <Navigate to="/platform" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
         title="Log Book"
-        subtitle="Platform-wide visitor register across all organisations"
+        subtitle="Organisation visit register for walking and vehicle entries"
         iconKey="log-book"
         actions={(
           <ActionToolbar>

@@ -15,6 +15,8 @@ export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';
 export { default as Tooltip } from './Tooltip';
 export { default as FilterPills } from './FilterPills';
+export { default as SegmentedControl } from './SegmentedControl';
+export { default as UnderlineTabs } from './UnderlineTabs';
 export { default as RecordDrawer } from './RecordDrawer';
 export { default as BulkActionBar } from './BulkActionBar';
 export { default as AnalyticsPanel, AnalyticsCard, MicroStatGrid } from './AnalyticsPanel';

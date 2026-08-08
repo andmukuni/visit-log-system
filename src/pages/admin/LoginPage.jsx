@@ -8,16 +8,10 @@ import { purgeInvalidAuthState } from '../../utils/authHeaders';
 import { APP_NAME, APP_NAME_SHORT, LOGO_PATH } from '../../../shared/branding.js';
 import { CACHED_STATIC_ASSETS, warmLoginHeroAsset, warmLogoAsset } from '../../utils/staticAssetCache';
 import LoginHeroPanel from '../../components/admin/LoginHeroPanel';
-import { resolvePrimaryPortal, PORTALS } from '../../../shared/portalNavigation.js';
-import { permissionMatches } from '../../../shared/rbacPermissions.js';
+import { resolvePortalRoute } from '../../../shared/portalNavigation.js';
 
 const LOGIN_HERO_SRC = CACHED_STATIC_ASSETS.loginHero;
 const LOGO_SRC = LOGO_PATH;
-
-function portalRouteForPermissions(permissions = []) {
-  const hasPermission = (key) => permissionMatches(permissions, key);
-  return PORTALS[resolvePrimaryPortal(hasPermission)]?.routePrefix || '/admin';
-}
 
 export default function LoginPage() {
   const { login, isAuthenticated, loginError, clearLoginError, isLoading, user } = useAuth();
@@ -26,7 +20,7 @@ export default function LoginPage() {
   const toast = useToast();
 
   const from = location.state?.from?.pathname;
-  const defaultPortal = portalRouteForPermissions(user?.permissions || user?.admin_permissions || []);
+  const defaultPortal = resolvePortalRoute(user?.permissions || user?.admin_permissions || []);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,10 +66,11 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
+    const session = await login(email, password);
+    if (session) {
       toast.success('Signed in successfully.');
-      navigate(from || defaultPortal, { replace: true });
+      const portalRoute = resolvePortalRoute(session.permissions || session.admin_permissions || []);
+      navigate(from || portalRoute, { replace: true });
     }
   };
 
@@ -174,7 +169,7 @@ export default function LoginPage() {
                 <IconButton
                   icon={HelpCircle}
                   label="Demo credentials"
-                  tooltip="Demo: admin@template.dev / admin123"
+                  tooltip="Super admin: admin@template.dev / admin123 · Portal users: *@demo.org / demo1234"
                   variant="ghost"
                   type="button"
                 />

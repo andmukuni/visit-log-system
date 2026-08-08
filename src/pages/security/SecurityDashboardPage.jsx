@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Clock, AlertTriangle, ShieldAlert, UserCheck, Shield } from 'lucide-react';
+import { Clock, AlertTriangle, ShieldAlert, UserCheck, Shield, UserPlus, CheckCircle, LogIn, LogOut, XCircle } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -20,6 +20,14 @@ const EVENT_LABELS = {
   rejected: 'Rejected',
   checked_in: 'Check-in',
   checked_out: 'Check-out',
+};
+
+const EVENT_ICONS = {
+  registered: UserPlus,
+  approved: CheckCircle,
+  checked_in: LogIn,
+  checked_out: LogOut,
+  rejected: XCircle,
 };
 
 function formatEventType(type) {
@@ -87,6 +95,7 @@ export default function SecurityDashboardPage() {
     () => (data?.eventsByType || []).map((row) => ({
       ...row,
       event_label: formatEventType(row.event_type),
+      icon: EVENT_ICONS[row.event_type] || Shield,
     })),
     [data?.eventsByType],
   );
@@ -156,6 +165,7 @@ export default function SecurityDashboardPage() {
               nameKey: 'event_label',
               valueKey: 'total',
               emptyLabel: 'No event data yet.',
+              totalLabel: 'events',
             }}
           />
 

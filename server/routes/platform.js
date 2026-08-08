@@ -124,39 +124,48 @@ export function createPlatformRouter() {
   router.get('/log-book', async (req, res) => {
     try {
       const limit = Math.min(200, Number(req.query.limit) || 100);
-      const search = String(req.query.search || '').trim();
+      const search = String(req.query.search || req.query.q || '').trim();
       const status = String(req.query.status || '').trim();
+      const visitType = String(req.query.type || 'walking').toLowerCase();
 
       let sql = `
         SELECT vis.id, vis.reference_number, vis.status, vis.created_at, vis.check_in_at, vis.check_out_at,
-               CONCAT(v.first_name, ' ', v.last_name) AS visitor_name,
-               u.name AS host_name,
+               v.full_name AS visitor_name,
+               h.name AS host_name,
                o.name AS organisation_name,
                s.name AS site_name,
-               vc.name AS category_name
+               vc.name AS category_name,
+               (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
         FROM visits vis
         INNER JOIN visitors v ON v.id = vis.visitor_id
         INNER JOIN organisations o ON o.id = vis.organisation_id
-        LEFT JOIN users u ON u.id = vis.host_id
+        LEFT JOIN hosts h ON h.id = vis.host_id
         LEFT JOIN sites s ON s.id = vis.site_id
         LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
         WHERE 1=1
       `;
       const params = [];
 
+      if (visitType === 'walking') {
+        sql += ' AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      } else if (visitType === 'vehicle') {
+        sql += ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      }
       if (status) {
         sql += ' AND vis.status = ?';
         params.push(status);
       }
       if (search) {
         sql += ` AND (
-          CONCAT(v.first_name, ' ', v.last_name) LIKE ?
+          v.full_name LIKE ?
           OR vis.reference_number LIKE ?
-          OR u.name LIKE ?
+          OR h.name LIKE ?
           OR o.name LIKE ?
+          OR s.name LIKE ?
         )`;
         const term = `%${search}%`;
-        params.push(term, term, term, term);
+        params.push(term, term, term, term, term);
       }
 
       sql += ' ORDER BY vis.created_at DESC LIMIT ?';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, Suspense } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
+import { canAccessPortal, resolvePortalRoute } from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
   return (
@@ -99,6 +100,15 @@ function ShellBody({ portalId, title }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
+  const navigate = useNavigate();
+  const { permissions, hasPermission } = useAuth();
+
+  useEffect(() => {
+    if (!permissions.length) return;
+    if (!canAccessPortal(portalId, hasPermission)) {
+      navigate(resolvePortalRoute(permissions), { replace: true });
+    }
+  }, [portalId, permissions, hasPermission, navigate]);
 
   useEffect(() => {
     if (!sidebarOpen) {

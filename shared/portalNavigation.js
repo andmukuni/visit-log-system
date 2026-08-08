@@ -4,6 +4,7 @@
  */
 
 import { resolveNavIcon } from './navIcons.js';
+import { permissionMatches } from './rbacPermissions.js';
 
 function navItemVisible(item, hasPermission) {
   if (item.permissions?.length) {
@@ -87,10 +88,9 @@ export const PORTAL_NAVIGATION = {
     { key: 'hosts', name: 'Employees & Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'primary' },
     { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'primary' },
     { key: 'categories', name: 'Visitor Categories', to: '/admin/categories', permission: 'admin.categories', section: 'primary' },
-    { key: 'visitors', name: 'Visitors', to: '/admin/visitors', permission: 'admin.visitors', section: 'primary' },
-    { key: 'walking-visits', name: 'Walking Visits', to: '/admin/walking-visits', permission: 'admin.visitors', section: 'primary' },
-    { key: 'vehicles', name: 'Vehicles', to: '/admin/vehicles', permission: 'admin.vehicles', section: 'primary' },
-    { key: 'vehicle-visits', name: 'Vehicle Visits', to: '/admin/vehicle-visits', permission: 'admin.vehicles', section: 'primary' },
+    { key: 'visitors', name: 'Visitors', to: '/admin/visitors', permissions: ['admin.visitors', 'admin.dashboard'], section: 'primary' },
+    { key: 'log-book', name: 'Log Book', to: '/admin/log-book', permissions: ['admin.visitors', 'admin.vehicles', 'admin.dashboard'], section: 'primary' },
+    { key: 'vehicles', name: 'Vehicles', to: '/admin/vehicles', permissions: ['admin.vehicles', 'admin.dashboard'], section: 'primary' },
     { key: 'workflows', name: 'Approval Workflows', to: '/admin/workflows', permission: 'admin.workflows', section: 'primary' },
     { key: 'badges', name: 'Badge Inventory', to: '/admin/badges', permission: 'admin.badges', section: 'primary' },
     { key: 'notifications', name: 'Notifications', to: '/admin/notifications', permission: 'admin.notifications', section: 'system' },
@@ -232,6 +232,17 @@ export function resolvePrimaryPortal(hasPermission) {
     if (items.length > 0) return portalId;
   }
   return 'admin';
+}
+
+/** Default post-login route for a permission set. */
+export function resolvePortalRoute(permissions = []) {
+  const hasPermission = (key) => permissionMatches(permissions, key);
+  const portalId = resolvePrimaryPortal(hasPermission);
+  return PORTALS[portalId]?.routePrefix || '/admin';
+}
+
+export function canAccessPortal(portalId, hasPermission) {
+  return getVisibleNavItems(portalId, hasPermission).length > 0;
 }
 
 /** Portals the signed-in user can access (for sidebar switcher). */

@@ -105,6 +105,7 @@ export default function DashboardDonutChart({
   centerValue,
   emptyLabel = 'No data yet.',
   maxLegendItems = 4,
+  totalLabel = 'visits',
   className = '',
 }) {
   const chartData = normalizeData(data, nameKey, valueKey);
@@ -221,7 +222,7 @@ export default function DashboardDonutChart({
 
       {segments.length > maxLegendItems && (
         <p className="mt-3 text-xs text-gray-400">
-          +{segments.length - maxLegendItems} more · <AnimatedNumber value={total} delay={400} /> visits total
+          +{segments.length - maxLegendItems} more · <AnimatedNumber value={total} delay={400} /> {totalLabel} total
         </p>
       )}
       </div>

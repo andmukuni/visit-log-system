@@ -69,13 +69,13 @@ export function AuthProvider({ children }) {
 
       if (!res.ok) {
         setLoginError(json.message || 'Login failed.');
-        return false;
+        return null;
       }
 
       const userData = json.data;
       if (!canAccessAdminPanel(userData)) {
         setLoginError('Access denied. Administrator privileges required.');
-        return false;
+        return null;
       }
 
       const permissions = Array.isArray(userData.admin_permissions) ? userData.admin_permissions : [];
@@ -99,10 +99,10 @@ export function AuthProvider({ children }) {
 
       setIdleLogoutPromptOpen(false);
       setUser(session);
-      return true;
+      return session;
     } catch {
       setLoginError('Unable to connect to server. Please try again.');
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +194,8 @@ export function AuthProvider({ children }) {
   }, [user, permissions]);
 
   const refreshPermissions = useCallback(async () => {
-    if (!user?.id) return;
+    const stored = getStoredSession();
+    if (!stored?.id) return;
     try {
       const res = await fetch(`${API_BASE}/admin/rbac/me`, {
         headers: getAdminAuthHeaders(),
@@ -203,17 +204,25 @@ export function AuthProvider({ children }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) return;
       const nextPerms = json.data?.permissions || [];
-      const nextSession = {
-        ...user,
-        permissions: nextPerms,
-        admin_permissions: nextPerms,
-      };
-      localStorage.setItem('mm_auth_session', JSON.stringify(nextSession));
-      setUser(nextSession);
+      setUser((prev) => {
+        if (!prev) return prev;
+        const nextSession = {
+          ...prev,
+          permissions: nextPerms,
+          admin_permissions: nextPerms,
+        };
+        localStorage.setItem('mm_auth_session', JSON.stringify(nextSession));
+        return nextSession;
+      });
     } catch {
       // ignore
     }
-  }, [user]);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    refreshPermissions();
+  }, [user?.id, refreshPermissions]);
 
   const updateSession = useCallback((patch = {}) => {
     setUser((prev) => {

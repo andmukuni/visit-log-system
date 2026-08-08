@@ -142,12 +142,27 @@ app.use('/api', (req, res, next) => {
     if (!hasAnyPermission(perms, notificationGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
+  } else if (!isLegacyAdmin && (routePath.includes('/admin/org/visitors') || routePath.includes('/admin/org/vehicles'))) {
+    const registerGate = routePath.includes('/admin/org/vehicles')
+      ? ['admin.vehicles', 'admin.dashboard']
+      : ['admin.visitors', 'admin.dashboard'];
+    if (!hasAnyPermission(perms, registerGate)) {
+      return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
+    }
   } else if (!isLegacyAdmin && routePath.includes('/admin/org/visits')) {
     const visitType = String(req.query?.type || 'walking').toLowerCase();
     const visitGate = visitType === 'vehicle'
       ? ['admin.vehicles', 'admin.dashboard']
       : ['admin.visitors', 'admin.dashboard'];
     if (!hasAnyPermission(perms, visitGate)) {
+      return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
+    }
+  } else if (!isLegacyAdmin && routePath.includes('/admin/platform/log-book')) {
+    const visitType = String(req.query?.type || 'walking').toLowerCase();
+    const logBookGate = visitType === 'vehicle'
+      ? ['platform.vehicles', 'platform.logbook', 'platform.dashboard']
+      : ['platform.visitors', 'platform.logbook', 'platform.dashboard'];
+    if (!hasAnyPermission(perms, logBookGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
   } else if (!isLegacyAdmin && (routePath.includes('/platform/visitors') || routePath.includes('/platform/vehicles'))) {

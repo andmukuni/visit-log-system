@@ -1,7 +1,11 @@
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import EmptyState from '../EmptyState';
 import IconButton from './IconButton';
 import { Eye } from 'lucide-react';
+
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 function AvatarCell({ name }) {
   const initial = (name || '?').charAt(0).toUpperCase();
@@ -11,6 +15,91 @@ function AvatarCell({ name }) {
         {initial}
       </span>
       <span className="truncate font-medium text-gray-900">{name || '—'}</span>
+    </div>
+  );
+}
+
+function TablePagination({
+  page,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = PAGE_SIZE_OPTIONS,
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const end = Math.min(safePage * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-gray-500">
+        {totalItems === 0
+          ? 'No results'
+          : `Showing ${start}–${end} of ${totalItems}`}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="hidden sm:inline">Rows</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+            aria-label="Rows per page"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex items-center gap-1">
+          <IconButton
+            icon={ChevronLeft}
+            label="Previous page"
+            tooltip="Previous page"
+            size="sm"
+            variant="ghost"
+            disabled={safePage <= 1}
+            onClick={() => onPageChange(safePage - 1)}
+          />
+          <span className="min-w-[5.5rem] text-center text-sm font-medium text-gray-700">
+            Page {safePage} of {totalPages}
+          </span>
+          <IconButton
+            icon={ChevronRight}
+            label="Next page"
+            tooltip="Next page"
+            size="sm"
+            variant="ghost"
+            disabled={safePage >= totalPages}
+            onClick={() => onPageChange(safePage + 1)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TableToolbar({ value, onChange, placeholder = 'Search…' }) {
+  return (
+    <div className="border-b border-gray-100 px-4 py-3 sm:px-5">
+      <label className="relative block">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+        />
+      </label>
     </div>
   );
 }
@@ -27,12 +116,50 @@ export default function DataTable({
   selectedIds,
   onSelectionChange,
   getRowId = (row) => row.id,
+  embedded = false,
+  toolbar,
+  pagination = true,
+  pageSize: pageSizeProp,
+  initialPage = 1,
 }) {
   const [internalSelected, setInternalSelected] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(pageSizeProp || DEFAULT_PAGE_SIZE);
+
   const selected = selectedIds ?? internalSelected;
   const setSelected = onSelectionChange ?? setInternalSelected;
 
-  const allIds = useMemo(() => data.map(getRowId).filter(Boolean), [data, getRowId]);
+  const filteredData = useMemo(() => {
+    const term = String(search || '').trim().toLowerCase();
+    if (!term || !toolbar?.searchKeys?.length) return data;
+
+    return data.filter((row) => toolbar.searchKeys.some((key) => (
+      String(row[key] ?? '').toLowerCase().includes(term)
+    )));
+  }, [data, search, toolbar]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginatedData = useMemo(() => {
+    if (!pagination || filteredData.length <= pageSize) return filteredData;
+    const start = (safePage - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, pagination, pageSize, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, data, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const allIds = useMemo(
+    () => paginatedData.map(getRowId).filter(Boolean),
+    [paginatedData, getRowId],
+  );
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.includes(id));
 
   const toggleAll = useCallback(() => {
@@ -60,7 +187,12 @@ export default function DataTable({
     return row[col.key];
   };
 
-  const tableShell = 'rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden';
+  const tableShell = embedded
+    ? 'overflow-hidden'
+    : 'rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden';
+
+  const showPagination = pagination && filteredData.length > 0;
+  const displayData = pagination ? paginatedData : filteredData;
 
   if (loading) {
     return (
@@ -83,7 +215,7 @@ export default function DataTable({
                   {selectable && <td className="px-3 py-2" />}
                   {columns.map((_, colIdx) => (
                     <td key={colIdx} className="px-3 py-2">
-                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + Math.random() * 40}%` }} />
+                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + (rowIdx * 7) % 40}%` }} />
                     </td>
                   ))}
                 </tr>
@@ -97,14 +229,42 @@ export default function DataTable({
 
   if (data.length === 0) {
     return (
-      <div className={`${tableShell} p-8`}>
+      <div className={`${tableShell} ${embedded ? 'p-0' : 'p-8'}`}>
         <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+      </div>
+    );
+  }
+
+  if (filteredData.length === 0) {
+    return (
+      <div className={tableShell}>
+        {toolbar && (
+          <TableToolbar
+            value={search}
+            onChange={setSearch}
+            placeholder={toolbar.placeholder}
+          />
+        )}
+        <div className={embedded ? 'py-8' : 'p-8'}>
+          <EmptyState
+            title="No matching results"
+            description="Try adjusting your search terms."
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div className={tableShell}>
+      {toolbar && (
+        <TableToolbar
+          value={search}
+          onChange={setSearch}
+          placeholder={toolbar.placeholder}
+        />
+      )}
+
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
           <thead className="sticky top-0 z-10 bg-gray-50">
@@ -133,7 +293,7 @@ export default function DataTable({
             </tr>
           </thead>
           <tbody>
-            {data.map((row, rowIdx) => {
+            {displayData.map((row, rowIdx) => {
               const rowId = getRowId(row) ?? rowIdx;
               const isSelected = selected.includes(rowId);
               return (
@@ -172,7 +332,7 @@ export default function DataTable({
       </div>
 
       <div className="md:hidden divide-y divide-gray-100">
-        {data.map((row, rowIdx) => {
+        {displayData.map((row, rowIdx) => {
           const rowId = getRowId(row) ?? rowIdx;
           return (
             <article
@@ -197,6 +357,16 @@ export default function DataTable({
           );
         })}
       </div>
+
+      {showPagination && (
+        <TablePagination
+          page={safePage}
+          pageSize={pageSize}
+          totalItems={filteredData.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      )}
     </div>
   );
 }

@@ -15,8 +15,7 @@ const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const AdminVisitorsPage = lazy(() => import('./pages/admin/AdminVisitorsPage'));
 const AdminVehiclesPage = lazy(() => import('./pages/admin/AdminVehiclesPage'));
-const AdminWalkingVisitsPage = lazy(() => import('./pages/admin/AdminWalkingVisitsPage'));
-const AdminVehicleVisitsPage = lazy(() => import('./pages/admin/AdminVehicleVisitsPage'));
+const AdminLogBookPage = lazy(() => import('./pages/admin/AdminLogBookPage'));
 const DemoUsersPage = lazy(() => import('./pages/admin/DemoUsersPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const DemoAccessControlPage = lazy(() => import('./pages/admin/DemoAccessControlPage'));
@@ -279,9 +278,10 @@ export const router = createBrowserRouter([
           { path: 'hosts', element: <LazyAdminOrgPage page="hosts" /> },
           { path: 'categories', element: <LazyAdminOrgPage page="categories" /> },
           { path: 'visitors', element: <AdminVisitorsPage /> },
-          { path: 'walking-visits', element: <AdminWalkingVisitsPage /> },
+          { path: 'log-book', element: <AdminLogBookPage /> },
+          { path: 'walking-visits', element: <Navigate to="/admin/log-book?tab=walking" replace /> },
           { path: 'vehicles', element: <AdminVehiclesPage /> },
-          { path: 'vehicle-visits', element: <AdminVehicleVisitsPage /> },
+          { path: 'vehicle-visits', element: <Navigate to="/admin/log-book?tab=vehicle" replace /> },
           { path: 'badges', element: <LazyAdminOrgPage page="badges" /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },
           { path: 'users', element: <DemoUsersPage /> },
