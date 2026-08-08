@@ -85,6 +85,10 @@ export function adaptSqlForPostgres(sql) {
     .replace(/GROUP_CONCAT\s*\(\s*DISTINCT\s+([^)]+)\)/gi, 'STRING_AGG(DISTINCT $1::text, \',\')')
     .replace(/\bDATE\s*\(([^)]+)\)/gi, '($1)::date')
     .replace(
+      /\bDATE_FORMAT\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*'%Y-%m-01'\s*\)/gi,
+      "date_trunc('month', CURRENT_DATE)::date",
+    )
+    .replace(
       /\bDATE_SUB\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+WEEKDAY\s*\(\s*CURDATE\s*\(\s*\)\s*\)\s+DAY\s*\)/gi,
       "date_trunc('week', CURRENT_DATE)::date",
     )
@@ -98,6 +102,8 @@ export function adaptSqlForPostgres(sql) {
     )
     .replace(/\bDATE_SUB\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)/gi, "CURRENT_DATE - INTERVAL '$1 day'")
     .replace(/\bHOUR\s*\(([^)]+)\)/gi, 'EXTRACT(HOUR FROM $1)')
+    .replace(/\bYEAR\s*\(([^)]+)\)/gi, 'EXTRACT(YEAR FROM $1)')
+    .replace(/\bMONTH\s*\(([^)]+)\)/gi, 'EXTRACT(MONTH FROM $1)')
     .replace(/\bCURDATE\(\)/gi, 'CURRENT_DATE')
     .replace(/\bDATABASE\s*\(\s*\)/gi, 'current_database()')
     .replace(/\bTINYINT\s*\(\s*1\s*\)/gi, 'SMALLINT')
