@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageHeader, ActionToolbar, Spinner } from '../../components/ui';
+import { ActionToolbar, Spinner } from '../../components/ui';
 import ExecutiveWeekCalendar, { startOfWeek, weekQueryRange } from '../../components/executive/ExecutiveWeekCalendar';
 import { executiveApi } from '../../utils/visitorApi';
 import { useAuth } from '../../context/AuthContext';
+import { useRegisterPageHeader } from '../../context/PageHeaderContext';
 
 async function fetchWithRetry(fn, attempts = 2) {
   let lastError;
@@ -66,6 +67,8 @@ export default function ExecutiveDashboardPage() {
   const executive = dashboard?.executive || {};
   const kpis = dashboard?.kpis || {};
 
+  useRegisterPageHeader({ actions: <ActionToolbar /> });
+
   if (!isAuthenticated) {
     return (
       <div className="flex justify-center py-20">
@@ -76,12 +79,6 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        subtitle={`${executive.title || 'Executive'} office — weekly schedule`}
-        breadcrumbs={[{ label: executive.title || 'Executive', to: '/executive' }, { label: 'Dashboard' }]}
-        actions={<ActionToolbar />}
-      />
-
       {error && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {error}

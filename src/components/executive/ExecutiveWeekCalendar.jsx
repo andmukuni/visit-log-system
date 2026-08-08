@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, RefreshCw, User, UserCheck } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, User, UserCheck } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import { executiveApi } from '../../utils/visitorApi';
@@ -139,6 +139,46 @@ const GLANCE_ITEMS = [
   { key: 'onSiteNow', label: 'On-site', icon: UserCheck, accent: 'emerald' },
   { key: 'pendingApprovals', label: 'Pending', icon: Clock3, accent: 'amber' },
 ];
+
+const LEGEND_ITEMS = [
+  {
+    label: 'Standard visitor',
+    swatch: 'bg-blue-100 border-blue-400 shadow-sm shadow-blue-200/50',
+  },
+  {
+    label: 'VIP',
+    swatch: 'bg-violet-100 border-violet-500 shadow-sm shadow-violet-200/50',
+  },
+  {
+    label: 'VVIP',
+    swatch: 'bg-amber-100 border-amber-500 shadow-sm shadow-amber-200/50',
+  },
+  {
+    label: 'Pending approval',
+    swatch: 'bg-orange-50 border-orange-500 shadow-sm shadow-orange-200/50',
+  },
+];
+
+function ExecutiveLegendPanel() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
+      <div className="border-b border-navy-100 bg-gradient-to-r from-navy-50/90 to-white px-3.5 py-2.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">Event types</p>
+      </div>
+      <ul className="divide-y divide-navy-100/80">
+        {LEGEND_ITEMS.map(({ label, swatch }) => (
+          <li key={label} className="flex items-center gap-3 px-3.5 py-2.5">
+            <span
+              className={`h-5 w-9 shrink-0 rounded-md border-2 ${swatch}`}
+              aria-hidden="true"
+            />
+            <span className="text-xs font-medium text-navy-700">{label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function ExecutiveGlancePanel({ kpis = {} }) {
   return (
@@ -339,19 +379,14 @@ export default function ExecutiveWeekCalendar({
     <div className="flex flex-col lg:flex-row gap-4 min-h-0">
       {/* Left sidebar — Google Calendar style */}
       <aside className="w-full lg:w-64 shrink-0 space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
-              {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
-              <p className="truncate font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
-            </div>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
+            {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
+            <p className="truncate font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
           </div>
-          {onRefresh && (
-            <IconButton icon={RefreshCw} label="Refresh" tooltip="Refresh" variant="ghost" size="sm" onClick={onRefresh} />
-          )}
         </div>
 
         <MiniMonth
@@ -366,26 +401,7 @@ export default function ExecutiveWeekCalendar({
 
         <ExecutiveGlancePanel kpis={kpis} />
 
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Legend</p>
-          <div className="space-y-2 text-xs text-gray-600">
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded-sm bg-blue-600 shadow-sm ring-1 ring-blue-700/40" />
-              Standard visitor
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="flex shrink-0 gap-0.5">
-                <span className="h-3.5 w-3.5 rounded-sm bg-violet-600 shadow-sm ring-1 ring-violet-700/40" />
-                <span className="h-3.5 w-3.5 rounded-sm bg-amber-500 shadow-sm ring-1 ring-amber-600/40" />
-              </span>
-              VIP / VVIP
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded-sm bg-orange-500 shadow-sm ring-1 ring-orange-600/40" />
-              Pending approval
-            </div>
-          </div>
-        </div>
+        <ExecutiveLegendPanel />
 
         <div className="space-y-1 text-sm">
           <Link to="/executive/visitors" className="block rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50">My visitors</Link>
