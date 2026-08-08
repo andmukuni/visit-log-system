@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck, Users } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
+import ExecutiveAppointmentDetailPanel from './ExecutiveAppointmentDetailPanel';
 import { executiveApi } from '../../utils/visitorApi';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -401,6 +402,7 @@ export default function ExecutiveWeekCalendar({
   const [viewAnimClass, setViewAnimClass] = useState(null);
   const prevViewModeRef = useRef(viewMode);
   const [draft, setDraft] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [referenceData, setReferenceData] = useState(null);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -939,25 +941,27 @@ export default function ExecutiveWeekCalendar({
                         const showMeta = !compactHeaders && heightPct > 7;
 
                         const content = (
-                          <div
+                          <button
+                            type="button"
                             data-calendar-event
-                            className={`absolute z-10 overflow-hidden rounded-md border py-0.5 text-left shadow-sm ${color} ${compactHeaders ? 'inset-x-0.5 px-0.5' : 'inset-x-1 px-1.5'}`}
+                            className={`absolute z-10 block w-full overflow-hidden rounded-md border py-0.5 text-left shadow-sm ${color} ${compactHeaders ? 'inset-x-0.5 px-0.5' : 'inset-x-1 px-1.5'}`}
                             style={{ top: layout.top, height: layout.height, minHeight: '22px' }}
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedAppointment(appt);
+                            }}
                           >
                             <p className={`font-semibold truncate leading-tight ${compactHeaders ? 'text-[9px]' : 'text-[11px]'}`}>{appt.visitor_name || appt.title}</p>
                             {showMeta && (
                               <p className="text-[10px] opacity-80 truncate leading-tight">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
                             )}
-                          </div>
+                          </button>
                         );
 
-                        return appt.visit_id ? (
-                          <Link key={appt.id || appt.appointment_id} to={`/executive/visitors/${appt.visit_id}`} className="block">
+                        return (
+                          <div key={appt.id || appt.appointment_id}>
                             {content}
-                          </Link>
-                        ) : (
-                          <div key={appt.id || appt.appointment_id}>{content}</div>
+                          </div>
                         );
                       })}
                       </div>
@@ -969,6 +973,12 @@ export default function ExecutiveWeekCalendar({
           </div>
         )}
       </div>
+
+      <ExecutiveAppointmentDetailPanel
+        appointment={selectedAppointment}
+        open={Boolean(selectedAppointment)}
+        onClose={() => setSelectedAppointment(null)}
+      />
 
       <ExecutiveQuickAddPopover
         draft={draft}

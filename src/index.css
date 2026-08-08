@@ -276,6 +276,19 @@ body {
   animation: gcalSlotAppear 0.18s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
+@keyframes executiveDetailSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-executive-detail-panel {
+  animation: executiveDetailSlideIn 0.28s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
 @keyframes gcalViewExpand {
   from {
     opacity: 0.68;
