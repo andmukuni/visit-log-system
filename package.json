@@ -13,7 +13,9 @@
     "test": "node --test tests/",
     "seed:demo": "node server/scripts/seedDemo.js",
     "seed:demo:force": "node server/scripts/seedDemo.js --force",
-    "seed:demo:remote": "node server/scripts/seedDemo.js --target=remote"
+    "seed:demo:remote": "node server/scripts/seedDemo.js --target=remote",
+    "seed:portal-users": "node server/scripts/seedPortalUsersCli.js --force",
+    "seed:portal-users:remote": "node server/scripts/seedPortalUsersCli.js --force --url="
   },
   "dependencies": {
     "cors": "^2.8.6",

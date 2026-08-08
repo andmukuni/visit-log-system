@@ -1,6 +1,6 @@
 # VM360 — Implementation Status
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Phase A — Guard/Reception vertical slice
 
@@ -143,22 +143,28 @@ Aligned with `scoopofwork/Visitor_Appointment_Vehicle_Access_System_Logic.pdf`.
 
 ## Default development accounts
 
-Password for all seeded portal users: `demo1234` (development only).
+Password for all `@demo.org` portal users: `demo1234` (development only). Super admin: `admin@template.dev` / `admin123`.
 
-| Email | Role | Portal |
-|-------|------|--------|
-| admin@template.dev | Super Admin | All (via switcher) |
-| guard@demo.org | Receptionist | `/station` |
-| orgadmin@demo.org | Organisation Admin | `/admin` |
+Seed command: `npm run seed:portal-users` (local) or `npm run seed:portal-users:remote -- $DATABASE_URL`.
+
+| Email | Defined role | Portal |
+|-------|--------------|--------|
+| admin@template.dev | System Administrator (Super Admin) | All (via switcher) |
+| orgadmin@demo.org | System Administrator (Org Admin) | `/admin` |
+| ceo@demo.org | CEO | `/management` (full VIP contact) |
+| dceo@demo.org | DCEO | `/management` (full VIP contact) |
+| ceo.secretary@demo.org | CEO Secretary | `/host` (can assign VIP/VVIP) |
+| dceo.secretary@demo.org | DCEO Secretary | `/host` (can assign VIP/VVIP) |
+| exec.reception@demo.org | Executive Reception | `/station` (full VIP contact) |
+| reception@demo.org | Main Receptionist | `/station` |
+| gate@demo.org | Security Officer / Gate | `/station` |
+| guard@demo.org | Receptionist / Guard | `/station` |
 | security@demo.org | Security Manager | `/security` |
 | host@demo.org | Employee / Host | `/host` |
 | auditor@demo.org | Auditor | `/compliance` |
 | management@demo.org | Management Viewer | `/management` |
-| emergency@demo.org | Emergency Officer | `/emergency` |
 | platform@demo.org | Platform Admin | `/platform` |
-| exec.reception@demo.org | Executive Reception | `/station` (full VIP contact) |
-| ceo.secretary@demo.org | CEO Secretary | `/host` (can assign VIP/VVIP) |
-| ceo@demo.org | CEO | `/management` (full VIP contact) |
+| emergency@demo.org | Emergency Officer | `/emergency` |
 
 ## Test evidence log
 
