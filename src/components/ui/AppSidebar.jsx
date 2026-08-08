@@ -33,12 +33,18 @@ const SidebarNavLink = memo(function SidebarNavLink({
   executiveTheme = false,
   badgeCount = 0,
 }) {
+  const resolveActive = ({ isActive }) => {
+    if (item.sharedRouteKey && !item.isPrimaryRoute && isActive) return false;
+    return isActive;
+  };
+
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={() => onNavigate?.()}
       aria-label={item.name}
+      isActive={resolveActive}
       className={({ isActive }) =>
         `group relative flex items-center gap-3 -mx-4 py-2.5 pl-7 pr-4 text-sm font-medium transition-colors rounded-r-xl ${
           isActive
@@ -53,7 +59,7 @@ const SidebarNavLink = memo(function SidebarNavLink({
         <>
           <SidebarNavIcon
             iconKey={item.key}
-            isActive={isActive}
+            isActive={resolveActive({ isActive })}
             accentIndex={accentIndex}
             executiveTheme={executiveTheme}
           />
@@ -159,8 +165,8 @@ const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate, execut
   };
 
   return (
-    <div className="sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 p-4">
-      <div className="flex items-center gap-3 rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm">
+    <div className={`sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 ${executiveTheme ? 'px-4 py-3' : 'p-4'}`}>
+      <div className={`flex items-center gap-3 ${executiveTheme ? '' : 'rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm'}`}>
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-inner ${
           executiveTheme ? 'bg-navy-800 ring-2 ring-amber-400/30' : 'bg-gradient-to-br from-cyan-500 to-navy-700'
         }`}>
@@ -299,23 +305,23 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}
     >
-      <div className={`flex items-center justify-between border-b border-navy-800 px-6 ${executiveTheme ? 'min-h-16 py-3' : 'h-16'}`}>
-        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full">
+      <div className={`flex items-center justify-between border-b border-navy-800 px-6 ${executiveTheme ? 'min-h-24 py-5' : 'h-24'}`}>
+        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-4 min-w-0">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full">
             <img
               src={LOGO_PATH}
               alt=""
-              width={40}
-              height={40}
+              width={56}
+              height={56}
               decoding="async"
               className="h-full w-full object-contain"
             />
           </span>
           {executiveTheme ? (
             <span className="min-w-0 leading-none">
-              <span className="block text-[13px] font-bold uppercase tracking-[0.08em] text-white">Visitor</span>
-              <span className="block text-[13px] font-bold uppercase tracking-[0.08em] text-white">Management</span>
-              <span className="mt-1 block text-[11px] font-medium tracking-wide text-amber-400">Executive Portal</span>
+              <span className="block text-[17px] font-black uppercase tracking-[0.08em] text-white">Visitor</span>
+              <span className="block text-[17px] font-black uppercase tracking-[0.08em] text-white">Management</span>
+              <span className="mt-2 block text-sm font-medium tracking-wide text-amber-400">Executive Portal</span>
             </span>
           ) : (
             <span className="truncate text-3xl font-black uppercase leading-none tracking-tight text-white">

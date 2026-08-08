@@ -155,8 +155,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'profile', name: 'My Profile', to: '/host/profile', permission: 'host.profile', section: 'primary' },
   ],
   executive: [
-    { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
-    { key: 'calendar', name: 'My Calendar', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
+    { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary', isPrimaryRoute: true },
     { key: 'appointments', name: 'Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
     { key: 'register', name: 'Visitor Register', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
     { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary', badgeKey: 'notifications' },

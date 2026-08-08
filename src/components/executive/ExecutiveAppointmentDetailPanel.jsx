@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, ExternalLink, Mail, Phone, User, X } from 'lucide-react';
+import { Calendar, ExternalLink, X } from 'lucide-react';
 import { Spinner, StatusBadge } from '../ui';
 import { executiveApi } from '../../utils/visitorApi';
 import { formatDateTime } from '../../utils/helpers';
@@ -15,36 +15,92 @@ const EVENT_LABELS = {
   rejected: 'Rejected',
   checked_in: 'Checked in',
   checked_out: 'Checked out',
+  cancelled: 'Cancelled',
+  rescheduled: 'Rescheduled',
+  arrived_at_gate: 'Arrived at gate',
+  left_premises: 'Left premises',
+  pending_approval: 'Pending approval',
 };
 
-function DetailCard({ title, theme, children, className = '' }) {
+function formatEventLabel(type) {
+  return EVENT_LABELS[type] || String(type || '').replace(/_/g, ' ');
+}
+
+function formatEventNotes(evt) {
+  if (evt.reason) return evt.reason;
+  if (!evt.details) return '—';
+  if (typeof evt.details === 'string') {
+    try {
+      const parsed = JSON.parse(evt.details);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return Object.entries(parsed)
+          .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+          .join(' · ');
+      }
+    } catch {
+      return evt.details;
+    }
+    return evt.details;
+  }
+  return '—';
+}
+
+function InfoField({ label, value, className = '' }) {
+  if (!value && value !== 0) return null;
   return (
-    <section className={`overflow-hidden rounded-xl border bg-white shadow-sm ${theme.border} ${className}`}>
-      <div className="flex">
-        <span className={`w-1.5 shrink-0 ${theme.accent}`} aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          {title && (
-            <div className="border-b border-gray-100 px-4 py-2.5">
-              <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-            </div>
-          )}
-          <div className={title ? 'px-4 py-1' : 'px-4 py-3'}>{children}</div>
-        </div>
-      </div>
-    </section>
+    <div className={`px-4 py-3 ${className}`}>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
+      <dd className="mt-1 text-sm font-medium text-gray-900 break-words">{value}</dd>
+    </div>
   );
 }
 
-function DetailRow({ label, value, icon: Icon }) {
-  if (!value && value !== 0) return null;
+function ActivityStatementTable({ events = [] }) {
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
-      {Icon && <Icon size={16} className="mt-0.5 shrink-0 text-gray-400" />}
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <p className="mt-0.5 text-sm text-gray-900 break-words">{value}</p>
+    <section className="mt-6">
+      <h3 className="text-sm font-semibold text-navy-900">Activity statement</h3>
+      <p className="mt-0.5 text-xs text-gray-500">Everything recorded for this appointment.</p>
+      <div className="mt-3 overflow-hidden rounded-xl border border-gray-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                <th className="whitespace-nowrap px-4 py-2.5 font-semibold">When</th>
+                <th className="whitespace-nowrap px-4 py-2.5 font-semibold">Event</th>
+                <th className="whitespace-nowrap px-4 py-2.5 font-semibold">By</th>
+                <th className="min-w-[140px] px-4 py-2.5 font-semibold">Notes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {events.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                    No activity recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                events.map((evt) => (
+                  <tr key={evt.id} className="align-top">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-gray-600">
+                      {formatDateTime(evt.created_at)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">
+                      {formatEventLabel(evt.event_type)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                      {evt.actor_name || 'System'}
+                    </td>
+                    <td className="px-4 py-3 text-xs leading-relaxed text-gray-600">
+                      {formatEventNotes(evt)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -101,6 +157,7 @@ export default function ExecutiveAppointmentDetailPanel({
   if (!open || !appointment) return null;
 
   const visit = data?.visit;
+  const events = data?.events || [];
   const theme = getEventCardTheme(appointment.classification, visit?.status || appointment.visit_status);
   const guestName = visit?.full_name || appointment.visitor_name || appointment.title || 'Guest';
   const guestInitial = guestName.trim().charAt(0).toUpperCase() || '?';
@@ -110,6 +167,25 @@ export default function ExecutiveAppointmentDetailPanel({
     : '—';
 
   const resolvedStatus = visit?.status ?? (appointment.visit_id && loading ? null : appointment.visit_status);
+
+  const infoFields = [
+    { label: 'When', value: scheduledLabel },
+    { label: 'Category', value: visit?.category_name || appointment.category_name || 'Standard visitor' },
+    { label: 'Pass code', value: visit?.pass_code },
+    { label: 'Phone', value: visit?.phone || appointment.phone },
+    { label: 'Email', value: visit?.email },
+    { label: 'Company', value: visit?.company || appointment.company },
+    {
+      label: 'Checked in',
+      value: visit?.checked_in_at ? formatDateTime(visit.checked_in_at) : null,
+    },
+    {
+      label: 'Checked out',
+      value: visit?.checked_out_at ? formatDateTime(visit.checked_out_at) : null,
+    },
+  ];
+
+  const purpose = visit?.purpose || appointment.purpose || 'No description provided.';
 
   return createPortal(
     <>
@@ -131,11 +207,8 @@ export default function ExecutiveAppointmentDetailPanel({
               Appointment
             </p>
             <h2 id="executive-appointment-detail-title" className="mt-1 truncate text-xl font-semibold text-gray-900">
-              {appointment.visitor_name || appointment.title || 'Appointment details'}
+              {appointment.title || appointment.visitor_name || 'Appointment details'}
             </h2>
-            {appointment.title && appointment.visitor_name && (
-              <p className="mt-0.5 truncate text-sm text-gray-600">{appointment.title}</p>
-            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {appointment.visit_id && (
@@ -160,17 +233,6 @@ export default function ExecutiveAppointmentDetailPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            {resolvedStatus && (
-              <StatusBadge status={resolvedStatus} />
-            )}
-            {appointment.classification && appointment.classification !== 'standard' && (
-              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium capitalize text-orange-800 ring-1 ring-orange-200">
-                {appointment.classification}
-              </span>
-            )}
-          </div>
-
           {loading && (
             <div className="flex justify-center py-16">
               <Spinner size={32} />
@@ -184,72 +246,61 @@ export default function ExecutiveAppointmentDetailPanel({
           )}
 
           {!loading && !error && (
-            <div className="space-y-4">
-              <DetailCard theme={theme}>
-                <div className="flex items-start gap-3">
-                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white ${theme.accent}`}>
-                    {guestInitial}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold text-gray-900">{guestName}</p>
-                    {(visit?.company || appointment.company) && (
-                      <p className="mt-0.5 truncate text-sm text-gray-500">{visit?.company || appointment.company}</p>
-                    )}
-                    <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-700">
-                      <Calendar size={14} className="shrink-0 text-gray-400" aria-hidden="true" />
-                      {scheduledLabel}
-                    </p>
+            <>
+              <div className={`overflow-hidden rounded-xl border ${theme.border} bg-white shadow-sm`}>
+                <div className="flex">
+                  <span className={`w-1 shrink-0 ${theme.accent}`} aria-hidden="true" />
+                  <div className="min-w-0 flex-1 p-4">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-semibold text-white ${theme.accent}`}>
+                        {guestInitial}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-lg font-semibold text-gray-900">{guestName}</p>
+                        {(visit?.company || appointment.company) && (
+                          <p className="mt-0.5 truncate text-sm text-gray-500">
+                            {visit?.company || appointment.company}
+                          </p>
+                        )}
+                        <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-700">
+                          <Calendar size={14} className="shrink-0 text-gray-400" aria-hidden="true" />
+                          {scheduledLabel}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {resolvedStatus && <StatusBadge status={resolvedStatus} />}
+                        {appointment.classification && appointment.classification !== 'standard' && (
+                          <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium capitalize text-orange-800 ring-1 ring-orange-200">
+                            {appointment.classification}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </DetailCard>
+              </div>
 
-              <DetailCard title="Schedule" theme={theme}>
-                <DetailRow icon={Calendar} label="When" value={scheduledLabel} />
-                <DetailRow
-                  icon={Clock}
-                  label="Category"
-                  value={visit?.category_name || appointment.category_name || 'Standard visitor'}
-                />
-                {visit?.pass_code && (
-                  <DetailRow icon={User} label="Pass code" value={visit.pass_code} />
-                )}
-              </DetailCard>
+              <dl className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white sm:grid sm:grid-cols-2">
+                {infoFields.map(({ label, value }, index) => (
+                  <InfoField
+                    key={label}
+                    label={label}
+                    value={value}
+                    className={`border-gray-100 ${index % 2 === 1 ? 'sm:border-l' : ''} ${index >= 2 ? 'border-t sm:border-t' : ''}`}
+                  />
+                ))}
+                <div className="border-t border-gray-100 px-4 py-3 sm:col-span-2">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Purpose</dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-gray-800">{purpose}</dd>
+                </div>
+              </dl>
 
-              <DetailCard title="Guest" theme={theme}>
-                <DetailRow icon={User} label="Name" value={guestName} />
-                <DetailRow icon={Phone} label="Phone" value={visit?.phone || appointment.phone} />
-                <DetailRow icon={Mail} label="Email" value={visit?.email} />
-                <DetailRow label="Company" value={visit?.company || appointment.company} />
-              </DetailCard>
-
-              <DetailCard title="Meeting details" theme={theme}>
-                <p className="py-2 text-sm leading-relaxed text-gray-800">
-                  {visit?.purpose || appointment.purpose || 'No description provided.'}
-                </p>
-              </DetailCard>
-
-              {(data?.events || []).length > 0 && (
-                <DetailCard title="Timeline" theme={theme}>
-                  <ol className="space-y-3 py-2">
-                    {data.events.map((evt) => (
-                      <li key={evt.id} className="flex gap-3 text-sm">
-                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${theme.accent}`} aria-hidden="true" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-900">
-                            {EVENT_LABELS[evt.event_type] || evt.event_type}
-                          </p>
-                          <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(evt.created_at)}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </DetailCard>
-              )}
+              <ActivityStatementTable events={events} />
 
               {!visit && !appointment.visit_id && (
-                <p className="text-sm text-gray-500">Limited details are available for this appointment.</p>
+                <p className="mt-4 text-sm text-gray-500">Limited details are available for this appointment.</p>
               )}
-            </div>
+            </>
           )}
         </div>
       </aside>
