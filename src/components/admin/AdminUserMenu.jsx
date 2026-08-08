@@ -8,6 +8,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { resolvePortalRoute } from '../../../shared/portalNavigation.js';
 
 function MenuLink({ to, icon: Icon, children, onSelect, external = false }) {
   const className = 'flex items-center gap-2.5 w-full px-3 py-2 text-sm text-navy-700 hover:bg-navy-50 hover:text-navy-900 rounded-lg transition-colors text-left';
@@ -74,6 +75,7 @@ export default function AdminUserMenu() {
 
   const canSettings = hasPermission('admin.settings');
   const canAccessControl = hasPermission('admin.rbac');
+  const dashboardRoute = resolvePortalRoute(user?.permissions || user?.admin_permissions || []);
 
   return (
     <div ref={rootRef} className="relative">
@@ -106,7 +108,7 @@ export default function AdminUserMenu() {
           </div>
 
           <div className="px-2 space-y-0.5">
-            <MenuLink to="/admin" icon={LayoutDashboard} onSelect={close}>
+            <MenuLink to={dashboardRoute} icon={LayoutDashboard} onSelect={close}>
               Dashboard
             </MenuLink>
             {canSettings && (

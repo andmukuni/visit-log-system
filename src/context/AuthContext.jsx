@@ -197,13 +197,17 @@ export function AuthProvider({ children }) {
     const stored = getStoredSession();
     if (!stored?.id) return;
     try {
-      const res = await fetch(`${API_BASE}/admin/rbac/me`, {
+      const res = await fetch(`${API_BASE}/auth/refresh-session`, {
+        method: 'POST',
         headers: getAdminAuthHeaders(),
         cache: 'no-store',
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) return;
       const nextPerms = json.data?.permissions || [];
+      if (json.token) {
+        localStorage.setItem('mm_admin_token', String(json.token));
+      }
       setUser((prev) => {
         if (!prev) return prev;
         const nextSession = {

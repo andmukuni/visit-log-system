@@ -1,0 +1,484 @@
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Spinner, IconButton } from '../ui';
+import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
+import { executiveApi } from '../../utils/visitorApi';
+import { useToast } from '../../context/ToastContext';
+import {
+  addMinutes,
+  addWeeks,
+  CALENDAR_END_HOUR,
+  CALENDAR_START_HOUR,
+  currentTimeIndicator,
+  DEFAULT_EVENT_MINUTES,
+  eventLayout,
+  formatDayHeader,
+  formatHourLabel,
+  formatTimeRange,
+  formatWeekRange,
+  getMonthGrid,
+  getWeekDays,
+  HOUR_HEIGHT_PX,
+  isSameDay,
+  isSameMonth,
+  slotFromPointer,
+  startOfWeek,
+  weekQueryRange,
+  computeSlotRect,
+} from './calendarUtils';
+
+const HOURS = Array.from(
+  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
+  (_, i) => CALENDAR_START_HOUR + i,
+);
+
+const EVENT_COLORS = {
+  vip: 'bg-purple-100 border-purple-300 text-purple-900',
+  vvip: 'bg-amber-100 border-amber-300 text-amber-900',
+  standard: 'bg-blue-100 border-blue-300 text-blue-900',
+};
+
+function eventColor(classification, visitStatus) {
+  const key = String(classification || 'standard').toLowerCase();
+  if (key === 'vip' || key === 'vvip') return EVENT_COLORS[key];
+  if (visitStatus === 'pending_approval' || visitStatus === 'pre_registered') {
+    return 'bg-orange-50 border-orange-300 text-orange-900';
+  }
+  return EVENT_COLORS.standard;
+}
+
+function MiniMonth({ anchorDate, weekStart, onPickDate, onMonthChange }) {
+  const days = useMemo(() => getMonthGrid(anchorDate), [anchorDate]);
+  const monthLabel = anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-800">{monthLabel}</p>
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            icon={ChevronLeft}
+            label="Previous month"
+            tooltip="Previous month"
+            variant="ghost"
+            size="sm"
+            onClick={() => onMonthChange(new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1))}
+          />
+          <IconButton
+            icon={ChevronRight}
+            label="Next month"
+            tooltip="Next month"
+            variant="ghost"
+            size="sm"
+            onClick={() => onMonthChange(new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1))}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-1">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
+          <span key={d}>{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {days.map((day) => {
+          const inMonth = isSameMonth(day, anchorDate);
+          const selected = isSameDay(day, weekStart);
+          const today = isSameDay(day, new Date());
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => onPickDate(day)}
+              className={`h-8 w-8 rounded-full text-xs transition-colors ${
+                !inMonth ? 'text-gray-300' : 'text-gray-700 hover:bg-gray-100'
+              } ${selected ? 'bg-blue-600 text-white hover:bg-blue-600' : ''} ${
+                today && !selected ? 'ring-1 ring-blue-500' : ''
+              }`}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SidebarStat({ label, value, hint }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-xl font-semibold text-gray-900">{value}</p>
+      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+export default function ExecutiveWeekCalendar({
+  executive,
+  kpis = {},
+  appointments = [],
+  loading = false,
+  weekStart,
+  onWeekChange,
+  onRefresh,
+}) {
+  const toast = useToast();
+  const gridScrollRef = useRef(null);
+  const [sidebarMonth, setSidebarMonth] = useState(weekStart);
+  const [draft, setDraft] = useState(null);
+  const [referenceData, setReferenceData] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const today = new Date();
+  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
+  const nowLine = currentTimeIndicator(today);
+
+  useEffect(() => {
+    setSidebarMonth(weekStart);
+  }, [weekStart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    executiveApi.getReferenceData()
+      .then((data) => {
+        if (!cancelled) setReferenceData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refreshDraftSlotRect = useCallback((currentDraft) => {
+    if (!currentDraft?.dayKey) return currentDraft;
+    const column = document.querySelector(`[data-calendar-day="${currentDraft.dayKey}"]`);
+    if (!column) return currentDraft;
+    const slotRect = computeSlotRect(column, currentDraft.startAt, currentDraft.endAt);
+    if (!slotRect) return currentDraft;
+    return { ...currentDraft, slotRect };
+  }, []);
+
+  const handleSlotClick = useCallback((event, day) => {
+    if (event.target.closest('[data-calendar-event]')) return;
+    const column = event.currentTarget;
+    const rect = column.getBoundingClientRect();
+    const offsetY = event.clientY - rect.top;
+    const startAt = slotFromPointer(day, offsetY, rect.height);
+    const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+    const dayKey = day.toISOString();
+    const slotRect = computeSlotRect(column, startAt, endAt);
+    setDraft({
+      day,
+      dayKey,
+      startAt,
+      endAt,
+      title: '',
+      slotRect,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!draft) return undefined;
+
+    const syncRect = () => {
+      setDraft((current) => {
+        if (!current) return current;
+        const next = refreshDraftSlotRect(current);
+        if (
+          next?.slotRect?.top === current.slotRect?.top
+          && next?.slotRect?.left === current.slotRect?.left
+        ) {
+          return current;
+        }
+        return next;
+      });
+    };
+
+    syncRect();
+    const scrollEl = gridScrollRef.current;
+    scrollEl?.addEventListener('scroll', syncRect, { passive: true });
+    window.addEventListener('resize', syncRect);
+    window.addEventListener('scroll', syncRect, { passive: true });
+
+    return () => {
+      scrollEl?.removeEventListener('scroll', syncRect);
+      window.removeEventListener('resize', syncRect);
+      window.removeEventListener('scroll', syncRect);
+    };
+  }, [draft?.dayKey, draft?.startAt, draft?.endAt, refreshDraftSlotRect]);
+
+  const handleSaveDraft = async (payload) => {
+    if (!payload.visitorName) {
+      toast.error('Visitor name is required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await executiveApi.createAppointment(payload);
+      toast.success('Appointment added to your schedule.');
+      setDraft(null);
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not save appointment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const draftPreview = draft
+    ? eventLayout(draft.startAt, Math.max(
+      DEFAULT_EVENT_MINUTES,
+      Math.round((draft.endAt - draft.startAt) / 60000),
+    ))
+    : null;
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map();
+    for (const day of weekDays) {
+      map.set(
+        day.toDateString(),
+        appointments.filter((appt) => {
+          const d = new Date(appt.scheduled_at);
+          return !Number.isNaN(d.getTime()) && isSameDay(d, day);
+        }),
+      );
+    }
+    return map;
+  }, [appointments, weekDays]);
+
+  const goToday = () => {
+    const start = startOfWeek(new Date());
+    onWeekChange(start);
+    setSidebarMonth(start);
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[720px]">
+      {/* Left sidebar — Google Calendar style */}
+      <aside className="w-full lg:w-64 shrink-0 space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
+            <p className="font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
+          </div>
+          {onRefresh && (
+            <IconButton icon={RefreshCw} label="Refresh" tooltip="Refresh" variant="ghost" size="sm" onClick={onRefresh} />
+          )}
+        </div>
+
+        <MiniMonth
+          anchorDate={sidebarMonth}
+          weekStart={weekStart}
+          onPickDate={(day) => {
+            onWeekChange(startOfWeek(day));
+            setSidebarMonth(day);
+          }}
+          onMonthChange={setSidebarMonth}
+        />
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">At a glance</p>
+          <div className="grid grid-cols-2 gap-2">
+            <SidebarStat label="Today" value={kpis.todayAppointments ?? 0} />
+            <SidebarStat label="This week" value={kpis.weekAppointments ?? 0} />
+            <SidebarStat label="On-site" value={kpis.onSiteNow ?? 0} />
+            <SidebarStat label="Pending" value={kpis.pendingApprovals ?? 0} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Legend</p>
+          <div className="space-y-1.5 text-xs text-gray-600">
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-blue-200 border border-blue-300" /> Standard visitor</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-purple-200 border border-purple-300" /> VIP / VVIP</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-orange-100 border border-orange-300" /> Pending approval</div>
+          </div>
+        </div>
+
+        <div className="space-y-1 text-sm">
+          <Link to="/executive/visitors" className="block rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50">My visitors</Link>
+          <Link to="/executive/notifications" className="block rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50">Notifications</Link>
+        </div>
+      </aside>
+
+      {/* Main calendar */}
+      <div className="flex-1 min-w-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
+          <button
+            type="button"
+            onClick={goToday}
+            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Today
+          </button>
+          <div className="flex items-center gap-1">
+            <IconButton
+              icon={ChevronLeft}
+              label="Previous week"
+              tooltip="Previous week"
+              variant="ghost"
+              size="sm"
+              onClick={() => onWeekChange(addWeeks(weekStart, -1))}
+            />
+            <IconButton
+              icon={ChevronRight}
+              label="Next week"
+              tooltip="Next week"
+              variant="ghost"
+              size="sm"
+              onClick={() => onWeekChange(addWeeks(weekStart, 1))}
+            />
+          </div>
+          <h2 className="text-lg font-medium text-gray-900">{formatWeekRange(weekStart)}</h2>
+          <span className="ml-auto rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">Week</span>
+        </div>
+
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center py-24">
+            <Spinner size={32} />
+          </div>
+        ) : (
+          <>
+            {/* Day headers */}
+            <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
+              <div />
+              {weekDays.map((day) => {
+                const { weekday, day: dayNum, isToday } = formatDayHeader(day, today);
+                return (
+                  <div key={day.toISOString()} className="py-3 text-center border-l border-gray-200">
+                    <p className="text-[11px] font-medium text-gray-500">{weekday}</p>
+                    <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                      isToday ? 'bg-blue-600 text-white' : 'text-gray-800'
+                    }`}
+                    >
+                      {dayNum}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Time grid */}
+            <div ref={gridScrollRef} className="overflow-y-auto flex-1 max-h-[640px]">
+              <div
+                className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"
+                style={{ height: `${HOURS.length * HOUR_HEIGHT_PX}px` }}
+              >
+                {/* Hour labels */}
+                <div className="relative border-r border-gray-200 bg-gray-50">
+                  {HOURS.slice(0, -1).map((hour) => (
+                    <div
+                      key={hour}
+                      className="absolute right-2 -translate-y-1/2 text-[11px] text-gray-400"
+                      style={{ top: `${((hour - CALENDAR_START_HOUR) / (CALENDAR_END_HOUR - CALENDAR_START_HOUR)) * 100}%` }}
+                    >
+                      {formatHourLabel(hour)}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day columns */}
+                {weekDays.map((day) => {
+                  const dayEvents = eventsByDay.get(day.toDateString()) || [];
+                  const isToday = isSameDay(day, today);
+
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      data-calendar-day={day.toISOString()}
+                      className="relative border-l border-gray-200 cursor-pointer"
+                      onClick={(event) => handleSlotClick(event, day)}
+                    >
+                      {/* Hour lines */}
+                      {HOURS.map((hour) => (
+                        <div
+                          key={hour}
+                          className="absolute inset-x-0 border-t border-gray-100"
+                          style={{ top: `${((hour - CALENDAR_START_HOUR) / (CALENDAR_END_HOUR - CALENDAR_START_HOUR)) * 100}%` }}
+                        />
+                      ))}
+
+                      {/* Current time line */}
+                      {isToday && nowLine && (
+                        <div
+                          className="absolute inset-x-0 z-20 flex items-center pointer-events-none"
+                          style={{ top: nowLine }}
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1" />
+                          <span className="h-0.5 flex-1 bg-red-500" />
+                        </div>
+                      )}
+
+                      {/* Selected slot preview — stays visible while popover slides left */}
+                      {draft && isSameDay(day, draft.day) && draftPreview && (
+                        <div
+                          data-calendar-event
+                          className="absolute inset-x-1.5 z-[25] overflow-hidden rounded-md bg-[#039be5] px-2.5 py-1.5 text-left shadow-md pointer-events-none animate-gcal-slot ring-2 ring-[#039be5]/30"
+                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '32px' }}
+                        >
+                          <p className="text-[11px] font-semibold truncate text-white">
+                            {draft.title?.trim() || '(No title)'}
+                          </p>
+                          <p className="text-[10px] text-blue-50 truncate">
+                            {formatTimeRange(draft.startAt, draft.endAt)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Events */}
+                      {dayEvents.map((appt) => {
+                        const layout = eventLayout(appt.scheduled_at, DEFAULT_EVENT_MINUTES);
+                        if (!layout) return null;
+                        const color = eventColor(appt.classification, appt.visit_status);
+                        const time = layout.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+                        const content = (
+                          <div
+                            data-calendar-event
+                            className={`absolute inset-x-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left shadow-sm ${color}`}
+                            style={{ top: layout.top, height: layout.height, minHeight: '28px' }}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <p className="text-[11px] font-semibold truncate">{appt.visitor_name || appt.title}</p>
+                            <p className="text-[10px] opacity-80 truncate">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
+                          </div>
+                        );
+
+                        return appt.visit_id ? (
+                          <Link key={appt.id || appt.appointment_id} to={`/executive/visitors/${appt.visit_id}`} className="block">
+                            {content}
+                          </Link>
+                        ) : (
+                          <div key={appt.id || appt.appointment_id}>{content}</div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <ExecutiveQuickAddPopover
+        draft={draft}
+        executive={executive}
+        referenceData={referenceData}
+        saving={saving}
+        onClose={() => setDraft(null)}
+        onDraftChange={(nextDraft) => {
+          setDraft((current) => {
+            const merged = { ...current, ...nextDraft };
+            return refreshDraftSlotRect(merged);
+          });
+        }}
+        onSave={handleSaveDraft}
+      />
+    </div>
+  );
+}
+
+export { startOfWeek, weekQueryRange };

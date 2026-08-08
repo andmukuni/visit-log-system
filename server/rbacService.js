@@ -165,6 +165,7 @@ export function resolveRouteAdminPermission(req) {
   const path = String(req.path || '').replace(/^\/api/, '');
   const method = String(req.method || '').toUpperCase();
 
+  if (path.includes('/rbac/me')) return null;
   if (path.includes('/rbac')) return 'admin.rbac';
   if (path.includes('/settings') && !path.includes('/org/')) return 'admin.settings';
 
@@ -180,6 +181,8 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/host/profile')) return 'host.profile';
 
   if (path.includes('/executive/dashboard')) return 'executive.dashboard';
+  if (path.includes('/executive/reference-data')) return 'executive.dashboard';
+  if (path.includes('/executive/appointments') && method === 'POST') return 'executive.appointments';
   if (path.includes('/executive/appointments')) return 'executive.calendar';
   if (path.includes('/executive/visits')) return 'executive.visits';
 

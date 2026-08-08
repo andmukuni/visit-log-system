@@ -8,7 +8,7 @@ import { purgeInvalidAuthState } from '../../utils/authHeaders';
 import { APP_NAME, APP_NAME_SHORT, LOGO_PATH } from '../../../shared/branding.js';
 import { CACHED_STATIC_ASSETS, warmLoginHeroAsset, warmLogoAsset } from '../../utils/staticAssetCache';
 import LoginHeroPanel from '../../components/admin/LoginHeroPanel';
-import { resolvePortalRoute } from '../../../shared/portalNavigation.js';
+import { resolveLoginRedirect } from '../../../shared/portalNavigation.js';
 
 const LOGIN_HERO_SRC = CACHED_STATIC_ASSETS.loginHero;
 const LOGO_SRC = LOGO_PATH;
@@ -20,7 +20,8 @@ export default function LoginPage() {
   const toast = useToast();
 
   const from = location.state?.from?.pathname;
-  const defaultPortal = resolvePortalRoute(user?.permissions || user?.admin_permissions || []);
+  const perms = user?.permissions || user?.admin_permissions || [];
+  const loginRedirect = resolveLoginRedirect(from, perms);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,9 +57,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(from || defaultPortal, { replace: true });
+      navigate(loginRedirect, { replace: true });
     }
-  }, [isAuthenticated, navigate, from, defaultPortal]);
+  }, [isAuthenticated, navigate, loginRedirect]);
 
   useEffect(() => {
     if (loginError) clearLoginError();
@@ -69,8 +70,8 @@ export default function LoginPage() {
     const session = await login(email, password);
     if (session) {
       toast.success('Signed in successfully.');
-      const portalRoute = resolvePortalRoute(session.permissions || session.admin_permissions || []);
-      navigate(from || portalRoute, { replace: true });
+      const portalRoute = resolveLoginRedirect(from, session.permissions || session.admin_permissions || []);
+      navigate(portalRoute, { replace: true });
     }
   };
 

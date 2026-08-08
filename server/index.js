@@ -12,7 +12,7 @@ import {
   permissionMatches,
   hasAnyPermission,
 } from '../shared/rbacPermissions.js';
-import { resolveRouteAdminPermission } from './rbacService.js';
+import { resolveRouteAdminPermission, loadUserAdminPermissions } from './rbacService.js';
 import { createHealthRouter } from './routes/health.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createAdminRouter } from './routes/admin.js';
@@ -109,14 +109,28 @@ function isAdminProtectedRoute(req) {
   return false;
 }
 
-app.use('/api', (req, res, next) => {
+app.use('/api', async (req, res, next) => {
   if (!isAdminProtectedRoute(req)) return next();
 
   const auth = authService.getAdminAuth(req);
   if (!auth.ok) return authService.sendAuthFailure(res, auth);
 
+  let perms = Array.isArray(auth.claims.permissions) ? auth.claims.permissions : [];
+  if (auth.source === 'jwt' && auth.claims.sub) {
+    try {
+      const [[user]] = await pool.query('SELECT id, role, email, name FROM users WHERE id = ?', [auth.claims.sub]);
+      if (user) {
+        perms = await loadUserAdminPermissions(pool, user.id, { legacyRole: user.role });
+        auth.claims.permissions = perms;
+        auth.claims.email = user.email || auth.claims.email || '';
+        auth.claims.name = user.name || auth.claims.name || '';
+      }
+    } catch (error) {
+      console.error('[auth] permission reload failed:', error.message);
+    }
+  }
+
   const requiredPerm = resolveRouteAdminPermission(req);
-  const perms = Array.isArray(auth.claims.permissions) ? auth.claims.permissions : [];
   const isLegacyAdmin = auth.claims.role === 'admin' && perms.length === 0;
   const routePath = String(req.path || '');
 

@@ -231,15 +231,49 @@ body {
 .animation-delay-300 { animation-delay: 300ms; }
 .animation-delay-400 { animation-delay: 400ms; }
 
-@keyframes slideInRight {
+@keyframes gcalPopoverSlideLeft {
   from {
     opacity: 0;
-    transform: translateX(40px);
+    transform: translateX(24px);
   }
   to {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+@keyframes gcalSlotAppear {
+  from {
+    opacity: 0.55;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-gcal-popover {
+  animation: gcalPopoverSlideLeft 0.22s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+@keyframes gcalPopoverSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-gcal-popover-right {
+  animation: gcalPopoverSlideRight 0.22s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.animate-gcal-slot {
+  animation: gcalSlotAppear 0.18s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
 /* Utility: line clamp */

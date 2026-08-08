@@ -218,10 +218,15 @@ export const notificationsApi = {
 
 export const executiveApi = {
   getDashboard: () => apiFetch('/admin/executive/dashboard'),
+  getReferenceData: () => apiFetch('/admin/executive/reference-data'),
   getAppointments: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/executive/appointments${qs ? `?${qs}` : ''}`);
   },
+  createAppointment: (payload) => apiFetch('/admin/executive/appointments', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   getVisits: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/executive/visits${qs ? `?${qs}` : ''}`);

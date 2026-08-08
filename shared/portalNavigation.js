@@ -264,6 +264,19 @@ export function resolvePortalRoute(permissions = []) {
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
+/** Prefer the user's primary portal; never send executive-only users to /management. */
+export function resolveLoginRedirect(fromPath = '', permissions = []) {
+  const portalRoute = resolvePortalRoute(permissions);
+  const from = String(fromPath || '').trim();
+  if (!from || from === '/login' || from.startsWith('/admin/login')) {
+    return portalRoute;
+  }
+  if (isExecutiveOnlyUser(permissions) && from.startsWith('/management')) {
+    return portalRoute;
+  }
+  return from;
+}
+
 export function canAccessPortal(portalId, hasPermission, permissions = []) {
   if (isExecutiveOnlyUser(permissions) && portalId !== 'executive') {
     return false;

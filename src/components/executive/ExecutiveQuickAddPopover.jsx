@@ -1,0 +1,307 @@
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  Calendar,
+  Clock,
+  GripHorizontal,
+  MapPin,
+  TextAlignStart,
+  UserPlus,
+  X,
+} from 'lucide-react';
+import { LoadingButton } from '../ui';
+import {
+  addMinutes,
+  applyTimeToDate,
+  computeQuickAddPopoverPosition,
+  DEFAULT_EVENT_MINUTES,
+  formatLongDate,
+  toIsoLocalDateTime,
+  toTimeInputValue,
+} from './calendarUtils';
+
+const initialForm = () => ({
+  title: '',
+  visitorName: '',
+  company: '',
+  phone: '',
+  purpose: '',
+  siteId: '',
+  allDay: false,
+});
+
+export default function ExecutiveQuickAddPopover({
+  draft,
+  executive,
+  referenceData,
+  saving = false,
+  onClose,
+  onSave,
+  onDraftChange,
+}) {
+  const [form, setForm] = useState(initialForm);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!draft) {
+      setForm(initialForm());
+      setVisible(false);
+      return;
+    }
+    setForm({
+      ...initialForm(),
+      siteId: referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '',
+    });
+    const frame = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(frame);
+  }, [draft, referenceData?.defaultSiteId, referenceData?.sites]);
+
+  useEffect(() => {
+    if (!draft) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [draft, onClose]);
+
+  const position = useMemo(
+    () => computeQuickAddPopoverPosition(draft?.slotRect),
+    [draft?.slotRect],
+  );
+
+  if (!draft || !position) return null;
+
+  const startAt = draft.startAt;
+  const endAt = draft.endAt;
+  const startTime = toTimeInputValue(startAt);
+  const endTime = toTimeInputValue(endAt);
+  const calendarLabel = `${executive?.title || 'Executive'} office`;
+
+  const updateTimes = (nextStart, nextEnd) => {
+    onDraftChange({
+      ...draft,
+      startAt: nextStart,
+      endAt: nextEnd,
+    });
+  };
+
+  const handleStartTime = (value) => {
+    const nextStart = applyTimeToDate(startAt, value);
+    let nextEnd = endAt;
+    if (nextEnd <= nextStart) {
+      nextEnd = addMinutes(nextStart, DEFAULT_EVENT_MINUTES);
+    }
+    updateTimes(nextStart, nextEnd);
+  };
+
+  const handleEndTime = (value) => {
+    const nextEnd = applyTimeToDate(startAt, value);
+    if (nextEnd > startAt) {
+      updateTimes(startAt, nextEnd);
+    }
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onSave({
+      title: form.title.trim(),
+      visitorName: form.visitorName.trim(),
+      company: form.company.trim(),
+      phone: form.phone.trim(),
+      purpose: form.purpose.trim(),
+      siteId: form.siteId,
+      scheduledAt: toIsoLocalDateTime(startAt),
+      allDay: form.allDay,
+    });
+  };
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        aria-label="Close quick add"
+        className="fixed inset-0 z-[55] bg-transparent"
+        onClick={onClose}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: position.left,
+          top: position.top,
+          width: position.width,
+          zIndex: 60,
+        }}
+        className={`rounded-3xl border border-gray-200/80 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-hidden ${
+          visible
+            ? (position.placement === 'left' ? 'animate-gcal-popover' : 'animate-gcal-popover-right')
+            : 'opacity-0'
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <form onSubmit={handleSubmit}>
+          <div className="flex items-center justify-between px-4 pt-3">
+            <GripHorizontal size={18} className="text-gray-300" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="px-5 pb-2">
+            <input
+              autoFocus
+              value={form.title}
+              onChange={(event) => {
+                const title = event.target.value;
+                setForm((prev) => ({ ...prev, title }));
+                onDraftChange?.({ ...draft, title });
+              }}
+              placeholder="Add title"
+              className="w-full border-0 border-b-2 border-[#1a73e8] bg-transparent px-0 pb-2 text-[22px] leading-tight text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
+
+          <div className="px-5 pb-1">
+            <div className="inline-flex rounded-full bg-[#e8f0fe] p-1 text-sm">
+              <span className="rounded-full bg-[#d2e3fc] px-4 py-1.5 font-medium text-[#1967d2]">
+                Appointment
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-3 px-5 py-3 max-h-[52vh] overflow-y-auto">
+            <div className="flex items-start gap-3">
+              <Clock size={18} className="mt-3 shrink-0 text-gray-500" />
+              <div className="flex-1 space-y-2">
+                <div className="rounded-xl bg-[#f1f3f4] px-4 py-3">
+                  <p className="text-sm font-medium text-gray-800">{formatLongDate(startAt)}</p>
+                  {!form.allDay ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        type="time"
+                        value={startTime}
+                        onChange={(event) => handleStartTime(event.target.value)}
+                        className="rounded-lg border-0 bg-white px-2.5 py-1.5 text-sm shadow-sm"
+                      />
+                      <span className="text-gray-400">–</span>
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(event) => handleEndTime(event.target.value)}
+                        className="rounded-lg border-0 bg-white px-2.5 py-1.5 text-sm shadow-sm"
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-gray-600">All day</p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">Does not repeat</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={form.allDay}
+                    onChange={(event) => setForm((prev) => ({ ...prev, allDay: event.target.checked }))}
+                  />
+                  All day
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <UserPlus size={18} className="mt-2 shrink-0 text-gray-500" />
+              <div className="flex-1 space-y-2">
+                <button type="button" className="text-sm text-gray-600 hover:text-gray-800 text-left">
+                  Add guest
+                </button>
+                <input
+                  value={form.visitorName}
+                  onChange={(event) => setForm((prev) => ({ ...prev, visitorName: event.target.value }))}
+                  placeholder="Visitor name"
+                  required
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={form.company}
+                    onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
+                    placeholder="Company"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  />
+                  <input
+                    value={form.phone}
+                    onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                    placeholder="Phone"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <MapPin size={18} className="mt-2 shrink-0 text-gray-500" />
+              <select
+                value={form.siteId}
+                onChange={(event) => setForm((prev) => ({ ...prev, siteId: event.target.value }))}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+                required
+              >
+                <option value="">Add location</option>
+                {(referenceData?.sites || []).map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name}{site.code ? ` (${site.code})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <TextAlignStart size={18} className="mt-2 shrink-0 text-gray-500" />
+              <textarea
+                value={form.purpose}
+                onChange={(event) => setForm((prev) => ({ ...prev, purpose: event.target.value }))}
+                placeholder="Add description or meeting notes"
+                rows={2}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm resize-none"
+              />
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Calendar size={18} className="mt-2 shrink-0 text-gray-500" />
+              <div>
+                <p className="text-sm font-medium text-gray-800 inline-flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#039be5]" />
+                  {calendarLabel}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Busy · Default visibility · Notify 30 minutes before</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+            <button
+              type="button"
+              className="text-sm font-medium text-[#1a73e8] hover:underline"
+            >
+              More options
+            </button>
+            <LoadingButton
+              type="submit"
+              loading={saving}
+              loadingLabel="Saving"
+              variant="primary"
+              className="rounded-full bg-[#1a73e8] hover:bg-[#1765cc] px-6"
+            >
+              Save
+            </LoadingButton>
+          </div>
+        </form>
+      </div>
+    </>,
+    document.body,
+  );
+}

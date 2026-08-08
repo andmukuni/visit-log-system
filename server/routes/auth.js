@@ -119,5 +119,40 @@ export function createAuthRouter({ authService }) {
     }
   });
 
+  router.post('/refresh-session', async (req, res) => {
+    try {
+      const auth = authService.getAdminAuth(req);
+      if (!auth.ok) return authService.sendAuthFailure(res, auth);
+
+      const userId = auth.claims?.sub;
+      const [[user]] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
+      if (!user) {
+        return res.status(404).json({ ok: false, message: 'User not found.' });
+      }
+
+      const adminPermissions = await loadUserAdminPermissions(pool, user.id, { legacyRole: user.role });
+      const canAccessAdmin = userCanAccessAdmin(user.role, adminPermissions);
+      if (!canAccessAdmin) {
+        return res.status(403).json({ ok: false, message: 'Administrator privileges required.' });
+      }
+
+      const token = authService.signUserToken(user, {
+        adminPermissions,
+        canAccessAdmin,
+      });
+
+      return res.json({
+        ok: true,
+        data: {
+          permissions: adminPermissions,
+        },
+        token,
+      });
+    } catch (error) {
+      console.error('[auth/refresh-session]', error.message);
+      return res.status(500).json({ ok: false, message: 'Could not refresh session.' });
+    }
+  });
+
   return router;
 }

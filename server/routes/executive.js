@@ -1,7 +1,16 @@
 import express from 'express';
 import pool from '../db.js';
+import { generateId } from '../visitorSchema.js';
+import {
+  writeAuditLog,
+  writeVisitEvent,
+  generatePassCode,
+} from '../auditService.js';
+import { generateInviteToken } from '../platformSchema.js';
+import { notifyVisitEvent } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
-import { permissionsFromRequest } from '../classificationService.js';
+import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
+import { createAppointmentForVisit } from '../accessSchema.js';
 import { formatVisitListResponse, formatVisitResponse, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 
 function executiveVisitSql(extraWhere = '', orderBy = 'vis.expected_at ASC, vis.created_at DESC') {
@@ -33,6 +42,14 @@ export function createExecutiveRouter() {
       const orgId = ctx.scope.organisation_id;
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
+
+      if (!hostId) {
+        return res.status(403).json({
+          ok: false,
+          message: 'No host profile is linked to this account. Contact your administrator.',
+        });
+      }
+
       const baseParams = [orgId, hostId, userId];
 
       const countVisits = async (extra = '') => {
@@ -152,10 +169,20 @@ export function createExecutiveRouter() {
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
       const window = String(req.query.window || 'upcoming').toLowerCase();
+      const from = String(req.query.from || '').trim();
+      const to = String(req.query.to || '').trim();
 
       let dateFilter = 'AND a.scheduled_at >= CURDATE()';
       if (window === 'today') dateFilter = 'AND DATE(a.scheduled_at) = CURDATE()';
       if (window === 'past') dateFilter = 'AND a.scheduled_at < NOW()';
+      if (from && to) {
+        dateFilter = 'AND a.scheduled_at >= ? AND a.scheduled_at < ?';
+      }
+
+      const queryParams = [orgId, hostId, userId];
+      if (from && to) {
+        queryParams.push(`${from} 00:00:00`, `${to} 00:00:00`);
+      }
 
       const [rows] = await pool.query(
         `SELECT a.id, a.title, a.scheduled_at, a.status,
@@ -170,13 +197,200 @@ export function createExecutiveRouter() {
          ${dateFilter}
          ORDER BY a.scheduled_at ASC
          LIMIT 100`,
-        [orgId, hostId, userId],
+        queryParams,
       );
 
       return res.json({ ok: true, data: rows });
     } catch (error) {
       console.error('[executive/appointments]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to load appointments.' });
+    }
+  });
+
+  router.get('/reference-data', async (req, res) => {
+    try {
+      const ctx = await getExecutiveContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const orgId = ctx.scope.organisation_id;
+      const [categories] = await pool.query(
+        `SELECT id, name, slug, requires_approval, default_duration_minutes
+         FROM visitor_categories WHERE organisation_id = ? ORDER BY name`,
+        [orgId],
+      );
+      const [sites] = await pool.query(
+        `SELECT id, name, code FROM sites WHERE organisation_id = ? AND status = 'active' ORDER BY name`,
+        [orgId],
+      );
+
+      return res.json({
+        ok: true,
+        data: {
+          categories,
+          sites,
+          host: ctx.host,
+          defaultSiteId: ctx.scope.site_id,
+        },
+      });
+    } catch (error) {
+      console.error('[executive/reference-data]', error.message);
+      return res.status(500).json({ ok: false, message: 'Unable to load reference data.' });
+    }
+  });
+
+  router.post('/appointments', async (req, res) => {
+    try {
+      const ctx = await getExecutiveContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const userId = req.adminClaims.sub;
+      const {
+        title,
+        visitorName,
+        phone,
+        email,
+        company,
+        categoryId,
+        purpose,
+        scheduledAt,
+        siteId,
+      } = req.body || {};
+
+      if (!visitorName?.trim()) {
+        return res.status(400).json({ ok: false, message: 'Visitor name is required.' });
+      }
+      if (!scheduledAt) {
+        return res.status(400).json({ ok: false, message: 'Appointment time is required.' });
+      }
+
+      if (categoryId) {
+        const classCheck = await assertCanAssignCategory(pool, {
+          categoryId,
+          organisationId: ctx.scope.organisation_id,
+          permissions: permissionsFromRequest(req),
+        });
+        if (!classCheck.ok) {
+          return res.status(classCheck.status).json({ ok: false, message: classCheck.message });
+        }
+      }
+
+      const resolvedSiteId = siteId || ctx.scope.site_id;
+      if (!resolvedSiteId) {
+        return res.status(400).json({ ok: false, message: 'Location is required for the appointment.' });
+      }
+
+      const [[site]] = await pool.query(
+        `SELECT id FROM sites WHERE id = ? AND organisation_id = ?`,
+        [resolvedSiteId, ctx.scope.organisation_id],
+      );
+      if (!site) {
+        return res.status(400).json({ ok: false, message: 'Invalid site for this organisation.' });
+      }
+
+      let visitorId = null;
+      if (phone) {
+        const [[existing]] = await pool.query(
+          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
+          [ctx.scope.organisation_id, phone.trim()],
+        );
+        visitorId = existing?.id;
+      }
+
+      if (!visitorId) {
+        visitorId = generateId('vis');
+        await pool.query(
+          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            visitorId,
+            ctx.scope.organisation_id,
+            visitorName.trim(),
+            phone?.trim() || null,
+            email?.trim() || null,
+            company?.trim() || null,
+          ],
+        );
+      }
+
+      let status = 'pre_registered';
+      if (categoryId) {
+        const [[cat]] = await pool.query(
+          `SELECT requires_approval FROM visitor_categories WHERE id = ? AND organisation_id = ?`,
+          [categoryId, ctx.scope.organisation_id],
+        );
+        if (cat?.requires_approval) status = 'pending_approval';
+        else status = 'approved';
+      } else {
+        status = 'pending_approval';
+      }
+
+      const visitId = generateId('visit');
+      const passCode = generatePassCode();
+      const inviteToken = generateInviteToken();
+      const meetingTitle = title?.trim() || purpose?.trim() || `Meeting with ${visitorName.trim()}`;
+
+      await pool.query(
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          visitId,
+          ctx.scope.organisation_id,
+          resolvedSiteId,
+          visitorId,
+          ctx.host.id,
+          categoryId || null,
+          purpose?.trim() || meetingTitle,
+          status,
+          scheduledAt,
+          passCode,
+          inviteToken,
+          userId,
+        ],
+      );
+
+      const appointmentId = await createAppointmentForVisit(pool, {
+        organisationId: ctx.scope.organisation_id,
+        visitId,
+        hostId: ctx.host.id,
+        scheduledAt,
+        title: meetingTitle,
+        createdBy: userId,
+      });
+
+      await writeVisitEvent(pool, {
+        visitId,
+        eventType: 'pre_registered',
+        actorUserId: userId,
+        details: { status, source: 'executive_calendar' },
+      });
+
+      await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+
+      await writeAuditLog(pool, {
+        organisationId: ctx.scope.organisation_id,
+        actorUserId: userId,
+        action: 'executive.appointment.create',
+        targetType: 'appointment',
+        targetId: appointmentId,
+      });
+
+      const [[appointment]] = await pool.query(
+        `SELECT a.id, a.title, a.scheduled_at, a.status,
+                vis.id AS visit_id, vis.status AS visit_status, vis.purpose,
+                v.full_name AS visitor_name, v.company, v.phone,
+                COALESCE(vc.classification, 'standard') AS classification
+         FROM appointments a
+         INNER JOIN visits vis ON vis.id = a.visit_id
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
+         WHERE a.id = ?`,
+        [appointmentId],
+      );
+
+      return res.status(201).json({ ok: true, data: appointment });
+    } catch (error) {
+      console.error('[executive/appointments POST]', error.message);
+      return res.status(500).json({ ok: false, message: 'Unable to create appointment.' });
     }
   });
 
