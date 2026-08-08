@@ -23,6 +23,17 @@ export function formatDateTime(value) {
   });
 }
 
+export function formatTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Africa/Lusaka',
+  });
+}
+
 export function formatNumber(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '0';

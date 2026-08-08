@@ -28,6 +28,7 @@ import { createEmergencyRouter } from './routes/emergency.js';
 import { createReportsRouter } from './routes/reports.js';
 import { createComplianceRouter } from './routes/compliance.js';
 import { createPlatformRouter } from './routes/platform.js';
+import { createExecutiveRouter } from './routes/executive.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminSettingsRouter } from './routes/adminSettings.js';
 import { createKioskRouter } from './routes/kiosk.js';
@@ -138,7 +139,7 @@ app.use('/api', (req, res, next) => {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
   } else if (!isLegacyAdmin && routePath.startsWith('/admin/notifications')) {
-    const notificationGate = ['host.notifications', 'admin.notifications', 'admin.dashboard', 'station.dashboard', 'security.dashboard'];
+    const notificationGate = ['host.notifications', 'admin.notifications', 'admin.dashboard', 'station.dashboard', 'security.dashboard', 'executive.dashboard'];
     if (!hasAnyPermission(perms, notificationGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
@@ -187,6 +188,7 @@ app.use('/api/admin/visits', createVisitsRouter());
 app.use('/api/admin/vehicles', createVehiclesRouter());
 app.use('/api/admin/org', createOrgAdminRouter());
 app.use('/api/admin/host', createHostRouter());
+app.use('/api/admin/executive', createExecutiveRouter());
 app.use('/api/admin/security', createSecurityRouter());
 app.use('/api/admin/emergency', createEmergencyRouter());
 app.use('/api/admin/reports', createReportsRouter());

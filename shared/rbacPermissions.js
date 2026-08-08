@@ -109,10 +109,21 @@ const EMERGENCY_PERMISSIONS = [
 ];
 
 const EXECUTIVE_PERMISSIONS = [
+  { key: 'executive.dashboard', name: 'Executive dashboard', group: 'Executive' },
+  { key: 'executive.calendar', name: 'View my appointments', group: 'Executive' },
+  { key: 'executive.appointments', name: 'Manage executive appointments', group: 'Executive' },
+  { key: 'executive.visits', name: 'View my visitors', group: 'Executive' },
   { key: 'executive.full_contact', name: 'View full VIP/VVIP contact details', group: 'Executive' },
   { key: 'executive.assign_vip', name: 'Assign VIP/VVIP classification', group: 'Executive' },
-  { key: 'executive.calendar', name: 'Manage executive calendar', group: 'Executive' },
-  { key: 'executive.appointments', name: 'Manage executive appointments', group: 'Executive' },
+];
+
+export const EXECUTIVE_PORTAL_KEYS = [
+  'executive.dashboard',
+  'executive.calendar',
+  'executive.appointments',
+  'executive.visits',
+  'executive.full_contact',
+  'host.notifications',
 ];
 
 const EXECUTIVE_KEYS = EXECUTIVE_PERMISSIONS.map((p) => p.key);
@@ -258,16 +269,16 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: 'ceo',
     name: 'CEO',
-    description: 'Executive dashboard with full VIP contact visibility.',
+    description: 'Personal executive dashboard, calendar and visitor visibility.',
     is_system: true,
-    permissions: [...MANAGEMENT_KEYS, 'executive.full_contact', 'executive.calendar'],
+    permissions: EXECUTIVE_PORTAL_KEYS,
   },
   {
     slug: 'dceo',
     name: 'DCEO',
-    description: 'Deputy executive dashboard with full VIP contact visibility.',
+    description: 'Personal executive dashboard, calendar and visitor visibility.',
     is_system: true,
-    permissions: [...MANAGEMENT_KEYS, 'executive.full_contact', 'executive.calendar'],
+    permissions: EXECUTIVE_PORTAL_KEYS,
   },
 ];
 

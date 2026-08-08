@@ -62,6 +62,12 @@ const ManagementOccupancyPage = lazy(() => import('./pages/management/Management
 const ManagementReportsPage = lazy(() => import('./pages/management/ManagementReportsPage'));
 const ManagementExportHistoryPage = lazy(() => import('./pages/management/ManagementExportHistoryPage'));
 
+const ExecutiveDashboardPage = lazy(() => import('./pages/executive/ExecutiveDashboardPage'));
+const ExecutiveAppointmentsPage = lazy(() => import('./pages/executive/ExecutiveAppointmentsPage'));
+const ExecutiveVisitorsPage = lazy(() => import('./pages/executive/ExecutiveVisitorsPage'));
+const ExecutiveVisitDetailPage = lazy(() => import('./pages/executive/ExecutiveVisitDetailPage'));
+const ExecutiveNotificationsPage = lazy(() => import('./pages/executive/ExecutiveNotificationsPage'));
+
 const ComplianceExportLogsPage = lazy(() => import('./pages/compliance/ComplianceExportLogsPage'));
 const ComplianceReportsPage = lazy(() => import('./pages/compliance/ComplianceReportsPage'));
 const ComplianceDashboardPage = lazy(() => import('./pages/compliance/ComplianceDashboardPage'));
@@ -170,6 +176,10 @@ function HostPortalLayout() {
 
 function ManagementPortalLayout() {
   return <PortalLayout key="management" portalId="management" title={`${APP_NAME_SHORT} Management`} />;
+}
+
+function ExecutivePortalLayout() {
+  return <PortalLayout key="executive" portalId="executive" title={`${APP_NAME_SHORT} Executive`} />;
 }
 
 function CompliancePortalLayout() {
@@ -323,6 +333,18 @@ export const router = createBrowserRouter([
           { path: 'on-site', element: <HostOnSitePage /> },
           { path: 'notifications', element: <HostNotificationsPage /> },
           { path: '*', element: <PlaceholderPage title="Host" portalLabel="Host" /> },
+        ],
+      },
+
+      {
+        path: 'executive',
+        element: <ProtectedRoute><ExecutivePortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <ExecutiveDashboardPage /> },
+          { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
+          { path: 'visitors', element: <ExecutiveVisitorsPage /> },
+          { path: 'visitors/:id', element: <ExecutiveVisitDetailPage /> },
+          { path: 'notifications', element: <ExecutiveNotificationsPage /> },
         ],
       },
 

@@ -215,3 +215,16 @@ export const notificationsApi = {
   getTemplates: () => apiFetch('/admin/notifications/templates'),
   getOrgRecent: () => apiFetch('/admin/notifications/org/recent'),
 };
+
+export const executiveApi = {
+  getDashboard: () => apiFetch('/admin/executive/dashboard'),
+  getAppointments: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/executive/appointments${qs ? `?${qs}` : ''}`);
+  },
+  getVisits: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/executive/visits${qs ? `?${qs}` : ''}`);
+  },
+  getVisit: (id) => apiFetch(`/admin/executive/visits/${id}`),
+};

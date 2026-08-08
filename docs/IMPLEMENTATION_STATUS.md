@@ -151,8 +151,8 @@ Seed command: `npm run seed:portal-users` (local) or `npm run seed:portal-users:
 |-------|--------------|--------|
 | admin@template.dev | System Administrator (Super Admin) | All (via switcher) |
 | orgadmin@demo.org | System Administrator (Org Admin) | `/admin` |
-| ceo@demo.org | CEO | `/management` (full VIP contact) |
-| dceo@demo.org | DCEO | `/management` (full VIP contact) |
+| ceo@demo.org | CEO | `/executive` |
+| dceo@demo.org | DCEO | `/executive` |
 | ceo.secretary@demo.org | CEO Secretary | `/host` (can assign VIP/VVIP) |
 | dceo.secretary@demo.org | DCEO Secretary | `/host` (can assign VIP/VVIP) |
 | exec.reception@demo.org | Executive Reception | `/station` (full VIP contact) |

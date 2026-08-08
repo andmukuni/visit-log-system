@@ -99,12 +99,21 @@ export async function seedRbac(pool) {
         [roleRow.id],
       );
       const existingKeys = new Set(existing.map((row) => row.permission_key));
+      const allowed = new Set(roleDef.permissions);
       const missing = roleDef.permissions.filter((key) => !existingKeys.has(key));
       for (const permKey of missing) {
         await pool.query(
           'INSERT INTO admin_role_permissions (role_id, permission_key) VALUES (?, ?)',
           [roleRow.id, permKey],
         );
+      }
+      for (const row of existing) {
+        if (!allowed.has(row.permission_key)) {
+          await pool.query(
+            'DELETE FROM admin_role_permissions WHERE role_id = ? AND permission_key = ?',
+            [roleRow.id, row.permission_key],
+          );
+        }
       }
     }
   }
@@ -167,6 +176,13 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/host/approvals')) return 'host.approvals';
   if (path.includes('/host/on-site')) return 'host.onsite';
   if (path.includes('/host/visitors') && method === 'GET' && !path.includes('/visits/')) return 'host.visitors';
+  if (path.includes('/host/notifications')) return 'host.notifications';
+  if (path.includes('/host/profile')) return 'host.profile';
+
+  if (path.includes('/executive/dashboard')) return 'executive.dashboard';
+  if (path.includes('/executive/appointments')) return 'executive.calendar';
+  if (path.includes('/executive/visits')) return 'executive.visits';
+
   if (path.includes('/host/visits')) {
     if (path.includes('/approve') || path.includes('/reject')) return 'host.approvals';
     return 'host.visitors';

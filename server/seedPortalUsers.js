@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import pool from './db.js';
 import { hashPassword } from './auth.js';
 import { generateId } from './visitorSchema.js';
+import { createAppointmentForVisit } from './accessSchema.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const DEV_PORTAL_PASSWORD = String(process.env.DEV_PORTAL_PASSWORD || 'demo1234');
@@ -25,7 +26,7 @@ export const PORTAL_USERS = [
   { email: 'emergency@demo.org', name: 'Emergency Officer Demo', roleSlug: 'emergency_officer' },
 ];
 
-const HOST_LINKED_ROLES = new Set(['host']);
+const HOST_LINKED_ROLES = new Set(['host', 'ceo', 'dceo']);
 
 export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
   if (IS_PRODUCTION && !force) {
@@ -106,6 +107,7 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
 
   console.log(`[seed] Portal users ready (${created} created, ${updated} updated). Password: demo1234`);
   await seedHostDemoVisit(poolConn);
+  await seedExecutiveDemoVisits(poolConn);
   return { skipped: false, created, updated };
 }
 
@@ -152,6 +154,90 @@ async function seedHostDemoVisit(poolConn = pool) {
     `INSERT INTO visit_events (id, visit_id, event_type, actor_user_id, details) VALUES (?, ?, 'registered', ?, ?)`,
     [generateId('evt'), visitId, hostUser.id, JSON.stringify({ status: 'pending_approval' })],
   );
+}
+
+async function seedExecutiveDemoVisits(poolConn = pool) {
+  const executiveEmails = ['dceo@demo.org', 'ceo@demo.org'];
+  for (const email of executiveEmails) {
+    const [[hostUser]] = await poolConn.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
+    if (!hostUser?.id) continue;
+
+    const [[host]] = await poolConn.query(
+      'SELECT id, organisation_id FROM hosts WHERE user_id = ? LIMIT 1',
+      [hostUser.id],
+    );
+    if (!host?.id) continue;
+
+    const [[existingAppt]] = await poolConn.query(
+      `SELECT a.id FROM appointments a
+       INNER JOIN visits vis ON vis.id = a.visit_id
+       WHERE vis.host_id = ? AND DATE(a.scheduled_at) = CURDATE() LIMIT 1`,
+      [host.id],
+    );
+    if (existingAppt?.id) continue;
+
+    const [[site]] = await poolConn.query('SELECT id FROM sites WHERE organisation_id = ? LIMIT 1', [host.organisation_id]);
+    const [[category]] = await poolConn.query(
+      `SELECT id, classification FROM visitor_categories WHERE organisation_id = ? ORDER BY classification DESC LIMIT 1`,
+      [host.organisation_id],
+    );
+    if (!site?.id) continue;
+
+    const demoVisitors = email.includes('dceo')
+      ? [
+          { name: 'Ambassador Ngoma', company: 'Foreign Affairs', hourOffset: 2, status: 'approved', purpose: 'Policy briefing' },
+          { name: 'Dr. Mwila', company: 'Health Board', hourOffset: 4, status: 'pending_approval', purpose: 'Board review', vip: true },
+        ]
+      : [
+          { name: 'James Mulenga', company: 'Investor Group', hourOffset: 3, status: 'approved', purpose: 'Investment update' },
+        ];
+
+    for (const demo of demoVisitors) {
+      const visitorId = generateId('vis');
+      await poolConn.query(
+        `INSERT INTO visitors (id, organisation_id, full_name, phone, company) VALUES (?, ?, ?, ?, ?)`,
+        [visitorId, host.organisation_id, demo.name, '+260971234567', demo.company],
+      );
+
+      const visitId = generateId('visit');
+      const scheduledAt = new Date();
+      scheduledAt.setHours(9 + demo.hourOffset, 0, 0, 0);
+
+      await poolConn.query(
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, pass_code, expected_at, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          visitId,
+          host.organisation_id,
+          site.id,
+          visitorId,
+          host.id,
+          demo.vip ? category?.id : category?.id,
+          demo.purpose,
+          demo.status,
+          Math.random().toString(36).slice(2, 8).toUpperCase(),
+          scheduledAt,
+          hostUser.id,
+        ],
+      );
+
+      await createAppointmentForVisit(poolConn, {
+        organisationId: host.organisation_id,
+        visitId,
+        hostId: host.id,
+        scheduledAt,
+        title: demo.purpose,
+        createdBy: hostUser.id,
+      });
+
+      await poolConn.query(
+        `INSERT INTO visit_events (id, visit_id, event_type, actor_user_id, details) VALUES (?, ?, 'registered', ?, ?)`,
+        [generateId('evt'), visitId, hostUser.id, JSON.stringify({ status: demo.status })],
+      );
+    }
+  }
+
+  console.log('[seed] Executive demo appointments created.');
 }
 
 export async function seedSampleVisits(poolConn = pool, { force = false } = {}) {

@@ -45,6 +45,12 @@ export const PORTALS = {
     routePrefix: '/host',
     navSections: { primary: 'My Visitors' },
   },
+  executive: {
+    id: 'executive',
+    label: 'Executive Portal',
+    routePrefix: '/executive',
+    navSections: { primary: 'My Office' },
+  },
   management: {
     id: 'management',
     label: 'Management Portal',
@@ -148,6 +154,12 @@ export const PORTAL_NAVIGATION = {
     { key: 'notifications', name: 'Notifications', to: '/host/notifications', permission: 'host.notifications', section: 'primary' },
     { key: 'profile', name: 'My Profile', to: '/host/profile', permission: 'host.profile', section: 'primary' },
   ],
+  executive: [
+    { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
+    { key: 'appointments', name: 'My Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
+    { key: 'visitors', name: 'My Visitors', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
+    { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary' },
+  ],
   management: [
     { key: 'dashboard', name: 'Executive Dashboard', to: '/management', permission: 'management.dashboard', end: true, section: 'primary' },
     { key: 'occupancy', name: 'Live Occupancy', to: '/management/occupancy', permission: 'management.occupancy', section: 'primary' },
@@ -192,6 +204,7 @@ export const PORTAL_NAVIGATION = {
 export const PORTAL_PRIORITY = [
   'platform',
   'admin',
+  'executive',
   'security',
   'station',
   'host',
