@@ -77,7 +77,6 @@ export default function ExecutiveDashboardPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={`Good day, ${executive.name?.split(' ')[0] || 'Executive'}`}
         subtitle={`${executive.title || 'Executive'} office — weekly schedule`}
         breadcrumbs={[{ label: executive.title || 'Executive', to: '/executive' }, { label: 'Dashboard' }]}
         actions={<ActionToolbar />}
