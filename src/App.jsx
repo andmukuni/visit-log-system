@@ -1,4 +1,4 @@
-import { Suspense, lazy, Component } from 'react';
+import { Suspense, lazy, Component, useEffect } from 'react';
 import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -8,6 +8,7 @@ import TopProgressBar from './components/ui/TopProgressBar';
 import { useAuth } from './context/AuthContext';
 import { purgeInvalidAuthState } from './utils/authHeaders';
 import { APP_NAME_SHORT } from '../shared/branding.js';
+import { isExecutiveOnlyUser } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
@@ -178,6 +179,25 @@ function ManagementPortalLayout() {
   return <PortalLayout key="management" portalId="management" title={`${APP_NAME_SHORT} Management`} />;
 }
 
+function ExecutiveOnlyManagementRedirect({ children }) {
+  const { permissions } = useAuth();
+  const perms = permissions || [];
+  if (isExecutiveOnlyUser(perms)) {
+    return <Navigate to="/executive" replace />;
+  }
+  return children;
+}
+
+function ProtectedManagementPortal() {
+  return (
+    <ProtectedRoute>
+      <ExecutiveOnlyManagementRedirect>
+        <ManagementPortalLayout />
+      </ExecutiveOnlyManagementRedirect>
+    </ProtectedRoute>
+  );
+}
+
 function ExecutivePortalLayout() {
   return <PortalLayout key="executive" portalId="executive" title={`${APP_NAME_SHORT} Executive`} />;
 }
@@ -201,7 +221,15 @@ function AppRoot() {
     idleLogoutPromptOpen,
     dismissIdleLogoutPrompt,
     adminIdleTimeoutMinutes,
+    permissions,
   } = useAuth();
+
+  useEffect(() => {
+    if (!permissions?.length) return;
+    if (isExecutiveOnlyUser(permissions) && location.pathname.startsWith('/management')) {
+      navigate('/executive', { replace: true });
+    }
+  }, [permissions, location.pathname, navigate]);
 
   const openAdminLogin = () => {
     dismissIdleLogoutPrompt();
@@ -350,7 +378,7 @@ export const router = createBrowserRouter([
 
       {
         path: 'management',
-        element: <ProtectedRoute><ManagementPortalLayout /></ProtectedRoute>,
+        element: <ProtectedManagementPortal />,
         children: [
           { index: true, element: <ManagementDashboardPage /> },
           { path: 'occupancy', element: <ManagementOccupancyPage /> },

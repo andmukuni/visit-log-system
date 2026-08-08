@@ -239,7 +239,17 @@ export function groupNavItems(items) {
   return { primary, system, settings };
 }
 
-export function resolvePrimaryPortal(hasPermission) {
+/** CEO/DCEO users scoped to the personal executive portal only. */
+export function isExecutiveOnlyUser(permissions = []) {
+  const has = (key) => permissionMatches(permissions, key);
+  return has('executive.dashboard') && !has('management.dashboard');
+}
+
+export function resolvePrimaryPortal(hasPermission, permissions = []) {
+  if (isExecutiveOnlyUser(permissions)) {
+    return 'executive';
+  }
+
   for (const portalId of PORTAL_PRIORITY) {
     const items = getVisibleNavItems(portalId, hasPermission);
     if (items.length > 0) return portalId;
@@ -250,17 +260,25 @@ export function resolvePrimaryPortal(hasPermission) {
 /** Default post-login route for a permission set. */
 export function resolvePortalRoute(permissions = []) {
   const hasPermission = (key) => permissionMatches(permissions, key);
-  const portalId = resolvePrimaryPortal(hasPermission);
+  const portalId = resolvePrimaryPortal(hasPermission, permissions);
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
-export function canAccessPortal(portalId, hasPermission) {
+export function canAccessPortal(portalId, hasPermission, permissions = []) {
+  if (isExecutiveOnlyUser(permissions) && portalId !== 'executive') {
+    return false;
+  }
   return getVisibleNavItems(portalId, hasPermission).length > 0;
 }
 
 /** Portals the signed-in user can access (for sidebar switcher). */
-export function getAccessiblePortals(hasPermission) {
+export function getAccessiblePortals(hasPermission, permissions = []) {
+  if (isExecutiveOnlyUser(permissions)) {
+    return [];
+  }
+
   return PORTAL_PRIORITY.filter((portalId) => {
+    if (portalId === 'executive') return false;
     const items = getVisibleNavItems(portalId, hasPermission);
     return items.length > 0;
   }).map((portalId) => ({

@@ -122,7 +122,8 @@ Aligned with `scoopofwork/Visitor_Appointment_Vehicle_Access_System_Logic.pdf`.
 | Gate vehicle capture workflow | Done | `POST /api/admin/vehicles/gate-capture`, `vehicle_entries` |
 | Visitor contact details (ID, confidential) | Done | `visitor_contact_details` table |
 | Reception points + parking bays | Done | `reception_points`, `parking_bays` seeded |
-| Executive roles (CEO, secretaries, etc.) | Done | `rbacPermissions.js` + demo users |
+| CEO/DCEO executive portal (personal dashboard) | Done | `/executive`, `server/routes/executive.js` |
+| CEO/DCEO executive-only sidebar (4 links, no switcher) | Done | `isExecutiveOnlyUser()` in `shared/portalNavigation.js` |
 | Notifications: gate arrival, VIP, cancel, reschedule | Done | templates + `notificationService.js` |
 | Cancel / reschedule endpoints | Done | `POST /visits/:id/cancel`, `PATCH /visits/:id/reschedule` |
 | Appointment reminders (scheduled) | Not started | Cron template only |
@@ -151,8 +152,8 @@ Seed command: `npm run seed:portal-users` (local) or `npm run seed:portal-users:
 |-------|--------------|--------|
 | admin@template.dev | System Administrator (Super Admin) | All (via switcher) |
 | orgadmin@demo.org | System Administrator (Org Admin) | `/admin` |
-| ceo@demo.org | CEO | `/executive` |
-| dceo@demo.org | DCEO | `/executive` |
+| ceo@demo.org | CEO | `/executive` (Dashboard, Appointments, Visitors, Notifications only) |
+| dceo@demo.org | DCEO | `/executive` (Dashboard, Appointments, Visitors, Notifications only) |
 | ceo.secretary@demo.org | CEO Secretary | `/host` (can assign VIP/VVIP) |
 | dceo.secretary@demo.org | DCEO Secretary | `/host` (can assign VIP/VVIP) |
 | exec.reception@demo.org | Executive Reception | `/station` (full VIP contact) |

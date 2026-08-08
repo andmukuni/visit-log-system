@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
-import { canAccessPortal, resolvePortalRoute } from '../../../shared/portalNavigation.js';
+import { canAccessPortal, isExecutiveOnlyUser, resolvePortalRoute } from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
   return (
@@ -105,7 +105,11 @@ function ShellBody({ portalId, title }) {
 
   useEffect(() => {
     if (!permissions.length) return;
-    if (!canAccessPortal(portalId, hasPermission)) {
+    if (isExecutiveOnlyUser(permissions) && portalId === 'management') {
+      navigate('/executive', { replace: true });
+      return;
+    }
+    if (!canAccessPortal(portalId, hasPermission, permissions)) {
       navigate(resolvePortalRoute(permissions), { replace: true });
     }
   }, [portalId, permissions, hasPermission, navigate]);

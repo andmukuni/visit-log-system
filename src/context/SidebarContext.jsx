@@ -9,7 +9,7 @@ import {
 
 const SidebarContext = createContext(null);
 
-function buildSidebarSnapshot(portalId, hasPermission, extraItems = []) {
+function buildSidebarSnapshot(portalId, hasPermission, permissions = [], extraItems = []) {
   const staticItems = getVisibleNavItems(portalId, hasPermission);
   const mergedItems = [...staticItems];
 
@@ -26,7 +26,7 @@ function buildSidebarSnapshot(portalId, hasPermission, extraItems = []) {
   }
 
   const { primary, system, settings } = groupNavItems(mergedItems);
-  const accessiblePortals = getAccessiblePortals(hasPermission).filter((portal) => portal.id !== portalId);
+  const accessiblePortals = getAccessiblePortals(hasPermission, permissions).filter((portal) => portal.id !== portalId);
   const portalMeta = PORTALS[portalId];
   const sectionLabels = portalMeta?.navSections || { primary: 'Overview', system: 'System' };
 
@@ -56,9 +56,11 @@ export function SidebarProvider({ portalId, children }) {
     [extraNavItems],
   );
 
+  const permissions = user?.permissions || user?.admin_permissions || [];
+
   const snapshot = useMemo(
-    () => buildSidebarSnapshot(portalId, hasPermission, extraNavItems),
-    [portalId, permissionsKey, extraNavKey, hasPermission, extraNavItems],
+    () => buildSidebarSnapshot(portalId, hasPermission, permissions, extraNavItems),
+    [portalId, permissionsKey, extraNavKey, hasPermission, permissions, extraNavItems],
   );
 
   const registerNavItems = useCallback((items) => {
