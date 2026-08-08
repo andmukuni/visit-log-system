@@ -87,7 +87,6 @@ export default function ExecutiveAppointmentsPage() {
   const [draft, setDraft] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [referenceData, setReferenceData] = useState(null);
-  const [executive, setExecutive] = useState({});
   const [saving, setSaving] = useState(false);
 
   const updateParams = useCallback((updates) => {
@@ -104,24 +103,27 @@ export default function ExecutiveAppointmentsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [listResult, dashboard] = await Promise.all([
-        executiveApi.listAppointments({
-          tab,
-          search,
-          classification,
-          status,
-          range: dateRange,
-          page,
-          pageSize,
-        }),
-        executiveApi.getDashboard(),
-      ]);
+      const listResult = await executiveApi.listAppointments({
+        tab,
+        search,
+        classification,
+        status,
+        range: dateRange,
+        page,
+        pageSize,
+      });
 
+      const listStats = listResult?.stats || {};
       setRows(listResult?.rows || []);
       setTotal(Number(listResult?.total || 0));
-      setStats(listResult?.stats || {});
-      setKpis(dashboard?.kpis || {});
-      setExecutive(dashboard?.executive || {});
+      setStats(listStats);
+      setKpis({
+        todayAppointments: listStats.today ?? 0,
+        weekAppointments: listStats.week ?? 0,
+        pendingApprovals: listStats.awaiting ?? 0,
+        onSiteNow: listStats.onSiteNow ?? 0,
+        completedThisMonth: listStats.completedThisMonth ?? 0,
+      });
 
       setSelected((current) => {
         const nextRows = listResult?.rows || [];
@@ -133,6 +135,7 @@ export default function ExecutiveAppointmentsPage() {
       setRows([]);
       setTotal(0);
       setStats({});
+      setKpis({});
     } finally {
       setLoading(false);
     }
@@ -247,7 +250,7 @@ export default function ExecutiveAppointmentsPage() {
 
       <ExecutiveAppointmentsKpiRow kpis={kpis} />
 
-      <div className="-mx-4 flex min-h-[calc(100vh-18rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm sm:-mx-6 lg:-mx-8 lg:flex-row lg:items-stretch">
+      <div className="flex min-h-[calc(100vh-18rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:flex-row lg:items-stretch">
         <ExecutiveAppointmentsTableSection
           rows={rows}
           loading={loading}
@@ -299,7 +302,7 @@ export default function ExecutiveAppointmentsPage() {
           form={form}
           setForm={setForm}
           draft={draft}
-          executive={executive}
+          executive={referenceData?.host || {}}
           referenceData={referenceData}
           appointments={rows}
           saving={saving}

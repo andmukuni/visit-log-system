@@ -315,6 +315,15 @@ export function createExecutiveRouter() {
         return Number(row?.count || 0);
       };
 
+      const countVisits = async (extra = '') => {
+        const [[row]] = await pool.query(
+          `SELECT COUNT(*) AS count FROM visits vis
+           WHERE vis.organisation_id = ? AND ${hostVisitFilter('vis')} ${extra}`,
+          baseParams,
+        );
+        return Number(row?.count || 0);
+      };
+
       const stats = {
         today: await countByTab('AND DATE(a.scheduled_at) = CURDATE()'),
         week: await countByTab(
@@ -322,6 +331,11 @@ export function createExecutiveRouter() {
         ),
         awaiting: await countByTab(`AND vis.status IN ('pending_approval', 'pre_registered')`),
         all: await countByTab(''),
+        onSiteNow: await countVisits(`AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`),
+        completedThisMonth: await countVisits(
+          `AND vis.status IN ('completed', 'checked_out')
+           AND vis.updated_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+        ),
       };
 
       return res.json({
