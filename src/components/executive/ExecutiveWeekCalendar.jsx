@@ -277,7 +277,11 @@ export default function ExecutiveWeekCalendar({
   onRefresh,
 }) {
   const toast = useToast();
+  const sidebarRef = useRef(null);
+  const toolbarRef = useRef(null);
+  const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
+  const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -296,6 +300,57 @@ export default function ExecutiveWeekCalendar({
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, []);
+
+  const syncCalendarViewport = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    if (window.innerWidth < 1024) {
+      setGridViewportHeight(GRID_VIEWPORT_HEIGHT_PX);
+      return;
+    }
+
+    const sidebar = sidebarRef.current;
+    const toolbar = toolbarRef.current;
+    const dayHeaders = dayHeadersRef.current;
+    if (!sidebar || !toolbar || !dayHeaders) return;
+
+    const chromeHeight = toolbar.offsetHeight + dayHeaders.offsetHeight;
+    const nextHeight = sidebar.offsetHeight - chromeHeight;
+    setGridViewportHeight(Math.min(GRID_SCROLL_HEIGHT_PX, Math.max(0, nextHeight)));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const runSync = () => {
+      if (!cancelled) syncCalendarViewport();
+    };
+
+    runSync();
+    const rafId = requestAnimationFrame(() => {
+      runSync();
+      requestAnimationFrame(runSync);
+    });
+
+    const sidebar = sidebarRef.current;
+    if (!sidebar || typeof ResizeObserver === 'undefined') {
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(rafId);
+      };
+    }
+
+    const observer = new ResizeObserver(runSync);
+    observer.observe(sidebar);
+    window.addEventListener('resize', runSync);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+      window.removeEventListener('resize', runSync);
+    };
+  }, [syncCalendarViewport, loading, kpis, sidebarMonth, weekStart]);
 
   useEffect(() => {
     if (!isInWeek(focusedDay, weekStart)) {
@@ -337,9 +392,9 @@ export default function ExecutiveWeekCalendar({
       ? Math.max(CALENDAR_START_HOUR, nowDate.getHours())
       : 8;
 
-    el.scrollTop = initialGridScrollTop(focusHour);
+    el.scrollTop = initialGridScrollTop(focusHour, gridViewportHeight);
     return undefined;
-  }, [weekStart, loading, weekDays]);
+  }, [weekStart, loading, weekDays, gridViewportHeight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -465,13 +520,13 @@ export default function ExecutiveWeekCalendar({
     const el = gridScrollRef.current;
     if (!el) return;
     const focusHour = Math.max(CALENDAR_START_HOUR, now.getHours());
-    el.scrollTo({ top: initialGridScrollTop(focusHour), behavior: 'smooth' });
-  }, [now]);
+    el.scrollTo({ top: initialGridScrollTop(focusHour, gridViewportHeight), behavior: 'smooth' });
+  }, [now, gridViewportHeight]);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 min-h-0">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-4 min-h-0">
       {/* Left sidebar — Google Calendar style */}
-      <aside className="w-full lg:w-64 shrink-0 space-y-5">
+      <aside ref={sidebarRef} className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
             {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
@@ -492,15 +547,19 @@ export default function ExecutiveWeekCalendar({
 
         <ExecutiveGlancePanel kpis={kpis} />
 
-        <ExecutiveLegendPanel />
-
-        <ExecutiveSidebarLinks />
+        <div className="space-y-2">
+          <ExecutiveLegendPanel />
+          <ExecutiveSidebarLinks />
+        </div>
       </aside>
 
-      {/* Main calendar */}
-      <div className="flex-1 min-w-0 min-h-[560px] max-h-[calc(100vh-11rem)] rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+      {/* Main calendar — height synced to sidebar on desktop */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white max-h-[calc(100vh-11rem)]">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-navy-800/30 bg-gradient-to-r from-[#0f294d] via-[#132f52] to-[#163a63] px-4 py-3 shadow-sm">
+        <div
+          ref={toolbarRef}
+          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-navy-800/30 bg-gradient-to-r from-[#0f294d] via-[#132f52] to-[#163a63] px-4 py-3 shadow-sm"
+        >
           <button
             type="button"
             onClick={goToday}
@@ -535,13 +594,13 @@ export default function ExecutiveWeekCalendar({
         </div>
 
         {loading ? (
-          <div className="flex flex-1 items-center justify-center py-24">
+          <div className="flex items-center justify-center py-24">
             <Spinner size={32} />
           </div>
         ) : (
           <div
             key={weekStart.toISOString()}
-            className={`flex min-h-0 flex-1 flex-col ${
+            className={`flex shrink-0 flex-col ${
               weekSlideDirection === 'forward'
                 ? 'animate-gcal-week-forward'
                 : weekSlideDirection === 'backward'
@@ -550,7 +609,10 @@ export default function ExecutiveWeekCalendar({
             }`}
           >
             {/* Day headers — fixed above scroll so they never cover hour rows */}
-            <div className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
+            <div
+              ref={dayHeadersRef}
+              className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50"
+            >
               <button
                 type="button"
                 onClick={scrollToNow}
@@ -581,11 +643,11 @@ export default function ExecutiveWeekCalendar({
               })}
             </div>
 
-            {/* Time grid — 12-hour viewport, scroll through full day */}
+            {/* Time grid — viewport height matches sidebar baseline on desktop */}
             <div
               ref={gridScrollRef}
-              className="min-h-0 shrink-0 overflow-y-auto overflow-x-hidden"
-              style={{ height: `${GRID_VIEWPORT_HEIGHT_PX}px` }}
+              className="shrink-0 overflow-y-auto overflow-x-hidden"
+              style={{ height: `${gridViewportHeight}px` }}
             >
               <div
                 className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"

@@ -115,7 +115,8 @@ export function formatHourLabel(hour) {
 }
 
 /** Scroll position that keeps the given hour near the top of the 12-hour viewport. */
-export function initialGridScrollTop(hour, visibleHours = CALENDAR_VISIBLE_HOURS) {
+export function initialGridScrollTop(hour, viewportHeightPx = GRID_VIEWPORT_HEIGHT_PX) {
+  const visibleHours = viewportHeightPx / HOUR_HEIGHT_PX;
   const offsetHours = Math.max(0, hour - 1);
   const maxScroll = Math.max(0, GRID_BODY_HEIGHT_PX - visibleHours * HOUR_HEIGHT_PX);
   return Math.min(offsetHours * HOUR_HEIGHT_PX, maxScroll);
