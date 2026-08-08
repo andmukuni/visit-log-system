@@ -51,6 +51,53 @@ function hourLabelTop(hour, hourHeight = HOUR_HEIGHT_PX) {
   return (hour - CALENDAR_START_HOUR) * hourHeight;
 }
 
+function GutterHourMark({ hour, hourHeight, isCurrentHour, gutterLiveTime }) {
+  const lineTop = hourLabelTop(hour, hourHeight);
+  const isFirstHour = hour === CALENDAR_START_HOUR;
+
+  return (
+    <>
+      <div
+        className="pointer-events-none absolute right-0 left-0 z-20"
+        style={{ top: `${lineTop}px`, height: 0 }}
+        aria-hidden="true"
+      >
+        <span
+          className={`absolute right-0 top-0 block -translate-y-1/2 translate-x-1/2 rounded-full ${
+            isCurrentHour ? 'h-2 w-2 bg-navy-700 ring-2 ring-white' : 'h-1.5 w-1.5 bg-gray-300'
+          }`}
+        />
+      </div>
+      <div
+        className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center ${
+          isCurrentHour
+            ? 'text-[10px] font-bold text-navy-900 tabular-nums'
+            : 'text-[11px] font-medium leading-none text-gray-400'
+        }`}
+        style={{
+          top: `${lineTop}px`,
+          transform: isFirstHour ? 'translateY(2px)' : 'translateY(-50%)',
+        }}
+      >
+        <div className="px-0.5 text-center leading-tight">
+          {isCurrentHour ? (
+            <>
+              <span className="block whitespace-nowrap">{gutterLiveTime.clock}</span>
+              {gutterLiveTime.period && (
+                <span className="mt-0.5 block text-[9px] font-semibold leading-none text-navy-700">
+                  {gutterLiveTime.period}
+                </span>
+              )}
+            </>
+          ) : (
+            formatHourLabel(hour)
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ViewModeSelect({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -797,40 +844,28 @@ export default function ExecutiveWeekCalendar({
                 )}
 
                 {/* Hour labels */}
-                <div className="relative z-10 overflow-hidden border-r border-gray-200 bg-gray-50/95">
-                  {HOUR_LABELS.map((hour) => {
-                    const isCurrentHour = hour === currentHour;
-                    return (
-                      <div
-                        key={hour}
-                        className={`absolute inset-x-0 px-1 text-right leading-tight ${
-                          isCurrentHour
-                            ? 'text-[10px] font-bold text-navy-900 tabular-nums'
-                            : 'text-[11px] font-medium leading-none text-gray-400'
-                        }`}
-                        style={{
-                          top: `${hourLabelTop(hour, viewConfig.hourHeight)}px`,
-                          transform: hour === CALENDAR_START_HOUR ? 'translateY(2px)' : 'translateY(-50%)',
-                        }}
-                      >
-                        {isCurrentHour ? (
-                          <>
-                            <span className="block whitespace-nowrap">{gutterLiveTime.clock}</span>
-                            {gutterLiveTime.period && (
-                              <span className="mt-0.5 block text-[9px] font-semibold leading-none text-navy-700">
-                                {gutterLiveTime.period}
-                              </span>
-                            )}
-                          </>
-                        ) : formatHourLabel(hour)}
-                      </div>
-                    );
-                  })}
+                <div className="relative z-10 border-r border-gray-200 bg-gray-50/95">
+                  {HOUR_LABELS.map((hour) => (
+                    <GutterHourMark
+                      key={hour}
+                      hour={hour}
+                      hourHeight={viewConfig.hourHeight}
+                      isCurrentHour={hour === currentHour}
+                      gutterLiveTime={gutterLiveTime}
+                    />
+                  ))}
                   <div
-                    className="absolute inset-x-0 px-1 text-right text-[11px] leading-none font-medium text-gray-400"
+                    className="pointer-events-none absolute right-0 left-0 z-20"
+                    style={{ top: `${gridBodyHeight}px`, height: 0 }}
+                    aria-hidden="true"
+                  >
+                    <span className="absolute right-0 top-0 block h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-gray-300" />
+                  </div>
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-10 flex justify-center text-[11px] font-medium leading-none text-gray-400"
                     style={{ top: `${gridBodyHeight}px`, transform: 'translateY(-50%)' }}
                   >
-                    {formatHourLabel(CALENDAR_END_HOUR)}
+                    <span className="px-0.5 text-center">{formatHourLabel(CALENDAR_END_HOUR)}</span>
                   </div>
                 </div>
 
