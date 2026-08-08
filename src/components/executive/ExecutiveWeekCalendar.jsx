@@ -19,6 +19,9 @@ import {
   formatWeekRange,
   getMonthGrid,
   getWeekDays,
+  GRID_BODY_HEIGHT_PX,
+  GRID_SCROLL_HEIGHT_PX,
+  HOUR_LABELS,
   HOUR_HEIGHT_PX,
   isSameDay,
   isSameMonth,
@@ -32,6 +35,10 @@ const HOURS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
   (_, i) => CALENDAR_START_HOUR + i,
 );
+
+function hourLabelTop(hour) {
+  return (hour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
+}
 
 const EVENT_COLORS = {
   vip: 'bg-purple-100 border-purple-300 text-purple-900',
@@ -154,7 +161,7 @@ export default function ExecutiveWeekCalendar({
     if (!currentDraft?.dayKey) return currentDraft;
     const column = document.querySelector(`[data-calendar-day="${currentDraft.dayKey}"]`);
     if (!column) return currentDraft;
-    const slotRect = computeSlotRect(column, currentDraft.startAt, currentDraft.endAt);
+    const slotRect = computeSlotRect(column, currentDraft.startAt, currentDraft.endAt, GRID_BODY_HEIGHT_PX);
     if (!slotRect) return currentDraft;
     return { ...currentDraft, slotRect };
   }, []);
@@ -167,7 +174,7 @@ export default function ExecutiveWeekCalendar({
     const startAt = slotFromPointer(day, offsetY, rect.height);
     const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
     const dayKey = day.toISOString();
-    const slotRect = computeSlotRect(column, startAt, endAt);
+    const slotRect = computeSlotRect(column, startAt, endAt, GRID_BODY_HEIGHT_PX);
     setDraft({
       day,
       dayKey,
@@ -254,7 +261,7 @@ export default function ExecutiveWeekCalendar({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 min-h-[720px]">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-0">
       {/* Left sidebar — Google Calendar style */}
       <aside className="w-full lg:w-64 shrink-0 space-y-5">
         <div className="flex items-center justify-between">
@@ -303,7 +310,7 @@ export default function ExecutiveWeekCalendar({
       </aside>
 
       {/* Main calendar */}
-      <div className="flex-1 min-w-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-w-0 min-h-[480px] max-h-[calc(100vh-11rem)] rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
           <button
@@ -341,13 +348,13 @@ export default function ExecutiveWeekCalendar({
           </div>
         ) : (
           <>
-            {/* Day headers */}
-            <div className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
-              <div />
+            {/* Day headers — fixed above scroll so they never cover hour rows */}
+            <div className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
+              <div className="border-r border-gray-200 bg-gray-50" aria-hidden="true" />
               {weekDays.map((day) => {
                 const { weekday, day: dayNum, isToday } = formatDayHeader(day, today);
                 return (
-                  <div key={day.toISOString()} className="py-3 text-center border-l border-gray-200">
+                  <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2.5 text-center">
                     <p className="text-[11px] font-medium text-gray-500">{weekday}</p>
                     <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
                       isToday ? 'bg-blue-600 text-white' : 'text-gray-800'
@@ -360,23 +367,32 @@ export default function ExecutiveWeekCalendar({
               })}
             </div>
 
-            {/* Time grid */}
-            <div ref={gridScrollRef} className="overflow-y-auto flex-1 max-h-[640px]">
+            {/* Time grid — scrolls independently */}
+            <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
               <div
                 className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"
-                style={{ height: `${HOURS.length * HOUR_HEIGHT_PX}px` }}
+                style={{ height: `${GRID_SCROLL_HEIGHT_PX}px` }}
               >
                 {/* Hour labels */}
                 <div className="relative border-r border-gray-200 bg-gray-50">
-                  {HOURS.slice(0, -1).map((hour) => (
+                  {HOUR_LABELS.map((hour) => (
                     <div
                       key={hour}
-                      className="absolute right-2 -translate-y-1/2 text-[11px] text-gray-400"
-                      style={{ top: `${((hour - CALENDAR_START_HOUR) / (CALENDAR_END_HOUR - CALENDAR_START_HOUR)) * 100}%` }}
+                      className="absolute right-2 text-[11px] leading-none text-gray-400"
+                      style={{
+                        top: `${hourLabelTop(hour)}px`,
+                        transform: hour === CALENDAR_START_HOUR ? 'translateY(2px)' : 'translateY(-50%)',
+                      }}
                     >
                       {formatHourLabel(hour)}
                     </div>
                   ))}
+                  <div
+                    className="absolute right-2 text-[11px] leading-none text-gray-400"
+                    style={{ top: `${GRID_BODY_HEIGHT_PX}px`, transform: 'translateY(-50%)' }}
+                  >
+                    {formatHourLabel(CALENDAR_END_HOUR)}
+                  </div>
                 </div>
 
                 {/* Day columns */}
@@ -388,10 +404,13 @@ export default function ExecutiveWeekCalendar({
                     <div
                       key={day.toISOString()}
                       data-calendar-day={day.toISOString()}
-                      className="relative border-l border-gray-200 cursor-pointer"
-                      onClick={(event) => handleSlotClick(event, day)}
+                      className="relative border-l border-gray-200"
                     >
-                      {/* Hour lines */}
+                      <div
+                        className="absolute inset-x-0 top-0 cursor-pointer"
+                        style={{ height: `${GRID_BODY_HEIGHT_PX}px` }}
+                        onClick={(event) => handleSlotClick(event, day)}
+                      >
                       {HOURS.map((hour) => (
                         <div
                           key={hour}
@@ -406,8 +425,8 @@ export default function ExecutiveWeekCalendar({
                           className="absolute inset-x-0 z-20 flex items-center pointer-events-none"
                           style={{ top: nowLine }}
                         >
-                          <span className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1" />
-                          <span className="h-0.5 flex-1 bg-red-500" />
+                          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                          <span className="h-px flex-1 bg-red-500" />
                         </div>
                       )}
 
@@ -415,14 +434,11 @@ export default function ExecutiveWeekCalendar({
                       {draft && isSameDay(day, draft.day) && draftPreview && (
                         <div
                           data-calendar-event
-                          className="absolute inset-x-1.5 z-[25] overflow-hidden rounded-md bg-[#039be5] px-2.5 py-1.5 text-left shadow-md pointer-events-none animate-gcal-slot ring-2 ring-[#039be5]/30"
-                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '32px' }}
+                          className="absolute inset-x-1 z-[25] overflow-hidden rounded-md bg-[#039be5] px-2 py-1 text-left shadow-md pointer-events-none animate-gcal-slot"
+                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '22px' }}
                         >
                           <p className="text-[11px] font-semibold truncate text-white">
                             {draft.title?.trim() || '(No title)'}
-                          </p>
-                          <p className="text-[10px] text-blue-50 truncate">
-                            {formatTimeRange(draft.startAt, draft.endAt)}
                           </p>
                         </div>
                       )}
@@ -433,16 +449,20 @@ export default function ExecutiveWeekCalendar({
                         if (!layout) return null;
                         const color = eventColor(appt.classification, appt.visit_status);
                         const time = layout.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                        const heightPct = parseFloat(String(layout.height).replace('%', ''));
+                        const showMeta = heightPct > 7;
 
                         const content = (
                           <div
                             data-calendar-event
-                            className={`absolute inset-x-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left shadow-sm ${color}`}
-                            style={{ top: layout.top, height: layout.height, minHeight: '28px' }}
+                            className={`absolute inset-x-1 z-10 overflow-hidden rounded-md border px-1.5 py-0.5 text-left shadow-sm ${color}`}
+                            style={{ top: layout.top, height: layout.height, minHeight: '22px' }}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <p className="text-[11px] font-semibold truncate">{appt.visitor_name || appt.title}</p>
-                            <p className="text-[10px] opacity-80 truncate">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
+                            <p className="text-[11px] font-semibold truncate leading-tight">{appt.visitor_name || appt.title}</p>
+                            {showMeta && (
+                              <p className="text-[10px] opacity-80 truncate leading-tight">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
+                            )}
                           </div>
                         );
 
@@ -454,6 +474,7 @@ export default function ExecutiveWeekCalendar({
                           <div key={appt.id || appt.appointment_id}>{content}</div>
                         );
                       })}
+                      </div>
                     </div>
                   );
                 })}

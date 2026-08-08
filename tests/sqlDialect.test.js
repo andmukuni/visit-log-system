@@ -23,6 +23,20 @@ describe('PostgreSQL SQL adapter', () => {
     assert.match(sql, /CURRENT_DATE - INTERVAL '6 day'/);
   });
 
+  it('converts DATE_ADD and start-of-week DATE_SUB for executive KPIs', () => {
+    const weekRange = adaptSqlForPostgres(
+      'AND a.scheduled_at >= CURDATE() AND a.scheduled_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)',
+    );
+    assert.match(weekRange, /CURRENT_DATE \+ INTERVAL '7 day'/);
+    assert.doesNotMatch(weekRange, /DATE_ADD/);
+
+    const weekStart = adaptSqlForPostgres(
+      'AND vis.updated_at >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)',
+    );
+    assert.match(weekStart, /date_trunc\('week', CURRENT_DATE\)::date/);
+    assert.doesNotMatch(weekStart, /WEEKDAY/);
+  });
+
   it('converts INSERT IGNORE to ON CONFLICT DO NOTHING', () => {
     const sql = adaptSqlForPostgres(
       'INSERT IGNORE INTO user_admin_roles (user_id, role_id) VALUES (?, ?)',

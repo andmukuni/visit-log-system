@@ -1,9 +1,16 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const CALENDAR_START_HOUR = 6;
-export const CALENDAR_END_HOUR = 20;
-export const HOUR_HEIGHT_PX = 56;
+export const CALENDAR_START_HOUR = 7;
+export const CALENDAR_END_HOUR = 19;
+export const HOUR_HEIGHT_PX = 44;
 export const DEFAULT_EVENT_MINUTES = 60;
+export const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
+export const GRID_PADDING_BOTTOM_PX = 12;
+export const GRID_SCROLL_HEIGHT_PX = GRID_BODY_HEIGHT_PX + GRID_PADDING_BOTTOM_PX;
+export const HOUR_LABELS = Array.from(
+  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
+  (_, i) => CALENDAR_START_HOUR + i,
+);
 
 export function startOfDay(date) {
   const d = new Date(date);
@@ -163,7 +170,7 @@ export function formatTimeRange(start, end) {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function computeSlotRect(columnEl, startAt, endAt) {
+export function computeSlotRect(columnEl, startAt, endAt, columnHeightPx = GRID_BODY_HEIGHT_PX) {
   if (!columnEl) return null;
   const rect = columnEl.getBoundingClientRect();
   const durationMinutes = Math.max(
@@ -175,8 +182,8 @@ export function computeSlotRect(columnEl, startAt, endAt) {
 
   const topPct = parseFloat(layout.top) / 100;
   const heightPct = parseFloat(layout.height) / 100;
-  const slotTop = rect.top + topPct * rect.height;
-  const slotHeight = Math.max(heightPct * rect.height, 32);
+  const slotTop = rect.top + topPct * columnHeightPx;
+  const slotHeight = Math.max(heightPct * columnHeightPx, 32);
 
   return {
     top: slotTop,

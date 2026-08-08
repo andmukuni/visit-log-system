@@ -85,6 +85,14 @@ export function adaptSqlForPostgres(sql) {
     .replace(/GROUP_CONCAT\s*\(\s*DISTINCT\s+([^)]+)\)/gi, 'STRING_AGG(DISTINCT $1::text, \',\')')
     .replace(/\bDATE\s*\(([^)]+)\)/gi, '($1)::date')
     .replace(
+      /\bDATE_SUB\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+WEEKDAY\s*\(\s*CURDATE\s*\(\s*\)\s*\)\s+DAY\s*\)/gi,
+      "date_trunc('week', CURRENT_DATE)::date",
+    )
+    .replace(
+      /\bDATE_ADD\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)/gi,
+      "(CURRENT_DATE + INTERVAL '$1 day')",
+    )
+    .replace(
       /\bDATE_SUB\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)\s+AND\s+created_at\s+<\s+CURDATE\s*\(\s*\)/gi,
       "CURRENT_DATE - INTERVAL '$1 day' AND created_at < CURRENT_DATE",
     )
