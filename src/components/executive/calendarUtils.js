@@ -1,9 +1,9 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const CALENDAR_START_HOUR = 0;
-export const CALENDAR_END_HOUR = 24;
-export const CALENDAR_VISIBLE_HOURS = 12;
-export const HOUR_HEIGHT_PX = 44;
+export const CALENDAR_START_HOUR = 8;
+export const CALENDAR_END_HOUR = 19;
+export const CALENDAR_VISIBLE_HOURS = 11;
+export const HOUR_HEIGHT_PX = 52;
 export const DEFAULT_EVENT_MINUTES = 60;
 export const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
 export const GRID_PADDING_BOTTOM_PX = 12;
@@ -50,12 +50,20 @@ export function addMonths(date, months) {
 }
 
 export const CALENDAR_VIEW_MODES = {
+  day: {
+    id: 'day',
+    label: 'Day',
+    dayCount: 1,
+    hourHeight: 52,
+    minDayWidth: 280,
+    stepDays: 1,
+  },
   week: {
     id: 'week',
     label: 'Week',
     dayCount: 7,
-    hourHeight: 44,
-    minDayWidth: 72,
+    hourHeight: 52,
+    minDayWidth: 96,
     stepDays: 7,
   },
   twoWeeks: {
@@ -99,6 +107,7 @@ export function gridScrollHeightPx(hourHeight = HOUR_HEIGHT_PX) {
 export function normalizePeriodStart(date, viewMode = 'week') {
   const config = getViewConfig(viewMode);
   if (config.stepMonths) return startOfMonth(date);
+  if (config.dayCount === 1) return startOfDay(date);
   return startOfWeek(date);
 }
 
@@ -141,6 +150,10 @@ export function formatPeriodRange(periodStart, viewMode = 'week') {
 
   if (viewMode === 'month') {
     return first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+
+  if (viewMode === 'day') {
+    return first.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
 
   if (viewMode === 'twoMonths') {
@@ -274,9 +287,17 @@ export function eventLayout(scheduledAt, durationMinutes = DEFAULT_EVENT_MINUTES
 
 export function formatHourLabel(hour) {
   const normalized = ((hour % 24) + 24) % 24;
-  const period = normalized >= 12 ? 'PM' : 'AM';
-  const h = normalized % 12 || 12;
-  return `${h} ${period}`;
+  return `${String(normalized).padStart(2, '0')}:00`;
+}
+
+export function formatClockTime(date) {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+export function formatTimeRange24(start, end) {
+  return `${formatClockTime(start)} - ${formatClockTime(end)}`;
 }
 
 /** Scroll position that keeps the given hour near the top of the 12-hour viewport. */
@@ -318,13 +339,9 @@ export function formatCurrentTimeLabel(now = new Date()) {
   return now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-/** Compact live clock for the 56px time gutter. */
+/** Compact live clock for the time gutter (24h). */
 export function formatGutterLiveTime(now = new Date()) {
-  const parts = formatCurrentTimeLabel(now).split(' ');
-  return {
-    clock: parts[0] || formatCurrentTimeLabel(now),
-    period: parts.slice(1).join(' '),
-  };
+  return formatClockTime(now);
 }
 
 export function addMinutes(date, minutes) {

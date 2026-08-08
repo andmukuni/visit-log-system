@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck, Users } from 'lucide-react';
+import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, Clock3, Filter, User, UserCheck, Users } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import ExecutiveAppointmentDetailPanel from './ExecutiveAppointmentDetailPanel';
@@ -27,7 +27,6 @@ import {
   periodQueryRange,
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
-  currentTimeIndicator,
   currentTimePositionPx,
   DEFAULT_EVENT_MINUTES,
   eventLayout,
@@ -56,105 +55,43 @@ function hourLabelTop(hour, hourHeight = HOUR_HEIGHT_PX) {
   return (hour - CALENDAR_START_HOUR) * hourHeight;
 }
 
-function GutterHourMark({ hour, hourHeight, isCurrentHour, gutterLiveTime }) {
+function GutterHourMark({ hour, hourHeight }) {
   const lineTop = hourLabelTop(hour, hourHeight);
-  const isFirstHour = hour === CALENDAR_START_HOUR;
-
   return (
-    <>
-      <div
-        className="pointer-events-none absolute right-0 left-0 z-20"
-        style={{ top: `${lineTop}px`, height: 0 }}
-        aria-hidden="true"
-      >
-        <span
-          className={`absolute right-0 top-0 block -translate-y-1/2 translate-x-1/2 rounded-full ${
-            isCurrentHour ? 'h-2 w-2 bg-navy-700 ring-2 ring-white' : 'h-1.5 w-1.5 bg-gray-300'
-          }`}
-        />
-      </div>
-      <div
-        className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center ${
-          isCurrentHour
-            ? 'text-[10px] font-bold text-navy-900 tabular-nums'
-            : 'text-[11px] font-medium leading-none text-gray-400'
-        }`}
-        style={{
-          top: `${lineTop}px`,
-          transform: isFirstHour ? 'translateY(2px)' : 'translateY(-50%)',
-        }}
-      >
-        <div className="px-0.5 text-center leading-tight">
-          {isCurrentHour ? (
-            <>
-              <span className="block whitespace-nowrap">{gutterLiveTime.clock}</span>
-              {gutterLiveTime.period && (
-                <span className="mt-0.5 block text-[9px] font-semibold leading-none text-navy-700">
-                  {gutterLiveTime.period}
-                </span>
-              )}
-            </>
-          ) : (
-            formatHourLabel(hour)
-          )}
-        </div>
-      </div>
-    </>
+    <div
+      className="pointer-events-none absolute inset-x-0 z-10 flex items-start justify-end pr-2 text-[11px] font-medium tabular-nums text-gray-400"
+      style={{ top: `${lineTop}px`, transform: 'translateY(-50%)' }}
+    >
+      {formatHourLabel(hour)}
+    </div>
   );
 }
 
-function ViewModeSelect({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = getViewConfig(value);
+const TOOLBAR_VIEW_MODES = [
+  { id: 'month', label: 'Month' },
+  { id: 'week', label: 'Week' },
+  { id: 'day', label: 'Day' },
+];
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleClick = (event) => {
-      if (!ref.current?.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
+function ViewModeTabs({ value, onChange }) {
   return (
-    <div ref={ref} className="relative ml-auto">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-white/20 transition-colors hover:bg-white/25"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        {selected.label}
-        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-      </button>
-      {open && (
-        <div
-          className="absolute right-0 top-full z-50 mt-1 min-w-[9.5rem] overflow-hidden rounded-xl border border-navy-100 bg-white py-1 shadow-lg"
-          role="listbox"
+    <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="tablist" aria-label="Calendar view">
+      {TOOLBAR_VIEW_MODES.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="tab"
+          aria-selected={option.id === value}
+          onClick={() => onChange(option.id)}
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+            option.id === value
+              ? 'bg-white text-[#1a73e8] shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
         >
-          {CALENDAR_VIEW_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="option"
-              aria-selected={option.id === value}
-              onClick={() => {
-                onChange(option.id);
-                setOpen(false);
-              }}
-              className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
-                option.id === value
-                  ? 'bg-navy-50 font-semibold text-navy-900'
-                  : 'text-navy-700 hover:bg-navy-50'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -375,11 +312,10 @@ export default function ExecutiveWeekCalendar({
   onRefresh,
 }) {
   const toast = useToast();
-  const sidebarRef = useRef(null);
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
-  const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
+  const [gridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -395,14 +331,12 @@ export default function ExecutiveWeekCalendar({
   const gridBodyHeight = useMemo(() => gridBodyHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
   const gridScrollHeight = useMemo(() => gridScrollHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
   const gridTemplateColumns = useMemo(
-    () => `56px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
+    () => `52px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
     [periodDays.length, viewConfig.minDayWidth],
   );
   const compactHeaders = periodDays.length > 14;
-  const nowLine = currentTimeIndicator(now);
   const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
   const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
-  const currentHour = now.getHours();
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -410,57 +344,6 @@ export default function ExecutiveWeekCalendar({
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, []);
-
-  const syncCalendarViewport = useCallback(() => {
-    if (typeof window === 'undefined') return;
-
-    if (window.innerWidth < 1024) {
-      setGridViewportHeight(GRID_VIEWPORT_HEIGHT_PX);
-      return;
-    }
-
-    const sidebar = sidebarRef.current;
-    const toolbar = toolbarRef.current;
-    const dayHeaders = dayHeadersRef.current;
-    if (!sidebar || !toolbar || !dayHeaders) return;
-
-    const chromeHeight = toolbar.offsetHeight + dayHeaders.offsetHeight;
-    const nextHeight = sidebar.offsetHeight - chromeHeight;
-    setGridViewportHeight(Math.min(gridScrollHeight, Math.max(0, nextHeight)));
-  }, [gridScrollHeight]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const runSync = () => {
-      if (!cancelled) syncCalendarViewport();
-    };
-
-    runSync();
-    const rafId = requestAnimationFrame(() => {
-      runSync();
-      requestAnimationFrame(runSync);
-    });
-
-    const sidebar = sidebarRef.current;
-    if (!sidebar || typeof ResizeObserver === 'undefined') {
-      return () => {
-        cancelled = true;
-        cancelAnimationFrame(rafId);
-      };
-    }
-
-    const observer = new ResizeObserver(runSync);
-    observer.observe(sidebar);
-    window.addEventListener('resize', runSync);
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-      observer.disconnect();
-      window.removeEventListener('resize', runSync);
-    };
-  }, [syncCalendarViewport, loading, kpis, sidebarMonth, weekStart, viewMode, gridScrollHeight]);
 
   useEffect(() => {
     if (prevViewModeRef.current === viewMode) return undefined;
@@ -687,9 +570,9 @@ export default function ExecutiveWeekCalendar({
   }, [now, gridViewportHeight]);
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-start gap-4 min-h-0">
-      {/* Left sidebar — Google Calendar style */}
-      <aside ref={sidebarRef} className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
+    <div className="flex min-h-0 flex-col gap-4 lg:flex-row lg:items-start">
+      {/* Left sidebar — executive profile, mini-month, KPIs, legend, quick links */}
+      <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
             {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
@@ -717,28 +600,27 @@ export default function ExecutiveWeekCalendar({
         </div>
       </aside>
 
-      {/* Main calendar — height synced to sidebar on desktop */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white max-h-[calc(100vh-11rem)]">
+      {/* Main calendar */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm max-h-[calc(100vh-11rem)]">
         {/* Toolbar */}
         <div
           ref={toolbarRef}
-          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-navy-800/30 bg-gradient-to-r from-[#0f294d] via-[#132f52] to-[#163a63] px-4 py-3 shadow-sm"
+          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-5"
         >
           <button
             type="button"
             onClick={goToday}
-            className="rounded-lg border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20"
+            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
           >
             Today
           </button>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center">
             <IconButton
               icon={ChevronLeft}
               label={`Previous ${navLabel}`}
               tooltip={`Previous ${navLabel}`}
               variant="ghost"
               size="sm"
-              className="text-white/85 hover:bg-white/10 hover:text-white"
               onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, -1), 'backward')}
             />
             <IconButton
@@ -747,12 +629,27 @@ export default function ExecutiveWeekCalendar({
               tooltip={`Next ${navLabel}`}
               variant="ghost"
               size="sm"
-              className="text-white/85 hover:bg-white/10 hover:text-white"
               onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, 1), 'forward')}
             />
           </div>
-          <h2 className="text-lg font-semibold tracking-tight text-white">{formatPeriodRange(weekStart, viewMode)}</h2>
-          <ViewModeSelect value={viewMode} onChange={handleViewModeChange} />
+          <div className="flex min-w-0 items-center gap-2 text-gray-800">
+            <CalendarDays size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            <h2 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+              {formatPeriodRange(weekStart, viewMode)}
+            </h2>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <ViewModeTabs value={viewMode} onChange={handleViewModeChange} />
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              aria-label="Filter calendar"
+            >
+              <Filter size={14} aria-hidden="true" />
+              Filter
+              <ChevronDown size={14} className="text-gray-400" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -774,37 +671,22 @@ export default function ExecutiveWeekCalendar({
             {/* Day headers — fixed above scroll so they never cover hour rows */}
             <div
               ref={dayHeadersRef}
-              className={`shrink-0 grid border-b border-gray-200 bg-gray-50 ${periodDays.length > 7 ? 'overflow-x-auto' : ''}`}
+              className={`shrink-0 grid border-b border-gray-200 bg-white ${periodDays.length > 7 ? 'overflow-x-auto' : ''}`}
               style={{
                 gridTemplateColumns,
-                minWidth: periodDays.length > 7 ? `${56 + periodDays.length * viewConfig.minDayWidth}px` : undefined,
+                minWidth: periodDays.length > 7 ? `${52 + periodDays.length * viewConfig.minDayWidth}px` : undefined,
               }}
             >
-              <button
-                type="button"
-                onClick={scrollToNow}
-                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-navy-50 hover:text-navy-700"
-                aria-label="Jump to current time"
-                title="Jump to current time"
-              >
-                <Clock size={16} strokeWidth={2} aria-hidden="true" />
-              </button>
+              <div className="border-r border-gray-200 bg-white" aria-hidden="true" />
               {periodDays.map((day) => {
                 const { weekday, day: dayNum, isToday } = formatDayHeader(day, now);
-                const isFocused = isSameDay(day, focusedDay);
                 return (
-                  <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2 text-center">
-                    <p className={`font-medium text-gray-500 ${compactHeaders ? 'text-[9px]' : 'text-[11px]'}`}>
-                      {compactHeaders ? weekday.charAt(0) : weekday}
+                  <div key={day.toISOString()} className="border-l border-gray-200 py-2.5 text-center">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      {weekday}
                     </p>
-                    <p className={`mt-0.5 inline-flex items-center justify-center rounded-full font-semibold ${
-                      compactHeaders ? 'h-6 w-6 text-[11px]' : 'mt-1 h-8 w-8 text-sm'
-                    } ${
-                      isToday
-                        ? 'bg-navy-900 text-white'
-                        : isFocused
-                          ? 'bg-navy-100 text-navy-800 ring-2 ring-navy-600'
-                          : 'text-gray-800'
+                    <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                      isToday ? 'bg-navy-900 text-white' : 'text-gray-800'
                     }`}
                     >
                       {dayNum}
@@ -825,45 +707,36 @@ export default function ExecutiveWeekCalendar({
                 style={{
                   gridTemplateColumns,
                   height: `${gridScrollHeight}px`,
-                  minWidth: `${56 + periodDays.length * viewConfig.minDayWidth}px`,
+                  minWidth: `${52 + periodDays.length * viewConfig.minDayWidth}px`,
                 }}
               >
-                {/* Current hour band across the grid */}
-                {nowLinePx != null && currentHour >= CALENDAR_START_HOUR && currentHour < CALENDAR_END_HOUR && (
+                {nowLinePx != null && periodDays.some((day) => isSameDay(day, now)) && (
                   <div
-                    className="pointer-events-none absolute inset-x-0 z-[5] bg-gradient-to-r from-cyan-50/90 via-sky-50/60 to-cyan-50/20"
-                    style={{
-                      top: `${hourLabelTop(currentHour, viewConfig.hourHeight)}px`,
-                      height: `${viewConfig.hourHeight}px`,
-                    }}
+                    className="pointer-events-none absolute right-0 z-[15] h-0.5 bg-red-500"
+                    style={{ left: '52px', top: `${nowLinePx}px` }}
                     aria-hidden="true"
                   />
                 )}
 
-                {/* Hour labels */}
-                <div className="relative z-10 border-r border-gray-200 bg-gray-50/95">
+                {/* Hour labels + current time pill */}
+                <div className="relative z-10 border-r border-gray-200 bg-white">
                   {HOUR_LABELS.map((hour) => (
                     <GutterHourMark
                       key={hour}
                       hour={hour}
                       hourHeight={viewConfig.hourHeight}
-                      isCurrentHour={hour === currentHour}
-                      gutterLiveTime={gutterLiveTime}
                     />
                   ))}
-                  <div
-                    className="pointer-events-none absolute right-0 left-0 z-20"
-                    style={{ top: `${gridBodyHeight}px`, height: 0 }}
-                    aria-hidden="true"
-                  >
-                    <span className="absolute right-0 top-0 block h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-gray-300" />
-                  </div>
-                  <div
-                    className="pointer-events-none absolute inset-x-0 z-10 flex justify-center text-[11px] font-medium leading-none text-gray-400"
-                    style={{ top: `${gridBodyHeight}px`, transform: 'translateY(-50%)' }}
-                  >
-                    <span className="px-0.5 text-center">{formatHourLabel(CALENDAR_END_HOUR)}</span>
-                  </div>
+                  {nowLinePx != null && (
+                    <div
+                      className="pointer-events-none absolute right-0 z-30 flex justify-end pr-1"
+                      style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
+                    >
+                      <span className="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm">
+                        {gutterLiveTime}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Day columns */}
@@ -886,30 +759,22 @@ export default function ExecutiveWeekCalendar({
                       {HOURS.map((hour) => (
                         <div
                           key={hour}
-                          className="absolute inset-x-0 border-t border-gray-100"
+                          className="absolute inset-x-0 border-t border-dashed border-gray-200/90"
                           style={{ top: `${((hour - CALENDAR_START_HOUR) / (CALENDAR_END_HOUR - CALENDAR_START_HOUR)) * 100}%` }}
                         />
                       ))}
-
-                      {/* Current time line */}
-                      {isToday && nowLine && (
-                        <div
-                          className="absolute inset-x-0 z-20 flex items-center pointer-events-none"
-                          style={{ top: nowLine }}
-                        >
-                          <span className="h-2 w-2 rounded-full bg-[#0f294d] shrink-0 ring-2 ring-cyan-400" />
-                          <span className="h-0.5 flex-1 bg-gradient-to-r from-[#0f294d] via-cyan-500 to-cyan-400" />
-                        </div>
-                      )}
 
                       {/* Selected slot preview — stays visible while popover slides left */}
                       {draft && isSameDay(day, draft.day) && draftPreview && (
                         <div
                           data-calendar-event
-                          className="absolute inset-x-1 z-[25] overflow-hidden rounded-md border border-[#1a73e8]/40 bg-[#039be5] px-1.5 py-px text-left shadow-sm pointer-events-none animate-gcal-slot"
-                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '18px' }}
+                          className="absolute inset-x-1.5 z-[25] overflow-hidden rounded-lg border border-[#1a73e8]/40 bg-[#039be5] px-2 py-1.5 text-left shadow-sm pointer-events-none animate-gcal-slot"
+                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '28px' }}
                         >
-                          <p className="truncate text-[11px] font-semibold leading-[1.15] text-white">
+                          <p className="truncate text-[10px] font-medium text-white/90">
+                            {formatTimeRange(draft.startAt, draft.endAt)}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs font-semibold text-white">
                             {draft.title?.trim() || '(No title)'}
                           </p>
                         </div>
