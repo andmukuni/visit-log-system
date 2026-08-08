@@ -1,12 +1,14 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const CALENDAR_START_HOUR = 7;
-export const CALENDAR_END_HOUR = 19;
+export const CALENDAR_START_HOUR = 0;
+export const CALENDAR_END_HOUR = 24;
+export const CALENDAR_VISIBLE_HOURS = 12;
 export const HOUR_HEIGHT_PX = 44;
 export const DEFAULT_EVENT_MINUTES = 60;
 export const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
 export const GRID_PADDING_BOTTOM_PX = 12;
 export const GRID_SCROLL_HEIGHT_PX = GRID_BODY_HEIGHT_PX + GRID_PADDING_BOTTOM_PX;
+export const GRID_VIEWPORT_HEIGHT_PX = CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT_PX;
 export const HOUR_LABELS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
   (_, i) => CALENDAR_START_HOUR + i,
@@ -99,9 +101,17 @@ export function eventLayout(scheduledAt, durationMinutes = DEFAULT_EVENT_MINUTES
 }
 
 export function formatHourLabel(hour) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const h = hour % 12 || 12;
+  const normalized = ((hour % 24) + 24) % 24;
+  const period = normalized >= 12 ? 'PM' : 'AM';
+  const h = normalized % 12 || 12;
   return `${h} ${period}`;
+}
+
+/** Scroll position that keeps the given hour near the top of the 12-hour viewport. */
+export function initialGridScrollTop(hour, visibleHours = CALENDAR_VISIBLE_HOURS) {
+  const offsetHours = Math.max(0, hour - 1);
+  const maxScroll = Math.max(0, GRID_BODY_HEIGHT_PX - visibleHours * HOUR_HEIGHT_PX);
+  return Math.min(offsetHours * HOUR_HEIGHT_PX, maxScroll);
 }
 
 export function formatDayHeader(date, today = new Date()) {

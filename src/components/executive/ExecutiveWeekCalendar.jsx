@@ -21,8 +21,10 @@ import {
   getWeekDays,
   GRID_BODY_HEIGHT_PX,
   GRID_SCROLL_HEIGHT_PX,
+  GRID_VIEWPORT_HEIGHT_PX,
   HOUR_LABELS,
   HOUR_HEIGHT_PX,
+  initialGridScrollTop,
   isSameDay,
   isSameMonth,
   slotFromPointer,
@@ -144,6 +146,22 @@ export default function ExecutiveWeekCalendar({
   useEffect(() => {
     setSidebarMonth(weekStart);
   }, [weekStart]);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
+    const el = gridScrollRef.current;
+    if (!el) return undefined;
+
+    const now = new Date();
+    const hasToday = weekDays.some((day) => isSameDay(day, now));
+    const focusHour = hasToday
+      ? Math.max(CALENDAR_START_HOUR, now.getHours())
+      : 8;
+
+    el.scrollTop = initialGridScrollTop(focusHour);
+    return undefined;
+  }, [weekStart, loading, weekDays]);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,23 +328,24 @@ export default function ExecutiveWeekCalendar({
       </aside>
 
       {/* Main calendar */}
-      <div className="flex-1 min-w-0 min-h-[480px] max-h-[calc(100vh-11rem)] rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-w-0 min-h-[560px] max-h-[calc(100vh-11rem)] rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-navy-800/30 bg-gradient-to-r from-[#0f294d] via-[#132f52] to-[#163a63] px-4 py-3 shadow-sm">
           <button
             type="button"
             onClick={goToday}
-            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20"
           >
             Today
           </button>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <IconButton
               icon={ChevronLeft}
               label="Previous week"
               tooltip="Previous week"
               variant="ghost"
               size="sm"
+              className="text-white/85 hover:bg-white/10 hover:text-white"
               onClick={() => onWeekChange(addWeeks(weekStart, -1))}
             />
             <IconButton
@@ -335,11 +354,14 @@ export default function ExecutiveWeekCalendar({
               tooltip="Next week"
               variant="ghost"
               size="sm"
+              className="text-white/85 hover:bg-white/10 hover:text-white"
               onClick={() => onWeekChange(addWeeks(weekStart, 1))}
             />
           </div>
-          <h2 className="text-lg font-medium text-gray-900">{formatWeekRange(weekStart)}</h2>
-          <span className="ml-auto rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">Week</span>
+          <h2 className="text-lg font-semibold tracking-tight text-white">{formatWeekRange(weekStart)}</h2>
+          <span className="ml-auto rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-white/20">
+            Week
+          </span>
         </div>
 
         {loading ? (
@@ -367,8 +389,12 @@ export default function ExecutiveWeekCalendar({
               })}
             </div>
 
-            {/* Time grid — scrolls independently */}
-            <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            {/* Time grid — 12-hour viewport, scroll through full day */}
+            <div
+              ref={gridScrollRef}
+              className="min-h-0 shrink-0 overflow-y-auto overflow-x-hidden"
+              style={{ height: `${GRID_VIEWPORT_HEIGHT_PX}px` }}
+            >
               <div
                 className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"
                 style={{ height: `${GRID_SCROLL_HEIGHT_PX}px` }}
