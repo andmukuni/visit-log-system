@@ -27,10 +27,12 @@ import {
   HOUR_LABELS,
   HOUR_HEIGHT_PX,
   initialGridScrollTop,
+  isInWeek,
   isSameDay,
   isSameMonth,
   slotFromPointer,
   startOfWeek,
+  startOfDay,
   weekQueryRange,
   computeSlotRect,
 } from './calendarUtils';
@@ -59,9 +61,10 @@ function eventColor(classification, visitStatus) {
   return EVENT_COLORS.standard;
 }
 
-function MiniMonth({ anchorDate, weekStart, onPickDate, onMonthChange }) {
+function MiniMonth({ anchorDate, weekStart, focusedDay, onPickDate, onMonthChange }) {
   const days = useMemo(() => getMonthGrid(anchorDate), [anchorDate]);
   const monthLabel = anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
     <div>
@@ -87,25 +90,34 @@ function MiniMonth({ anchorDate, weekStart, onPickDate, onMonthChange }) {
         </div>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-1">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
-          <span key={d}>{d}</span>
+        {weekdayLabels.map((label, index) => (
+          <span key={`${label}-${index}`}>{label}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {days.map((day) => {
           const inMonth = isSameMonth(day, anchorDate);
-          const selected = isSameDay(day, weekStart);
+          const selected = isSameDay(day, focusedDay);
+          const inWeek = isInWeek(day, weekStart);
           const today = isSameDay(day, new Date());
+          const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+
           return (
             <button
-              key={day.toISOString()}
+              key={dayKey}
               type="button"
               onClick={() => onPickDate(day)}
-              className={`h-8 w-8 rounded-full text-xs transition-colors ${
-                !inMonth ? 'text-gray-300' : 'text-gray-700 hover:bg-gray-100'
-              } ${selected ? 'bg-blue-600 text-white hover:bg-blue-600' : ''} ${
-                today && !selected ? 'ring-1 ring-blue-500' : ''
-              }`}
+              className={`mx-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs transition-colors ${
+                selected
+                  ? 'bg-blue-600 text-white hover:bg-blue-600 shadow-sm'
+                  : inWeek
+                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    : !inMonth
+                      ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+              } ${today && !selected ? 'ring-1 ring-blue-500' : ''}`}
+              aria-label={day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              aria-pressed={selected}
             >
               {day.getDate()}
             </button>
@@ -143,41 +155,27 @@ const GLANCE_ITEMS = [
 ];
 
 const LEGEND_ITEMS = [
-  {
-    label: 'Standard visitor',
-    swatch: 'bg-blue-100 border-blue-400 shadow-sm shadow-blue-200/50',
-  },
-  {
-    label: 'VIP',
-    swatch: 'bg-violet-100 border-violet-500 shadow-sm shadow-violet-200/50',
-  },
-  {
-    label: 'VVIP',
-    swatch: 'bg-amber-100 border-amber-500 shadow-sm shadow-amber-200/50',
-  },
-  {
-    label: 'Pending approval',
-    swatch: 'bg-orange-50 border-orange-500 shadow-sm shadow-orange-200/50',
-  },
+  { label: 'Standard', swatch: 'bg-blue-100 border-blue-400' },
+  { label: 'VIP', swatch: 'bg-violet-100 border-violet-500' },
+  { label: 'VVIP', swatch: 'bg-amber-100 border-amber-500' },
+  { label: 'Pending', swatch: 'bg-orange-50 border-orange-500' },
 ];
 
 function ExecutiveLegendPanel() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
-      <div className="border-b border-navy-100 bg-gradient-to-r from-navy-50/90 to-white px-3.5 py-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">Event types</p>
-      </div>
-      <ul className="divide-y divide-navy-100/80">
+    <div className="rounded-2xl border border-navy-100 bg-white p-3 shadow-sm">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Event types</p>
+      <div className="grid grid-cols-2 gap-1.5">
         {LEGEND_ITEMS.map(({ label, swatch }) => (
-          <li key={label} className="flex items-center gap-3 px-3.5 py-2.5">
+          <div key={label} className="flex min-w-0 items-center gap-2 rounded-lg bg-navy-50/40 px-2 py-1.5">
             <span
-              className={`h-5 w-9 shrink-0 rounded-md border-2 ${swatch}`}
+              className={`h-3 w-5 shrink-0 rounded border ${swatch}`}
               aria-hidden="true"
             />
-            <span className="text-xs font-medium text-navy-700">{label}</span>
-          </li>
+            <span className="truncate text-[11px] font-medium text-navy-700">{label}</span>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -235,6 +233,8 @@ export default function ExecutiveWeekCalendar({
   const toast = useToast();
   const gridScrollRef = useRef(null);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
+  const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
+  const [weekSlideDirection, setWeekSlideDirection] = useState(null);
   const [draft, setDraft] = useState(null);
   const [referenceData, setReferenceData] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -252,8 +252,32 @@ export default function ExecutiveWeekCalendar({
   }, []);
 
   useEffect(() => {
-    setSidebarMonth(weekStart);
-  }, [weekStart]);
+    if (!isInWeek(focusedDay, weekStart)) {
+      setFocusedDay(startOfDay(weekStart));
+    }
+  }, [weekStart, focusedDay]);
+
+  const changeWeek = useCallback((nextWeekStart, direction = null) => {
+    setWeekSlideDirection(direction);
+    setSidebarMonth(new Date(nextWeekStart.getFullYear(), nextWeekStart.getMonth(), 1));
+    onWeekChange(nextWeekStart);
+  }, [onWeekChange]);
+
+  const handlePickDate = useCallback((day) => {
+    const picked = startOfDay(day);
+    const nextWeekStart = startOfWeek(picked);
+    let direction = null;
+
+    if (nextWeekStart.getTime() > weekStart.getTime()) {
+      direction = 'forward';
+    } else if (nextWeekStart.getTime() < weekStart.getTime()) {
+      direction = 'backward';
+    }
+
+    setFocusedDay(picked);
+    setSidebarMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
+    changeWeek(nextWeekStart, direction);
+  }, [weekStart, changeWeek]);
 
   useEffect(() => {
     if (loading) return undefined;
@@ -381,9 +405,14 @@ export default function ExecutiveWeekCalendar({
   }, [appointments, weekDays]);
 
   const goToday = () => {
-    const start = startOfWeek(new Date());
-    onWeekChange(start);
-    setSidebarMonth(start);
+    const todayDate = startOfDay(new Date());
+    const start = startOfWeek(todayDate);
+    let direction = null;
+    if (start.getTime() > weekStart.getTime()) direction = 'forward';
+    else if (start.getTime() < weekStart.getTime()) direction = 'backward';
+    setFocusedDay(todayDate);
+    setSidebarMonth(todayDate);
+    changeWeek(start, direction);
   };
 
   const scrollToNow = useCallback(() => {
@@ -410,10 +439,8 @@ export default function ExecutiveWeekCalendar({
         <MiniMonth
           anchorDate={sidebarMonth}
           weekStart={weekStart}
-          onPickDate={(day) => {
-            onWeekChange(startOfWeek(day));
-            setSidebarMonth(day);
-          }}
+          focusedDay={focusedDay}
+          onPickDate={handlePickDate}
           onMonthChange={setSidebarMonth}
         />
 
@@ -446,7 +473,7 @@ export default function ExecutiveWeekCalendar({
               variant="ghost"
               size="sm"
               className="text-white/85 hover:bg-white/10 hover:text-white"
-              onClick={() => onWeekChange(addWeeks(weekStart, -1))}
+              onClick={() => changeWeek(addWeeks(weekStart, -1), 'backward')}
             />
             <IconButton
               icon={ChevronRight}
@@ -455,7 +482,7 @@ export default function ExecutiveWeekCalendar({
               variant="ghost"
               size="sm"
               className="text-white/85 hover:bg-white/10 hover:text-white"
-              onClick={() => onWeekChange(addWeeks(weekStart, 1))}
+              onClick={() => changeWeek(addWeeks(weekStart, 1), 'forward')}
             />
           </div>
           <h2 className="text-lg font-semibold tracking-tight text-white">{formatWeekRange(weekStart)}</h2>
@@ -469,13 +496,22 @@ export default function ExecutiveWeekCalendar({
             <Spinner size={32} />
           </div>
         ) : (
-          <>
+          <div
+            key={weekStart.toISOString()}
+            className={`flex min-h-0 flex-1 flex-col ${
+              weekSlideDirection === 'forward'
+                ? 'animate-gcal-week-forward'
+                : weekSlideDirection === 'backward'
+                  ? 'animate-gcal-week-backward'
+                  : ''
+            }`}
+          >
             {/* Day headers — fixed above scroll so they never cover hour rows */}
             <div className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
               <button
                 type="button"
                 onClick={scrollToNow}
-                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-cyan-50 hover:text-cyan-700"
                 aria-label="Jump to current time"
                 title="Jump to current time"
               >
@@ -483,11 +519,16 @@ export default function ExecutiveWeekCalendar({
               </button>
               {weekDays.map((day) => {
                 const { weekday, day: dayNum, isToday } = formatDayHeader(day, now);
+                const isFocused = isSameDay(day, focusedDay);
                 return (
                   <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2.5 text-center">
                     <p className="text-[11px] font-medium text-gray-500">{weekday}</p>
                     <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
-                      isToday ? 'bg-blue-600 text-white' : 'text-gray-800'
+                      isToday
+                        ? 'bg-blue-600 text-white'
+                        : isFocused
+                          ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500'
+                          : 'text-gray-800'
                     }`}
                     >
                       {dayNum}
@@ -510,7 +551,7 @@ export default function ExecutiveWeekCalendar({
                 {/* Current hour band across the grid */}
                 {nowLinePx != null && currentHour >= CALENDAR_START_HOUR && currentHour < CALENDAR_END_HOUR && (
                   <div
-                    className="pointer-events-none absolute inset-x-0 z-[5] bg-red-50/50"
+                    className="pointer-events-none absolute inset-x-0 z-[5] bg-gradient-to-r from-cyan-50/90 via-sky-50/60 to-cyan-50/20"
                     style={{
                       top: `${hourLabelTop(currentHour)}px`,
                       height: `${HOUR_HEIGHT_PX}px`,
@@ -528,7 +569,7 @@ export default function ExecutiveWeekCalendar({
                         key={hour}
                         className={`absolute right-2 text-[11px] leading-none ${
                           isCurrentHour
-                            ? 'font-bold text-red-600'
+                            ? 'font-bold text-[#0f294d]'
                             : 'font-medium text-gray-400'
                         }`}
                         style={{
@@ -552,7 +593,7 @@ export default function ExecutiveWeekCalendar({
                       className="pointer-events-none absolute inset-x-0 z-30 flex items-center justify-end pr-1"
                       style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
                     >
-                      <span className="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
+                      <span className="rounded bg-gradient-to-r from-[#0f294d] to-cyan-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
                         {formatCurrentTimeLabel(now)}
                       </span>
                     </div>
@@ -589,8 +630,8 @@ export default function ExecutiveWeekCalendar({
                           className="absolute inset-x-0 z-20 flex items-center pointer-events-none"
                           style={{ top: nowLine }}
                         >
-                          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-                          <span className="h-px flex-1 bg-red-500" />
+                          <span className="h-2 w-2 rounded-full bg-[#0f294d] shrink-0 ring-2 ring-cyan-400" />
+                          <span className="h-0.5 flex-1 bg-gradient-to-r from-[#0f294d] via-cyan-500 to-cyan-400" />
                         </div>
                       )}
 
@@ -644,7 +685,7 @@ export default function ExecutiveWeekCalendar({
                 })}
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 

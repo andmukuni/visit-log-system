@@ -41,6 +41,13 @@ export function isSameDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
+export function isInWeek(day, weekStart) {
+  const start = startOfWeek(weekStart).getTime();
+  const end = start + (7 * DAY_MS);
+  const target = startOfDay(day).getTime();
+  return target >= start && target < end;
+}
+
 export function isSameMonth(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }

@@ -276,6 +276,36 @@ body {
   animation: gcalSlotAppear 0.18s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
+@keyframes gcalWeekSlideForward {
+  from {
+    opacity: 0.55;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes gcalWeekSlideBackward {
+  from {
+    opacity: 0.55;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-gcal-week-forward {
+  animation: gcalWeekSlideForward 0.28s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.animate-gcal-week-backward {
+  animation: gcalWeekSlideBackward 0.28s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
 /* Utility: line clamp */
 .line-clamp-2 {
   display: -webkit-box;
