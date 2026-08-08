@@ -549,6 +549,7 @@ export default function ExecutiveWeekCalendar({
       endAt,
       title: '',
       slotRect,
+      sessionId: `${dayKey}-${startAt.getTime()}-${Date.now()}`,
     });
   }, [gridBodyHeight]);
 
@@ -926,6 +927,7 @@ export default function ExecutiveWeekCalendar({
         draft={draft}
         executive={executive}
         referenceData={referenceData}
+        appointments={appointments}
         saving={saving}
         onClose={() => setDraft(null)}
         onDraftChange={(nextDraft) => {

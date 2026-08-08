@@ -348,6 +348,99 @@ export function applyTimeToDate(day, timeValue) {
   return next;
 }
 
+export function applyDateToDateTime(dateTime, dateValue) {
+  const [year, month, day] = String(dateValue || '').split('-').map(Number);
+  if (!year || !month || !day) return new Date(dateTime);
+  const next = new Date(dateTime);
+  next.setFullYear(year, month - 1, day);
+  return next;
+}
+
+export function scheduleDurationMs(startAt, endAt) {
+  return Math.max(
+    endAt.getTime() - startAt.getTime(),
+    DEFAULT_EVENT_MINUTES * 60000,
+  );
+}
+
+export function buildDraftScheduleUpdate(draft, startAt, endAt) {
+  const day = startOfDay(startAt);
+  return {
+    ...draft,
+    startAt,
+    endAt,
+    day,
+    dayKey: day.toISOString(),
+  };
+}
+
+export function shiftScheduleByStartDate(startAt, endAt, dateValue) {
+  const nextStart = applyDateToDateTime(startAt, dateValue);
+  const nextEnd = new Date(nextStart.getTime() + scheduleDurationMs(startAt, endAt));
+  return { startAt: nextStart, endAt: nextEnd };
+}
+
+export function setScheduleEndDate(startAt, endAt, dateValue) {
+  let nextEnd = applyDateToDateTime(endAt, dateValue);
+  if (nextEnd <= startAt) {
+    nextEnd = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+  }
+  return { startAt, endAt: nextEnd };
+}
+
+export function setScheduleStartTime(startAt, endAt, timeValue) {
+  const nextStart = applyTimeToDate(startAt, timeValue);
+  let nextEnd = endAt;
+  if (nextEnd <= nextStart) {
+    nextEnd = addMinutes(nextStart, DEFAULT_EVENT_MINUTES);
+  }
+  return { startAt: nextStart, endAt: nextEnd };
+}
+
+export function setScheduleEndTime(startAt, endAt, timeValue) {
+  let nextEnd = applyTimeToDate(endAt, timeValue);
+  if (nextEnd <= startAt) {
+    nextEnd = applyTimeToDate(addDays(startAt, 1), timeValue);
+    if (nextEnd <= startAt) {
+      nextEnd = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+    }
+  }
+  return { startAt, endAt: nextEnd };
+}
+
+export function toAllDaySchedule(date) {
+  const dayStart = startOfDay(date);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setHours(23, 59, 0, 0);
+  return { startAt: dayStart, endAt: dayEnd };
+}
+
+export function formatTimezoneShort(date = new Date()) {
+  try {
+    const part = Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+      .formatToParts(date)
+      .find((entry) => entry.type === 'timeZoneName');
+    return part?.value || 'Local time';
+  } catch {
+    return 'Local time';
+  }
+}
+
+export function formatShortDate(date) {
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+export function formatTime12Compact(date) {
+  return date
+    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    .toLowerCase()
+    .replace(/\s/g, '');
+}
+
 export function formatLongDate(date) {
   return date.toLocaleDateString(undefined, {
     weekday: 'long',

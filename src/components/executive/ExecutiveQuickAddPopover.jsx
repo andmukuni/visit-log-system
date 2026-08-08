@@ -9,14 +9,16 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
+import ExecutiveAppointmentModal from './ExecutiveAppointmentModal';
 import { LoadingButton } from '../ui';
 import {
-  addMinutes,
-  applyTimeToDate,
+  buildDraftScheduleUpdate,
   clampPopoverToViewport,
   computeQuickAddPopoverPosition,
-  DEFAULT_EVENT_MINUTES,
   formatLongDate,
+  setScheduleEndTime,
+  setScheduleStartTime,
+  toAllDaySchedule,
   toIsoLocalDateTime,
   toTimeInputValue,
 } from './calendarUtils';
@@ -26,15 +28,20 @@ const initialForm = () => ({
   visitorName: '',
   company: '',
   phone: '',
+  email: '',
   purpose: '',
   siteId: '',
+  categoryId: '',
   allDay: false,
+  repeat: 'none',
+  notifyMinutes: 30,
 });
 
 export default function ExecutiveQuickAddPopover({
   draft,
   executive,
   referenceData,
+  appointments = [],
   saving = false,
   onClose,
   onSave,
@@ -42,32 +49,58 @@ export default function ExecutiveQuickAddPopover({
 }) {
   const [form, setForm] = useState(initialForm);
   const [visible, setVisible] = useState(false);
+  const [showFullEditor, setShowFullEditor] = useState(false);
   const [viewportPosition, setViewportPosition] = useState(null);
   const popoverRef = useRef(null);
+  const openedSessionIdRef = useRef(null);
+  const previousScheduleRef = useRef(null);
 
   useEffect(() => {
     if (!draft) {
       setForm(initialForm());
       setVisible(false);
+      setShowFullEditor(false);
       setViewportPosition(null);
-      return;
+      openedSessionIdRef.current = null;
+      return undefined;
     }
-    setForm({
-      ...initialForm(),
-      siteId: referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '',
-    });
-    const frame = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(frame);
-  }, [draft, referenceData?.defaultSiteId, referenceData?.sites]);
+
+    const isNewSession = openedSessionIdRef.current !== draft.sessionId;
+    if (isNewSession) {
+      setForm({
+        ...initialForm(),
+        siteId: referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '',
+      });
+      openedSessionIdRef.current = draft.sessionId;
+      const frame = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(frame);
+    }
+
+    return undefined;
+  }, [draft, draft?.sessionId, referenceData?.defaultSiteId, referenceData?.sites]);
+
+  useEffect(() => {
+    if (!draft) return undefined;
+
+    const defaultSiteId = referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '';
+    if (!defaultSiteId) return undefined;
+
+    setForm((prev) => (prev.siteId ? prev : { ...prev, siteId: defaultSiteId }));
+  }, [draft?.sessionId, referenceData?.defaultSiteId, referenceData?.sites]);
 
   useEffect(() => {
     if (!draft) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (showFullEditor) {
+        setShowFullEditor(false);
+        return;
+      }
+      onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [draft, onClose]);
+  }, [draft, onClose, showFullEditor]);
 
   const position = useMemo(
     () => computeQuickAddPopoverPosition(draft?.slotRect),
@@ -107,9 +140,6 @@ export default function ExecutiveQuickAddPopover({
 
   if (!draft || !position) return null;
 
-  const renderedLeft = viewportPosition?.left ?? position.left;
-  const renderedTop = viewportPosition?.top ?? position.top;
-
   const startAt = draft.startAt;
   const endAt = draft.endAt;
   const startTime = toTimeInputValue(startAt);
@@ -117,27 +147,35 @@ export default function ExecutiveQuickAddPopover({
   const calendarLabel = `${executive?.title || 'Executive'} office`;
 
   const updateTimes = (nextStart, nextEnd) => {
-    onDraftChange({
-      ...draft,
-      startAt: nextStart,
-      endAt: nextEnd,
-    });
+    onDraftChange(buildDraftScheduleUpdate(draft, nextStart, nextEnd));
   };
 
   const handleStartTime = (value) => {
-    const nextStart = applyTimeToDate(startAt, value);
-    let nextEnd = endAt;
-    if (nextEnd <= nextStart) {
-      nextEnd = addMinutes(nextStart, DEFAULT_EVENT_MINUTES);
-    }
-    updateTimes(nextStart, nextEnd);
+    const next = setScheduleStartTime(startAt, endAt, value);
+    updateTimes(next.startAt, next.endAt);
   };
 
   const handleEndTime = (value) => {
-    const nextEnd = applyTimeToDate(startAt, value);
-    if (nextEnd > startAt) {
-      updateTimes(startAt, nextEnd);
+    const next = setScheduleEndTime(startAt, endAt, value);
+    updateTimes(next.startAt, next.endAt);
+  };
+
+  const handleAllDayChange = (checked) => {
+    if (checked) {
+      previousScheduleRef.current = { startAt: new Date(startAt), endAt: new Date(endAt) };
+      const next = toAllDaySchedule(startAt);
+      updateTimes(next.startAt, next.endAt);
+    } else {
+      const previous = previousScheduleRef.current;
+      if (previous) {
+        updateTimes(previous.startAt, previous.endAt);
+      } else {
+        const next = setScheduleStartTime(startAt, endAt, '09:00');
+        updateTimes(next.startAt, next.endAt);
+      }
+      previousScheduleRef.current = null;
     }
+    setForm((prev) => ({ ...prev, allDay: checked }));
   };
 
   const handleSubmit = (event) => {
@@ -147,12 +185,35 @@ export default function ExecutiveQuickAddPopover({
       visitorName: form.visitorName.trim(),
       company: form.company.trim(),
       phone: form.phone.trim(),
+      email: form.email?.trim() || '',
       purpose: form.purpose.trim(),
       siteId: form.siteId,
+      categoryId: form.categoryId || undefined,
       scheduledAt: toIsoLocalDateTime(startAt),
       allDay: form.allDay,
     });
   };
+
+  if (showFullEditor) {
+    return (
+      <ExecutiveAppointmentModal
+        open
+        form={form}
+        setForm={setForm}
+        draft={draft}
+        executive={executive}
+        referenceData={referenceData}
+        appointments={appointments}
+        saving={saving}
+        onClose={() => setShowFullEditor(false)}
+        onSave={onSave}
+        onDraftChange={onDraftChange}
+      />
+    );
+  }
+
+  const renderedLeft = viewportPosition?.left ?? position.left;
+  const renderedTop = viewportPosition?.top ?? position.top;
 
   return createPortal(
     <>
@@ -245,7 +306,7 @@ export default function ExecutiveQuickAddPopover({
                   <input
                     type="checkbox"
                     checked={form.allDay}
-                    onChange={(event) => setForm((prev) => ({ ...prev, allDay: event.target.checked }))}
+                    onChange={(event) => handleAllDayChange(event.target.checked)}
                   />
                   All day
                 </label>
@@ -325,7 +386,8 @@ export default function ExecutiveQuickAddPopover({
           <div className="flex shrink-0 items-center justify-between border-t border-gray-100 px-5 py-3">
             <button
               type="button"
-              className="text-sm font-medium text-[#1a73e8] hover:underline"
+              onClick={() => setShowFullEditor(true)}
+              className="text-sm font-medium text-navy-700 hover:underline"
             >
               More options
             </button>
