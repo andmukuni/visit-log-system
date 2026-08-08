@@ -243,13 +243,13 @@ function ExecutiveSidebarLinks() {
   );
 }
 
-function ExecutiveLegendPanel() {
+function ExecutiveLegendPanel({ className = '' }) {
   return (
-    <div className="rounded-2xl border border-navy-100 bg-white p-3 shadow-sm">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Event types</p>
-      <div className="grid grid-cols-2 gap-1.5">
+    <div className={`rounded-2xl border border-navy-100 bg-white p-3 shadow-sm ${className}`}>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Visit type</p>
+      <div className="flex flex-wrap gap-2 sm:gap-3">
         {LEGEND_ITEMS.map(({ label, swatch }) => (
-          <div key={label} className="flex min-w-0 items-center gap-2 rounded-lg bg-navy-50/40 px-2 py-1.5">
+          <div key={label} className="flex min-w-0 items-center gap-2 rounded-lg bg-navy-50/40 px-2.5 py-1.5">
             <span className={`h-3 w-5 shrink-0 rounded border ${swatch}`} aria-hidden="true" />
             <span className="truncate text-[11px] font-medium text-navy-700">{label}</span>
           </div>
@@ -595,13 +595,13 @@ export default function ExecutiveWeekCalendar({
         <ExecutiveGlancePanel kpis={kpis} />
 
         <div className="space-y-2">
-          <ExecutiveLegendPanel />
           <ExecutiveSidebarLinks />
         </div>
       </aside>
 
-      {/* Main calendar */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm max-h-[calc(100vh-11rem)]">
+      {/* Main calendar + legend */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm max-h-[calc(100vh-11rem)]">
         {/* Toolbar */}
         <div
           ref={toolbarRef}
@@ -803,6 +803,9 @@ export default function ExecutiveWeekCalendar({
             </div>
           </div>
         )}
+      </div>
+
+      <ExecutiveLegendPanel />
       </div>
 
       <ExecutiveAppointmentDetailPanel
