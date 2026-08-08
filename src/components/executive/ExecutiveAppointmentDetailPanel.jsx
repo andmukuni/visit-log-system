@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Calendar, ExternalLink, X } from 'lucide-react';
-import { Spinner, StatusBadge } from '../ui';
+import { Spinner, StatusBadge, VisitorTypeBadge } from '../ui';
 import { executiveApi } from '../../utils/visitorApi';
 import { formatDateTime } from '../../utils/helpers';
 import { formatLongDate } from './calendarUtils';
@@ -269,11 +269,7 @@ export default function ExecutiveAppointmentDetailPanel({
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {resolvedStatus && <StatusBadge status={resolvedStatus} />}
-                        {appointment.classification && appointment.classification !== 'standard' && (
-                          <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium capitalize text-orange-800 ring-1 ring-orange-200">
-                            {appointment.classification}
-                          </span>
-                        )}
+                        <VisitorTypeBadge classification={appointment.classification} />
                       </div>
                     </div>
                   </div>

@@ -59,8 +59,8 @@ export default function ExecutiveAppointmentsKpiRow({ kpis = {}, className = '' 
             <p className="text-xl font-bold leading-none tabular-nums text-slate-900 sm:text-2xl">
               {Number(kpis[key] ?? 0)}
             </p>
-            <p className="mt-1 text-[11px] font-semibold leading-tight text-gray-600 sm:text-xs">{primaryLabel}</p>
-            <p className="mt-0.5 hidden text-[10px] leading-tight text-gray-400 sm:block">{secondaryLabel}</p>
+            <p className="mt-1 text-xs font-semibold leading-tight text-gray-600 sm:text-sm">{primaryLabel}</p>
+            <p className="mt-0.5 hidden text-xs leading-tight text-gray-400 sm:block">{secondaryLabel}</p>
           </div>
         </div>
       ))}

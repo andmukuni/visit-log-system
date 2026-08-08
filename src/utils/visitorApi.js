@@ -235,6 +235,10 @@ export const executiveApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/executive/visits${qs ? `?${qs}` : ''}`);
   },
+  listVisits: (params = {}) => {
+    const qs = new URLSearchParams({ list: '1', ...params }).toString();
+    return apiFetch(`/admin/executive/visits?${qs}`);
+  },
   getVisit: (id) => apiFetch(`/admin/executive/visits/${id}`),
   getContacts: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

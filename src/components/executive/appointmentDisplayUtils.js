@@ -80,6 +80,28 @@ export function formatAppointmentTimeRange(scheduledAt, durationMinutes = DEFAUL
   return { range, dayLabel, start, end };
 }
 
+export function formatVisitExpectedDisplay(expectedAt) {
+  const start = new Date(expectedAt);
+  if (Number.isNaN(start.getTime())) return { range: '—', dayLabel: '—' };
+
+  const range = `${padTime(start.getHours())}:${padTime(start.getMinutes())}`;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(start);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+  let dayLabel;
+  if (diffDays === 0) dayLabel = 'Today';
+  else if (diffDays === 1) dayLabel = 'Tomorrow';
+  else if (diffDays === -1) dayLabel = 'Yesterday';
+  else {
+    dayLabel = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  return { range, dayLabel, start };
+}
+
 export function formatDurationLabel(minutes) {
   const value = Number(minutes) || DEFAULT_EVENT_MINUTES;
   if (value < 60) return `(${value} min)`;

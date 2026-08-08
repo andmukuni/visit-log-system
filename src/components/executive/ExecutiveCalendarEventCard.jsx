@@ -1,4 +1,5 @@
-import { Clock3, Crown, Users } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
+import { VisitorTypeBadge } from '../ui';
 import { addMinutes, DEFAULT_EVENT_MINUTES, formatClockTime, formatTimeRange24 } from './calendarUtils';
 
 const CARD_THEMES = {
@@ -38,47 +39,31 @@ export function getEventCardTheme(classification, visitStatus) {
   return CARD_THEMES.standard;
 }
 
-function shortStatusMeta(classification, visitStatus) {
-  const key = String(classification || 'standard').toLowerCase();
-  const typeLabel = key === 'vvip' ? 'VVIP' : key === 'vip' ? 'VIP' : 'Std';
-  if (visitStatus === 'pending_approval' || visitStatus === 'pre_registered') return `${typeLabel}·P`;
-  if (visitStatus === 'checked_in') return `${typeLabel}·In`;
-  if (visitStatus === 'cancelled') return `${typeLabel}·X`;
-  if (visitStatus === 'checked_out' || visitStatus === 'completed') return `${typeLabel}·Done`;
-  return typeLabel;
-}
-
 const CARD_DENSITY = {
   normal: {
-    time: 'text-[7px] leading-none',
-    name: 'text-[9px] leading-tight',
-    meta: 'text-[7px] leading-none',
+    time: 'text-[8px] leading-none',
+    name: 'text-[10px] leading-tight',
     pad: 'px-0.5 py-px',
     accent: 'w-0.5',
-    icon: 6,
-    minHeight: 24,
-    nameClamp: 'line-clamp-2',
+    minHeight: 36,
+    nameClamp: 'line-clamp-1',
     nameWeight: 'font-semibold',
   },
   compact: {
-    time: 'text-[6px] leading-none',
-    name: 'text-[8px] leading-none',
-    meta: 'text-[6px] leading-none',
+    time: 'text-[7px] leading-none',
+    name: 'text-[9px] leading-none',
     pad: 'px-0.5 py-0',
     accent: 'w-px',
-    icon: 5,
-    minHeight: 12,
+    minHeight: 32,
     nameClamp: 'truncate',
     nameWeight: 'font-medium',
   },
   ultra: {
-    time: 'text-[6px] leading-none',
-    name: 'text-[7px] leading-none',
-    meta: 'text-[6px] leading-none',
+    time: 'text-[7px] leading-none',
+    name: 'text-[8px] leading-none',
     pad: 'px-0.5 py-0',
     accent: 'w-px',
-    icon: 5,
-    minHeight: 10,
+    minHeight: 16,
     nameClamp: 'truncate',
     nameWeight: 'font-medium',
   },
@@ -104,21 +89,20 @@ export default function ExecutiveCalendarEventCard({
   const shortTime = formatClockTime(start);
   const heightPct = parseFloat(String(layout.height).replace('%', ''));
   const name = appointment.visitor_name || appointment.title || 'Appointment';
-  const metaLine = shortStatusMeta(appointment.classification, appointment.visit_status);
   const classification = String(appointment.classification || 'standard').toLowerCase();
   const isPending = appointment.visit_status === 'pending_approval' || appointment.visit_status === 'pre_registered';
   const density = cardDensity(overlapColumnCount, compactHeaders);
   const isUltra = overlapColumnCount >= 3;
-  const showTime = !isUltra && heightPct > (overlapColumnCount >= 2 ? 10 : 6);
-  const showMeta = overlapColumnCount === 1 && heightPct > 9;
-  const showIcon = overlapColumnCount === 1 && heightPct > 8
-    && (isPending || classification === 'vvip' || classification === 'vip');
+  const showTime = !isUltra && (overlapColumnCount >= 2 ? heightPct > 3 : heightPct > 2);
+  const useInlineTypeBadge = isUltra;
 
   const topValue = parseFloat(String(layout.top).replace('%', ''));
   const leftValue = layout.left != null ? parseFloat(String(layout.left).replace('%', '')) : null;
   const widthValue = layout.width != null ? parseFloat(String(layout.width).replace('%', '')) : null;
   const inset = overlapColumnCount > 1 ? 0 : 1;
   const displayTime = overlapColumnCount >= 2 ? shortTime : timeRange;
+  const typeLabel = classification === 'vvip' ? 'VVIP' : classification === 'vip' ? 'VIP' : 'Standard';
+  const statusSuffix = isPending ? ', pending approval' : '';
 
   return (
     <button
@@ -143,35 +127,44 @@ export default function ExecutiveCalendarEventCard({
         event.stopPropagation();
         onSelect?.(appointment);
       }}
-      aria-label={`${name}, ${timeRange}, ${metaLine}`}
+      aria-label={`${name}, ${timeRange}, ${typeLabel}${statusSuffix}`}
     >
       <div className="flex h-full min-h-0">
         <span className={`shrink-0 ${density.accent} ${theme.accent}`} aria-hidden="true" />
-        <div className={`relative flex min-h-0 min-w-0 flex-1 flex-col justify-center ${density.pad} ${showIcon ? 'pr-2' : ''}`}>
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-px ${density.pad}`}>
           {showTime && (
             <p className={`truncate font-medium text-gray-500 ${density.time}`}>{displayTime}</p>
           )}
-          <p
-            className={`text-gray-900 ${density.nameWeight} ${density.name} ${density.nameClamp} ${showTime ? 'mt-px' : ''}`}
-            title={name}
-          >
-            {name}
-          </p>
-          {showMeta && (
-            <p className={`mt-px truncate font-medium ${density.meta} ${theme.badge}`}>
-              {metaLine}
-            </p>
-          )}
 
-          {showIcon && isPending && (
-            <Clock3 size={density.icon} className="absolute right-0 top-0 shrink-0 text-orange-500" aria-hidden="true" />
-          )}
-          {showIcon && !isPending && classification === 'vvip' && (
-            <Crown size={density.icon} className="absolute right-0 top-0 shrink-0 text-amber-600" aria-hidden="true" />
-          )}
-          {showIcon && !isPending && classification === 'vip' && (
-            <Users size={density.icon} className="absolute right-0 bottom-0 shrink-0 text-violet-600" aria-hidden="true" />
-          )}
+          <div className={`flex min-w-0 ${useInlineTypeBadge ? 'items-start gap-0.5' : 'flex-col gap-px'}`}>
+            <div className="flex min-w-0 flex-1 items-start gap-0.5">
+              <p
+                className={`min-w-0 flex-1 text-gray-900 ${density.nameWeight} ${density.name} ${density.nameClamp}`}
+                title={name}
+              >
+                {name}
+              </p>
+              {isPending && useInlineTypeBadge && (
+                <Clock3 size={8} className="mt-px shrink-0 text-orange-500" aria-hidden="true" />
+              )}
+              {useInlineTypeBadge && (
+                <VisitorTypeBadge
+                  classification={classification}
+                  size="xs"
+                  iconOnly
+                  className="mt-px shrink-0"
+                />
+              )}
+            </div>
+
+            {!useInlineTypeBadge && (
+              <VisitorTypeBadge
+                classification={classification}
+                size="xs"
+                className="w-fit max-w-full"
+              />
+            )}
+          </div>
         </div>
       </div>
     </button>

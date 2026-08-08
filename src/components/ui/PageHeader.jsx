@@ -33,14 +33,14 @@ export function ShellPageTitle({ title, subtitle, iconKey, compact = false }) {
         <div className="min-w-0">
           {title ? (
             <h1 className={`truncate font-bold leading-tight text-navy-900 ${
-              compact ? 'text-sm sm:text-base' : 'text-xl sm:text-2xl'
+              compact ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'
             }`}
             >
               {title}
             </h1>
           ) : null}
           {subtitle ? (
-            <p className={`truncate text-navy-400 ${compact ? 'text-[11px] sm:text-xs' : 'text-sm sm:text-base'}`}>
+            <p className={`truncate text-navy-400 ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
               {subtitle}
             </p>
           ) : null}

@@ -72,15 +72,15 @@ export default function StatusBadge({ status, size = 'sm' }) {
   const displayLabel = formatStatusLabel(status, normalized);
 
   const sizeClasses = {
-    sm: 'text-xs px-2 py-0.5 gap-1',
-    md: 'text-xs px-2.5 py-1 gap-1.5',
+    sm: 'text-sm px-2 py-0.5 gap-1',
+    md: 'text-sm px-2.5 py-1 gap-1.5',
   };
 
   return (
     <span
       className={`inline-flex items-center rounded-full font-medium ring-1 ring-inset ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
     >
-      <Icon size={size === 'sm' ? 12 : 14} aria-hidden="true" />
+      <Icon size={size === 'sm' ? 14 : 16} aria-hidden="true" />
       {displayLabel}
     </span>
   );

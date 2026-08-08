@@ -7,6 +7,25 @@ import { Eye } from 'lucide-react';
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
+const TABLE_SIZE = {
+  default: {
+    table: 'text-sm',
+    th: 'text-xs',
+    td: 'py-2',
+    thPad: 'py-2.5',
+    mobileLabel: 'text-xs',
+    mobileValue: 'text-sm',
+  },
+  comfortable: {
+    table: 'text-base',
+    th: 'text-sm',
+    td: 'py-2.5',
+    thPad: 'py-3',
+    mobileLabel: 'text-sm',
+    mobileValue: 'text-base',
+  },
+};
+
 function AvatarCell({ name }) {
   const initial = (name || '?').charAt(0).toUpperCase();
   return (
@@ -26,6 +45,7 @@ function TablePagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = PAGE_SIZE_OPTIONS,
+  className = '',
 }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -33,7 +53,7 @@ function TablePagination({
   const end = Math.min(safePage * pageSize, totalItems);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`flex flex-col gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${className}`}>
       <p className="text-sm text-gray-500">
         {totalItems === 0
           ? 'No results'
@@ -104,6 +124,8 @@ function TableToolbar({ value, onChange, placeholder = 'Search…' }) {
   );
 }
 
+export { TablePagination };
+
 export default function DataTable({
   columns = [],
   data = [],
@@ -119,9 +141,19 @@ export default function DataTable({
   embedded = false,
   toolbar,
   pagination = true,
+  serverPagination = false,
+  page: pageProp,
   pageSize: pageSizeProp,
+  totalItems: totalItemsProp,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = PAGE_SIZE_OPTIONS,
+  activeRowId = null,
+  getRowClassName,
   initialPage = 1,
+  size = 'default',
 }) {
+  const tableSize = TABLE_SIZE[size] || TABLE_SIZE.default;
   const [internalSelected, setInternalSelected] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(initialPage);
@@ -131,30 +163,35 @@ export default function DataTable({
   const setSelected = onSelectionChange ?? setInternalSelected;
 
   const filteredData = useMemo(() => {
+    if (serverPagination) return data;
     const term = String(search || '').trim().toLowerCase();
     if (!term || !toolbar?.searchKeys?.length) return data;
 
     return data.filter((row) => toolbar.searchKeys.some((key) => (
       String(row[key] ?? '').toLowerCase().includes(term)
     )));
-  }, [data, search, toolbar]);
+  }, [data, search, serverPagination, toolbar]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
-  const safePage = Math.min(page, totalPages);
+  const effectivePageSize = serverPagination ? (pageSizeProp || pageSize) : pageSize;
+  const effectivePage = serverPagination ? (pageProp || 1) : Math.min(page, Math.max(1, Math.ceil(filteredData.length / effectivePageSize)));
+  const totalItems = serverPagination ? (totalItemsProp ?? data.length) : filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
 
   const paginatedData = useMemo(() => {
-    if (!pagination || filteredData.length <= pageSize) return filteredData;
-    const start = (safePage - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, pagination, pageSize, safePage]);
+    if (serverPagination || !pagination || filteredData.length <= effectivePageSize) return filteredData;
+    const start = (effectivePage - 1) * effectivePageSize;
+    return filteredData.slice(start, start + effectivePageSize);
+  }, [filteredData, pagination, effectivePageSize, effectivePage, serverPagination]);
 
   useEffect(() => {
+    if (serverPagination) return;
     setPage(1);
-  }, [search, data, pageSize]);
+  }, [search, data, pageSize, serverPagination]);
 
   useEffect(() => {
+    if (serverPagination) return;
     if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  }, [page, totalPages, serverPagination]);
 
   const allIds = useMemo(
     () => paginatedData.map(getRowId).filter(Boolean),
@@ -188,22 +225,22 @@ export default function DataTable({
   };
 
   const tableShell = embedded
-    ? 'overflow-hidden'
+    ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
     : 'rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden';
 
-  const showPagination = pagination && filteredData.length > 0;
+  const showPagination = pagination && totalItems > 0;
   const displayData = pagination ? paginatedData : filteredData;
 
   if (loading) {
     return (
       <div className={tableShell}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={`w-full ${tableSize.table}`}>
             <thead className="sticky top-0 z-10 bg-gray-50">
               <tr className="border-b border-gray-200">
-                {selectable && <th className="w-10 px-3 py-2.5" />}
+                {selectable && <th className={`w-10 px-3 ${tableSize.thPad}`} />}
                 {columns.map((col, i) => (
-                  <th key={i} className="text-left px-3 py-2.5">
+                  <th key={i} className={`text-left px-3 ${tableSize.thPad}`}>
                     <div className="h-3 bg-gray-200 rounded w-16 animate-pulse" />
                   </th>
                 ))}
@@ -212,9 +249,9 @@ export default function DataTable({
             <tbody>
               {Array.from({ length: 5 }).map((_, rowIdx) => (
                 <tr key={rowIdx} className="border-b border-gray-100">
-                  {selectable && <td className="px-3 py-2" />}
+                  {selectable && <td className={`px-3 ${tableSize.td}`} />}
                   {columns.map((_, colIdx) => (
-                    <td key={colIdx} className="px-3 py-2">
+                    <td key={colIdx} className={`px-3 ${tableSize.td}`}>
                       <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + (rowIdx * 7) % 40}%` }} />
                     </td>
                   ))}
@@ -265,12 +302,12 @@ export default function DataTable({
         />
       )}
 
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
+      <div className="hidden min-h-0 flex-1 overflow-x-auto overflow-y-auto md:block">
+        <table className={`w-full min-w-[720px] ${tableSize.table}`}>
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr className="border-b border-gray-200">
               {selectable && (
-                <th className="w-10 px-3 py-2.5">
+                <th className={`w-10 px-3 ${tableSize.thPad}`}>
                   <input
                     type="checkbox"
                     aria-label="Select all rows"
@@ -283,7 +320,7 @@ export default function DataTable({
               {columns.map((col, i) => (
                 <th
                   key={col.key || i}
-                  className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 ${
+                  className={`px-3 ${tableSize.thPad} ${tableSize.th} font-semibold uppercase tracking-wide text-gray-500 ${
                     col.align === 'right' ? 'text-right' : 'text-left'
                   }`}
                 >
@@ -296,16 +333,17 @@ export default function DataTable({
             {displayData.map((row, rowIdx) => {
               const rowId = getRowId(row) ?? rowIdx;
               const isSelected = selected.includes(rowId);
+              const isActive = activeRowId != null && rowId === activeRowId;
               return (
                 <tr
                   key={rowId}
                   className={`border-b border-gray-100 transition-colors ${
                     onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-                  } ${isSelected ? 'bg-cyan-50/40' : ''}`}
+                  } ${isSelected || isActive ? 'bg-cyan-50/40' : ''} ${getRowClassName?.(row) ?? ''}`}
                   onClick={() => onRowClick?.(row)}
                 >
                   {selectable && (
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td className={`px-3 ${tableSize.td}`} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         aria-label={`Select row ${rowIdx + 1}`}
@@ -318,7 +356,7 @@ export default function DataTable({
                   {columns.map((col, colIdx) => (
                     <td
                       key={col.key || colIdx}
-                      className={`px-3 py-2 align-middle ${col.align === 'right' ? 'text-right' : ''}`}
+                      className={`px-3 ${tableSize.td} align-middle ${col.align === 'right' ? 'text-right' : ''}`}
                       onClick={col.key === 'actions' ? (e) => e.stopPropagation() : undefined}
                     >
                       {getCellValue(row, col)}
@@ -345,8 +383,8 @@ export default function DataTable({
                   const value = getCellValue(row, col);
                   return (
                     <div key={col.key || colIdx} className="flex items-start justify-between gap-3">
-                      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{col.label}</span>
-                      <div className={`text-sm text-gray-800 text-right ${colIdx === 0 ? 'font-semibold' : ''}`}>
+                      <span className={`font-medium text-gray-400 uppercase tracking-wide ${tableSize.mobileLabel}`}>{col.label}</span>
+                      <div className={`text-gray-800 text-right ${tableSize.mobileValue} ${colIdx === 0 ? 'font-semibold' : ''}`}>
                         {value ?? '—'}
                       </div>
                     </div>
@@ -360,11 +398,12 @@ export default function DataTable({
 
       {showPagination && (
         <TablePagination
-          page={safePage}
-          pageSize={pageSize}
-          totalItems={filteredData.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          page={effectivePage}
+          pageSize={effectivePageSize}
+          totalItems={totalItems}
+          onPageChange={serverPagination ? onPageChange : setPage}
+          onPageSizeChange={serverPagination ? onPageSizeChange : setPageSize}
+          pageSizeOptions={pageSizeOptions}
         />
       )}
     </div>

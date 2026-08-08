@@ -10,9 +10,9 @@ export default function ExecutiveDashboardHeaderActions({
       <button
         type="button"
         onClick={onNewAppointment}
-        className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 sm:px-3"
+        className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 sm:px-3.5"
       >
-        <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
+        <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
         <span className="hidden sm:inline">New Appointment</span>
         <span className="sm:hidden">New</span>
       </button>

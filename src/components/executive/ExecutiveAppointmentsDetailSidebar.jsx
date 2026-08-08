@@ -12,7 +12,7 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { Spinner } from '../ui';
+import { Spinner, VisitorTypeBadge } from '../ui';
 import { executiveApi } from '../../utils/visitorApi';
 import {
   formatAppointmentTimeRange,
@@ -20,7 +20,6 @@ import {
   formatDurationLabel,
   formatPhoneDisplay,
   resolveAppointmentDisplayStatus,
-  resolveCategoryTag,
 } from './appointmentDisplayUtils';
 
 function DetailRow({ icon: Icon, label, value }) {
@@ -135,7 +134,6 @@ export default function ExecutiveAppointmentsDetailSidebar({
   );
   const durationLabel = formatDurationLabel(appointment.duration_minutes);
   const dateLabel = formatDetailDateLabel(appointment.scheduled_at);
-  const categoryTag = resolveCategoryTag(appointment.classification);
   const title = appointment.title || appointment.visitor_name || 'Appointment';
   const guestName = visit?.full_name || appointment.visitor_name || title;
   const phone = formatPhoneDisplay(visit?.phone || appointment.phone);
@@ -199,9 +197,9 @@ export default function ExecutiveAppointmentsDetailSidebar({
             <h2 className="mt-3 text-lg font-bold leading-tight text-navy-900 sm:mt-4 sm:text-xl">
               {title}
             </h2>
-            <span className={`mt-2.5 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${categoryTag.className}`}>
-              {categoryTag.label}
-            </span>
+            <div className="mt-2.5">
+              <VisitorTypeBadge classification={appointment.classification} />
+            </div>
 
             <DetailSection title="Visitor Details">
               <DetailRow icon={User} label="Name" value={guestName} />

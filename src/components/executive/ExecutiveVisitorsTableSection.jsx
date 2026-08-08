@@ -11,16 +11,15 @@ import {
 } from 'lucide-react';
 import { DataTable, IconButton, StatusBadge, TablePagination, VisitorTypeBadge } from '../ui';
 import {
-  formatAppointmentTimeRange,
-  resolvePurposeDisplay,
+  formatVisitExpectedDisplay,
 } from './appointmentDisplayUtils';
 
 const TABS = [
-  { id: 'all', label: 'All Appointments' },
+  { id: 'all', label: 'All Visitors' },
   { id: 'awaiting', label: 'Awaiting Approval', badgeKey: 'awaiting' },
   { id: 'today', label: 'Today' },
   { id: 'week', label: 'This Week' },
-  { id: 'month', label: 'This Month' },
+  { id: 'on_site', label: 'On-Site Now', badgeKey: 'onSite' },
   { id: 'completed', label: 'Completed' },
   { id: 'cancelled', label: 'Cancelled' },
 ];
@@ -82,13 +81,13 @@ function FilterDropdown({ label, icon: Icon, value, onChange, options }) {
   );
 }
 
-function useAppointmentColumns(onView) {
+function useVisitorColumns(onView) {
   return useMemo(() => [
     {
-      key: 'time',
-      label: 'Time',
+      key: 'expected_at',
+      label: 'Expected',
       render: (_, row) => {
-        const { range, dayLabel } = formatAppointmentTimeRange(row.scheduled_at, row.duration_minutes);
+        const { range, dayLabel } = formatVisitExpectedDisplay(row.expected_at);
         return (
           <div>
             <p className="font-medium tabular-nums text-gray-900">{range}</p>
@@ -98,11 +97,11 @@ function useAppointmentColumns(onView) {
       },
     },
     {
-      key: 'visitor_name',
+      key: 'full_name',
       label: 'Visitor',
       render: (_, row) => (
         <div>
-          <p className="font-medium text-gray-900">{row.visitor_name || '—'}</p>
+          <p className="font-medium text-gray-900">{row.full_name || '—'}</p>
           {row.phone && <p className="text-sm text-gray-500">{row.phone}</p>}
         </div>
       ),
@@ -115,15 +114,12 @@ function useAppointmentColumns(onView) {
     {
       key: 'purpose',
       label: 'Purpose',
-      render: (_, row) => {
-        const { title, subtitle } = resolvePurposeDisplay(row);
-        return (
-          <div className="min-w-[120px]">
-            <p className="font-medium text-gray-900">{title}</p>
-            {subtitle && <p className="line-clamp-2 text-sm text-gray-500">{subtitle}</p>}
-          </div>
-        );
-      },
+      render: (_, row) => (
+        <div className="min-w-[120px]">
+          <p className="font-medium text-gray-900">{row.purpose || row.category_name || '—'}</p>
+          {row.company && <p className="line-clamp-2 text-sm text-gray-500">{row.company}</p>}
+        </div>
+      ),
     },
     {
       key: 'host_name',
@@ -131,9 +127,9 @@ function useAppointmentColumns(onView) {
       render: (_, row) => row.host_name || '—',
     },
     {
-      key: 'visit_status',
+      key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.visit_status} />,
+      render: (_, row) => <StatusBadge status={row.status} />,
     },
     {
       key: 'actions',
@@ -142,7 +138,7 @@ function useAppointmentColumns(onView) {
       render: (_, row) => (
         <IconButton
           icon={Eye}
-          label={`View ${row.visitor_name || 'appointment'}`}
+          label={`View ${row.full_name || 'visitor'}`}
           tooltip="View"
           variant="ghost"
           size="sm"
@@ -153,19 +149,19 @@ function useAppointmentColumns(onView) {
   ], [onView]);
 }
 
-function exportAppointmentsCsv(rows) {
-  const headers = ['Time', 'Visitor', 'Phone', 'Type', 'Purpose', 'Host', 'Status'];
+function exportVisitorsCsv(rows) {
+  const headers = ['Expected', 'Visitor', 'Phone', 'Type', 'Purpose', 'Company', 'Host', 'Status'];
   const lines = rows.map((row) => {
-    const { range, dayLabel } = formatAppointmentTimeRange(row.scheduled_at, row.duration_minutes);
-    const { title, subtitle } = resolvePurposeDisplay(row);
+    const { range, dayLabel } = formatVisitExpectedDisplay(row.expected_at);
     return [
       `${range} (${dayLabel})`,
-      row.visitor_name || '',
+      row.full_name || '',
       row.phone || '',
       row.classification || 'standard',
-      subtitle ? `${title} / ${subtitle}` : title,
+      row.purpose || '',
+      row.company || '',
       row.host_name || '',
-      row.visit_status || '',
+      row.status || '',
     ];
   });
 
@@ -177,12 +173,12 @@ function exportAppointmentsCsv(rows) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'appointments.csv';
+  link.download = 'visitors.csv';
   link.click();
   URL.revokeObjectURL(url);
 }
 
-export function ExecutiveAppointmentsTableFooter({
+export function ExecutiveVisitorsTableFooter({
   total = 0,
   page = 1,
   pageSize = 7,
@@ -203,7 +199,7 @@ export function ExecutiveAppointmentsTableFooter({
   );
 }
 
-export default function ExecutiveAppointmentsTableSection({
+export default function ExecutiveVisitorsTableSection({
   rows = [],
   loading = false,
   total = 0,
@@ -227,12 +223,13 @@ export default function ExecutiveAppointmentsTableSection({
   onSelect,
   onView,
 }) {
-  const columns = useAppointmentColumns(onView);
+  const columns = useVisitorColumns(onView);
 
   return (
     <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white ${
       splitLayout ? 'lg:min-w-0 lg:flex-[1.75]' : ''
-    }`}>
+    }`}
+    >
       <div className="shrink-0 border-b border-gray-200">
         <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
           {TABS.map(({ id, label, badgeKey }) => {
@@ -313,7 +310,7 @@ export default function ExecutiveAppointmentsTableSection({
 
           <button
             type="button"
-            onClick={() => exportAppointmentsCsv(rows)}
+            onClick={() => exportVisitorsCsv(rows)}
             className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3.5 sm:py-2.5 lg:self-center"
           >
             <Download size={14} aria-hidden="true" />
@@ -329,7 +326,7 @@ export default function ExecutiveAppointmentsTableSection({
           columns={columns}
           data={rows}
           loading={loading}
-          emptyTitle="No appointments match your filters."
+          emptyTitle="No visitors match your filters."
           emptyDescription="Try adjusting your search or filters."
           onRowClick={onSelect}
           activeRowId={selectedId}
@@ -345,7 +342,7 @@ export default function ExecutiveAppointmentsTableSection({
       </div>
 
       {splitLayout && (
-        <ExecutiveAppointmentsTableFooter
+        <ExecutiveVisitorsTableFooter
           total={total}
           page={page}
           pageSize={pageSize}

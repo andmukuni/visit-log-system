@@ -610,29 +610,163 @@ export function createExecutiveRouter() {
       const orgId = ctx.scope.organisation_id;
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
-      const status = String(req.query.status || '').trim();
-      const search = String(req.query.search || '').trim().toLowerCase();
-
-      let extraWhere = '';
-      const params = [orgId, hostId, userId];
-
-      if (status) {
-        extraWhere += ' AND vis.status = ?';
-        params.push(status);
-      }
-      if (search) {
-        extraWhere += ' AND (LOWER(v.full_name) LIKE ? OR LOWER(v.company) LIKE ? OR LOWER(vis.purpose) LIKE ?)';
-        const like = `%${search}%`;
-        params.push(like, like, like);
-      }
-
-      const [rows] = await pool.query(executiveVisitSql(extraWhere), params);
+      const baseParams = [orgId, hostId, userId];
       const permissions = permissionsFromRequest(req);
-      const data = await formatVisitListResponse(pool, rows, permissions, {
+
+      const visitSelect = `
+        SELECT ${VISIT_SELECT_FIELDS}, s.name AS site_name
+        FROM visits vis
+        ${VISIT_JOINS}
+        LEFT JOIN sites s ON s.id = vis.site_id
+        WHERE vis.organisation_id = ? AND ${hostVisitFilter('vis')}
+      `;
+
+      const isListMode = req.query.tab != null
+        || req.query.page != null
+        || req.query.search != null
+        || req.query.list === '1';
+
+      if (!isListMode) {
+        const status = String(req.query.status || '').trim();
+        const search = String(req.query.search || '').trim().toLowerCase();
+
+        let extraWhere = '';
+        const params = [...baseParams];
+
+        if (status) {
+          extraWhere += ' AND vis.status = ?';
+          params.push(status);
+        }
+        if (search) {
+          extraWhere += ' AND (LOWER(v.full_name) LIKE ? OR LOWER(v.company) LIKE ? OR LOWER(vis.purpose) LIKE ?)';
+          const like = `%${search}%`;
+          params.push(like, like, like);
+        }
+
+        const [rows] = await pool.query(
+          `${visitSelect}${extraWhere} ORDER BY vis.expected_at DESC, vis.created_at DESC LIMIT 200`,
+          params,
+        );
+        const data = await formatVisitListResponse(pool, rows, permissions, {
+          actorUserId: userId,
+        });
+
+        return res.json({ ok: true, data });
+      }
+
+      const tab = String(req.query.tab || 'all').toLowerCase();
+      const search = String(req.query.search || '').trim().toLowerCase();
+      const classification = String(req.query.classification || req.query.type || '').trim().toLowerCase();
+      const statusFilter = String(req.query.status || '').trim().toLowerCase();
+      const dateRange = String(req.query.range || '').trim().toLowerCase();
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize) || 7));
+
+      let filters = '';
+      const filterParams = [];
+
+      if (tab === 'awaiting') {
+        filters += ` AND vis.status IN ('pending_approval', 'pre_registered')`;
+      } else if (tab === 'today') {
+        filters += ` AND DATE(vis.expected_at) = CURDATE()`;
+      } else if (tab === 'week') {
+        filters += ` AND vis.expected_at >= CURDATE() AND vis.expected_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+      } else if (tab === 'on_site') {
+        filters += ` AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`;
+      } else if (tab === 'completed') {
+        filters += ` AND vis.status IN ('completed', 'checked_out')`;
+      } else if (tab === 'cancelled') {
+        filters += ` AND vis.status IN ('cancelled', 'rejected')`;
+      }
+
+      if (dateRange === 'today') {
+        filters += ` AND DATE(vis.expected_at) = CURDATE()`;
+      } else if (dateRange === 'week') {
+        filters += ` AND vis.expected_at >= CURDATE() AND vis.expected_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+      } else if (dateRange === 'month') {
+        filters += ` AND YEAR(vis.expected_at) = YEAR(CURDATE()) AND MONTH(vis.expected_at) = MONTH(CURDATE())`;
+      }
+
+      if (classification) {
+        filters += ` AND LOWER(COALESCE(vc.classification, 'standard')) = ?`;
+        filterParams.push(classification);
+      }
+
+      if (statusFilter) {
+        filters += ` AND LOWER(vis.status) = ?`;
+        filterParams.push(statusFilter);
+      }
+
+      if (search) {
+        filters += ` AND (
+          LOWER(v.full_name) LIKE ?
+          OR LOWER(v.company) LIKE ?
+          OR LOWER(vis.purpose) LIKE ?
+          OR LOWER(h.name) LIKE ?
+          OR LOWER(v.phone) LIKE ?
+          OR LOWER(vis.pass_code) LIKE ?
+        )`;
+        const like = `%${search}%`;
+        filterParams.push(like, like, like, like, like, like);
+      }
+
+      const countSql = `
+        SELECT COUNT(*) AS count
+        FROM visits vis
+        ${VISIT_JOINS}
+        WHERE vis.organisation_id = ? AND ${hostVisitFilter('vis')}
+        ${filters}
+      `;
+
+      const [[totalRow]] = await pool.query(countSql, [...baseParams, ...filterParams]);
+      const total = Number(totalRow?.count || 0);
+      const offset = (page - 1) * pageSize;
+
+      const [rows] = await pool.query(
+        `${visitSelect}
+         ${filters}
+         ORDER BY COALESCE(vis.expected_at, vis.created_at) DESC
+         LIMIT ? OFFSET ?`,
+        [...baseParams, ...filterParams, pageSize, offset],
+      );
+
+      const formattedRows = await formatVisitListResponse(pool, rows, permissions, {
         actorUserId: userId,
       });
 
-      return res.json({ ok: true, data });
+      const countVisits = async (extra = '') => {
+        const [[row]] = await pool.query(
+          `SELECT COUNT(*) AS count FROM visits vis
+           WHERE vis.organisation_id = ? AND ${hostVisitFilter('vis')} ${extra}`,
+          baseParams,
+        );
+        return Number(row?.count || 0);
+      };
+
+      const stats = {
+        today: await countVisits('AND DATE(vis.expected_at) = CURDATE()'),
+        week: await countVisits(
+          'AND vis.expected_at >= CURDATE() AND vis.expected_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)',
+        ),
+        awaiting: await countVisits(`AND vis.status IN ('pending_approval', 'pre_registered')`),
+        onSite: await countVisits(`AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`),
+        all: await countVisits(''),
+        completedThisMonth: await countVisits(
+          `AND vis.status IN ('completed', 'checked_out')
+           AND vis.updated_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+        ),
+      };
+
+      return res.json({
+        ok: true,
+        data: {
+          rows: formattedRows,
+          total,
+          page,
+          pageSize,
+          stats,
+        },
+      });
     } catch (error) {
       console.error('[executive/visits]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to load visits.' });

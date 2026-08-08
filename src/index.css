@@ -64,9 +64,9 @@
   --app-shadow: var(--shadow-card);
 }
 
-/* Executive portal — slightly zoomed-out density for calendar-heavy workflows */
+/* Executive portal — readable density while keeping calendar layout compact */
 html[data-portal='executive'] {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 html[data-portal='executive'] {
