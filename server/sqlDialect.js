@@ -97,6 +97,7 @@ export function adaptSqlForPostgres(sql) {
       "CURRENT_DATE - INTERVAL '$1 day' AND created_at < CURRENT_DATE",
     )
     .replace(/\bDATE_SUB\s*\(\s*CURDATE\s*\(\s*\)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)/gi, "CURRENT_DATE - INTERVAL '$1 day'")
+    .replace(/\bHOUR\s*\(([^)]+)\)/gi, 'EXTRACT(HOUR FROM $1)')
     .replace(/\bCURDATE\(\)/gi, 'CURRENT_DATE')
     .replace(/\bDATABASE\s*\(\s*\)/gi, 'current_database()')
     .replace(/\bTINYINT\s*\(\s*1\s*\)/gi, 'SMALLINT')

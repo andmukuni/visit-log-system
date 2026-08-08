@@ -5,8 +5,12 @@ import ExecutiveDashboardHeaderActions from '../../components/executive/Executiv
 import ExecutiveAppointmentModal from '../../components/executive/ExecutiveAppointmentModal';
 import ExecutiveAppointmentDetailPanel from '../../components/executive/ExecutiveAppointmentDetailPanel';
 import ExecutiveAppointmentsKpiRow from '../../components/executive/ExecutiveAppointmentsKpiRow';
-import ExecutiveAppointmentsTableSection from '../../components/executive/ExecutiveAppointmentsTableSection';
-import ExecutiveAppointmentsDetailSidebar from '../../components/executive/ExecutiveAppointmentsDetailSidebar';
+import ExecutiveAppointmentsTableSection, {
+  ExecutiveAppointmentsTableFooter,
+} from '../../components/executive/ExecutiveAppointmentsTableSection';
+import ExecutiveAppointmentsDetailSidebar, {
+  ExecutiveAppointmentsDetailActions,
+} from '../../components/executive/ExecutiveAppointmentsDetailSidebar';
 import {
   addMinutes,
   CALENDAR_END_HOUR,
@@ -72,7 +76,7 @@ export default function ExecutiveAppointmentsPage() {
   const status = searchParams.get('status') || '';
   const dateRange = searchParams.get('range') || '';
   const page = Math.max(1, Number(searchParams.get('page') || 1));
-  const pageSize = Math.min(50, Math.max(5, Number(searchParams.get('pageSize') || 10)));
+  const pageSize = Math.min(50, Math.max(5, Number(searchParams.get('pageSize') || 7)));
 
   const [searchInput, setSearchInput] = useState(search);
   const [rows, setRows] = useState([]);
@@ -250,42 +254,66 @@ export default function ExecutiveAppointmentsPage() {
 
       <ExecutiveAppointmentsKpiRow kpis={kpis} />
 
-      <div className="flex min-h-[calc(100vh-18rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:flex-row lg:items-stretch">
-        <ExecutiveAppointmentsTableSection
-          rows={rows}
-          loading={loading}
-          total={total}
-          page={page}
-          pageSize={pageSize}
-          tab={tab}
-          stats={stats}
-          search={searchInput}
-          dateRange={dateRange}
-          classification={classification}
-          status={status}
-          selectedId={selected?.id}
-          splitLayout={Boolean(selected)}
-          onTabChange={(value) => updateParams({ tab: value, page: 1 })}
-          onSearchChange={setSearchInput}
-          onDateRangeChange={(value) => updateParams({ range: value, page: 1 })}
-          onClassificationChange={(value) => updateParams({ type: value, page: 1 })}
-          onStatusChange={(value) => updateParams({ status: value, page: 1 })}
-          onPageChange={(value) => updateParams({ page: value })}
-          onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
-          onSelect={handleSelect}
-          onView={(row) => {
-            handleSelect(row);
-            if (window.innerWidth < 1024) setMobileDetailOpen(true);
-          }}
-        />
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-start">
+          <ExecutiveAppointmentsTableSection
+            rows={rows}
+            loading={loading}
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            tab={tab}
+            stats={stats}
+            search={searchInput}
+            dateRange={dateRange}
+            classification={classification}
+            status={status}
+            selectedId={selected?.id}
+            splitLayout={Boolean(selected)}
+            onTabChange={(value) => updateParams({ tab: value, page: 1 })}
+            onSearchChange={setSearchInput}
+            onDateRangeChange={(value) => updateParams({ range: value, page: 1 })}
+            onClassificationChange={(value) => updateParams({ type: value, page: 1 })}
+            onStatusChange={(value) => updateParams({ status: value, page: 1 })}
+            onPageChange={(value) => updateParams({ page: value })}
+            onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
+            onSelect={handleSelect}
+            onView={(row) => {
+              handleSelect(row);
+              if (window.innerWidth < 1024) setMobileDetailOpen(true);
+            }}
+          />
+
+          {selected && (
+            <div className="hidden lg:contents">
+              <ExecutiveAppointmentsDetailSidebar
+                appointment={selected}
+                splitLayout
+                onClose={() => setSelected(null)}
+                onReschedule={openReschedule}
+              />
+            </div>
+          )}
+        </div>
 
         {selected && (
-          <div className="hidden lg:contents">
-            <ExecutiveAppointmentsDetailSidebar
-              appointment={selected}
-              onClose={() => setSelected(null)}
-              onReschedule={openReschedule}
-            />
+          <div className="hidden border-t border-gray-200 lg:flex lg:items-stretch">
+            <div className="min-w-0 flex-[1.75]">
+              <ExecutiveAppointmentsTableFooter
+                total={total}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={(value) => updateParams({ page: value })}
+                onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
+              />
+            </div>
+            <div className="flex min-w-[320px] max-w-[400px] flex-1 items-center border-l border-gray-200">
+              <ExecutiveAppointmentsDetailActions
+                appointment={selected}
+                onReschedule={openReschedule}
+                className="w-full"
+              />
+            </div>
           </div>
         )}
       </div>

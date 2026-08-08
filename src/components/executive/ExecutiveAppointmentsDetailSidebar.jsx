@@ -48,10 +48,55 @@ function DetailSection({ title, children }) {
   );
 }
 
+export function ExecutiveAppointmentsDetailActions({
+  appointment,
+  onReschedule,
+  className = '',
+}) {
+  if (!appointment) return null;
+
+  const { start, end } = formatAppointmentTimeRange(
+    appointment.scheduled_at,
+    appointment.duration_minutes,
+  );
+
+  return (
+    <div className={`flex shrink-0 gap-3 px-5 py-3 ${className}`}>
+      <button
+        type="button"
+        onClick={() => onReschedule?.(appointment, { start, end })}
+        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1a73e8] bg-white px-3 py-2.5 text-sm font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50"
+      >
+        <CalendarCheck size={16} aria-hidden="true" />
+        Reschedule
+      </button>
+      {appointment.visit_id ? (
+        <Link
+          to={`/executive/visitors/${appointment.visit_id}`}
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
+        >
+          <Edit3 size={16} aria-hidden="true" />
+          View / Edit
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900/40 px-3 py-2.5 text-sm font-semibold text-white"
+        >
+          <Edit3 size={16} aria-hidden="true" />
+          View / Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ExecutiveAppointmentsDetailSidebar({
   appointment,
   onClose,
   onReschedule,
+  splitLayout = false,
 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -84,7 +129,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
 
   const visit = data?.visit;
   const displayStatus = resolveAppointmentDisplayStatus(visit?.status || appointment.visit_status);
-  const { range, start, end } = formatAppointmentTimeRange(
+  const { range } = formatAppointmentTimeRange(
     appointment.scheduled_at,
     appointment.duration_minutes,
   );
@@ -106,7 +151,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
   const access = 'Main Reception';
 
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col border-l border-gray-200 bg-white lg:min-w-[320px] lg:max-w-[400px] lg:flex-1">
+    <aside className="flex min-h-0 w-full flex-col border-l border-gray-200 bg-white lg:min-w-[320px] lg:max-w-[400px] lg:flex-1">
       <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${displayStatus.bg} ${displayStatus.text}`}>
           {displayStatus.label}
@@ -121,7 +166,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+      <div className="overflow-y-auto px-5 pb-5">
         {loading && (
           <div className="flex justify-center py-16">
             <Spinner size={28} />
@@ -175,34 +220,11 @@ export default function ExecutiveAppointmentsDetailSidebar({
         )}
       </div>
 
-      <div className="flex shrink-0 gap-3 border-t border-gray-200 px-5 py-3.5">
-        <button
-          type="button"
-          onClick={() => onReschedule?.(appointment, { start, end })}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1a73e8] bg-white px-3 py-2.5 text-sm font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50"
-        >
-          <CalendarCheck size={16} aria-hidden="true" />
-          Reschedule
-        </button>
-        {appointment.visit_id ? (
-          <Link
-            to={`/executive/visitors/${appointment.visit_id}`}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
-          >
-            <Edit3 size={16} aria-hidden="true" />
-            View / Edit
-          </Link>
-        ) : (
-          <button
-            type="button"
-            disabled
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900/40 px-3 py-2.5 text-sm font-semibold text-white"
-          >
-            <Edit3 size={16} aria-hidden="true" />
-            View / Edit
-          </button>
-        )}
-      </div>
+      <ExecutiveAppointmentsDetailActions
+        appointment={appointment}
+        onReschedule={onReschedule}
+        className={`border-t border-gray-200 ${splitLayout ? 'lg:hidden' : ''}`}
+      />
     </aside>
   );
 }

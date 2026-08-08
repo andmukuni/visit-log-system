@@ -28,6 +28,57 @@ export const PORTAL_USERS = [
 
 const HOST_LINKED_ROLES = new Set(['host', 'ceo', 'dceo']);
 
+const EMPLOYEE_APPT_MARKER = '[seed:employee-schedule]';
+
+const EMPLOYEE_APPT_VISITORS = [
+  { name: 'John Chanda', company: 'ABC Holdings', purpose: 'Quarterly review' },
+  { name: 'Mary Phiri', company: 'Zenith Partners', purpose: 'Contract signing' },
+  { name: 'David Mwale', company: 'Summit Legal', purpose: 'Legal consultation' },
+  { name: 'Sarah Banda', company: 'Partner Co', purpose: 'Partnership discussion' },
+  { name: 'James Mulenga', company: 'Investor Group', purpose: 'Investment update' },
+  { name: 'Ambassador Ngoma', company: 'Foreign Affairs', purpose: 'Policy briefing' },
+  { name: 'Dr. Mwila', company: 'Health Board', purpose: 'Board review' },
+  { name: 'Linda Zulu', company: 'Tech Solutions', purpose: 'Product demo' },
+  { name: 'Michael Bweupe', company: 'Logistics Ltd', purpose: 'Supply chain review' },
+  { name: 'Patricia Lungu', company: 'Finance Corp', purpose: 'Budget planning' },
+];
+
+const EMPLOYEE_APPT_STATUSES = ['expected', 'approved', 'pending_approval', 'pre_registered'];
+const EMPLOYEE_APPT_HOURS = [9, 10, 11, 14, 15, 16];
+
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return startOfDay(d);
+}
+
+function startOfNextCalendarWeek(from = new Date()) {
+  const base = startOfDay(from);
+  const day = base.getDay();
+  const daysUntilNextMonday = day === 0 ? 1 : 8 - day;
+  return addDays(base, daysUntilNextMonday);
+}
+
+function buildEmployeeAppointmentDates(from = new Date()) {
+  const today = startOfDay(from);
+  const nextMonday = startOfNextCalendarWeek(from);
+  const dates = [today];
+  for (let i = 0; i < 7; i += 1) {
+    dates.push(addDays(nextMonday, i));
+  }
+  return dates;
+}
+
+function formatDateKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
 export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
   if (IS_PRODUCTION && !force) {
     console.log('[seed] Skipping portal user seed in production (pass force: true to override).');
@@ -108,6 +159,7 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
   console.log(`[seed] Portal users ready (${created} created, ${updated} updated). Password: demo1234`);
   await seedHostDemoVisit(poolConn);
   await seedExecutiveDemoVisits(poolConn);
+  await seedEmployeeAppointments(poolConn);
   return { skipped: false, created, updated };
 }
 
@@ -256,6 +308,204 @@ async function seedExecutiveDemoVisits(poolConn = pool) {
   }
 
   console.log('[seed] Executive demo appointments created.');
+}
+
+export async function seedEmployeeAppointments(poolConn = pool, { force = false } = {}) {
+  if (IS_PRODUCTION && !force) {
+    console.log('[seed] Skipping employee appointment seed in production (pass force: true to override).');
+    return { skipped: true };
+  }
+
+  const [[org]] = await poolConn.query(`SELECT id FROM organisations WHERE slug = 'demo-org' LIMIT 1`);
+  const orgIds = [];
+  if (org?.id) orgIds.push(org.id);
+
+  const [linkedOrgs] = await poolConn.query(
+    `SELECT DISTINCT h.organisation_id AS id
+     FROM hosts h
+     INNER JOIN users u ON u.id = h.user_id
+     WHERE u.email LIKE '%@demo.org'`,
+  );
+  for (const row of linkedOrgs) {
+    if (row?.id && !orgIds.includes(row.id)) orgIds.push(row.id);
+  }
+
+  if (!orgIds.length) {
+    const [[fallbackOrg]] = await poolConn.query('SELECT id FROM organisations LIMIT 1');
+    if (fallbackOrg?.id) orgIds.push(fallbackOrg.id);
+  }
+
+  const [hosts] = await poolConn.query(
+    `SELECT h.id, h.organisation_id, h.name, h.email, h.user_id
+     FROM hosts h
+     WHERE h.status = 'active'
+       AND h.organisation_id IN (${orgIds.map(() => '?').join(',')})
+     ORDER BY h.organisation_id, h.name`,
+    orgIds,
+  );
+  if (!hosts.length) {
+    console.warn('[seed] No active hosts found for demo organisation.');
+    return { skipped: true, reason: 'no_hosts' };
+  }
+
+  const siteByOrg = new Map();
+  const [sites] = await poolConn.query(
+    `SELECT id, organisation_id FROM sites WHERE organisation_id IN (${orgIds.map(() => '?').join(',')})`,
+    orgIds,
+  );
+  for (const site of sites) {
+    if (!siteByOrg.has(site.organisation_id)) siteByOrg.set(site.organisation_id, site.id);
+  }
+
+  const categoryByOrg = new Map();
+  const [categories] = await poolConn.query(
+    `SELECT id, organisation_id, classification FROM visitor_categories WHERE organisation_id IN (${orgIds.map(() => '?').join(',')}) ORDER BY classification DESC`,
+    orgIds,
+  );
+  for (const category of categories) {
+    if (!categoryByOrg.has(category.organisation_id)) categoryByOrg.set(category.organisation_id, category.id);
+  }
+
+  if (!siteByOrg.size) {
+    console.warn('[seed] No sites found for target organisations.');
+    return { skipped: true, reason: 'no_site' };
+  }
+
+  const [[fallbackActor]] = await poolConn.query(
+    `SELECT id FROM users WHERE email = 'orgadmin@demo.org' LIMIT 1`,
+  );
+  const targetDates = buildEmployeeAppointmentDates();
+
+  if (force) {
+    const [seedVisits] = await poolConn.query(
+      `SELECT id, visitor_id FROM visits WHERE organisation_id IN (${orgIds.map(() => '?').join(',')}) AND purpose LIKE ?`,
+      [...orgIds, `${EMPLOYEE_APPT_MARKER}%`],
+    );
+    const visitIds = seedVisits.map((row) => row.id).filter(Boolean);
+    const visitorIds = seedVisits.map((row) => row.visitor_id).filter(Boolean);
+
+    if (visitIds.length) {
+      await poolConn.query(
+        `DELETE FROM appointments WHERE visit_id IN (${visitIds.map(() => '?').join(',')})`,
+        visitIds,
+      );
+      await poolConn.query(
+        `DELETE FROM visit_events WHERE visit_id IN (${visitIds.map(() => '?').join(',')})`,
+        visitIds,
+      );
+      await poolConn.query(
+        `DELETE FROM visits WHERE id IN (${visitIds.map(() => '?').join(',')})`,
+        visitIds,
+      );
+      if (visitorIds.length) {
+        await poolConn.query(
+          `DELETE FROM visitors WHERE id IN (${visitorIds.map(() => '?').join(',')})`,
+          visitorIds,
+        );
+      }
+    }
+  }
+
+  let created = 0;
+  let skipped = 0;
+  let visitorIndex = 0;
+
+  for (const host of hosts) {
+    const actorUserId = host.user_id || fallbackActor?.id || null;
+    const siteId = siteByOrg.get(host.organisation_id);
+    const categoryId = categoryByOrg.get(host.organisation_id);
+    if (!siteId) continue;
+
+    for (const date of targetDates) {
+      const slotsForDay = 2;
+      for (let slot = 0; slot < slotsForDay; slot += 1) {
+        const scheduledAt = new Date(date);
+        const hour = EMPLOYEE_APPT_HOURS[(visitorIndex + slot) % EMPLOYEE_APPT_HOURS.length];
+        scheduledAt.setHours(hour, (slot * 15) % 60, 0, 0);
+
+        const [[existing]] = await poolConn.query(
+          `SELECT a.id
+           FROM appointments a
+           INNER JOIN visits vis ON vis.id = a.visit_id
+           WHERE vis.host_id = ?
+             AND vis.purpose LIKE ?
+             AND DATE(a.scheduled_at) = DATE(?)
+             AND HOUR(a.scheduled_at) = ?
+           LIMIT 1`,
+          [host.id, `${EMPLOYEE_APPT_MARKER}%`, scheduledAt, hour],
+        );
+        if (existing?.id && !force) {
+          skipped += 1;
+          continue;
+        }
+
+        const visitor = EMPLOYEE_APPT_VISITORS[visitorIndex % EMPLOYEE_APPT_VISITORS.length];
+        visitorIndex += 1;
+        const status = EMPLOYEE_APPT_STATUSES[visitorIndex % EMPLOYEE_APPT_STATUSES.length];
+        const purpose = `${EMPLOYEE_APPT_MARKER} — ${visitor.purpose}`;
+
+        const visitorId = generateId('vis');
+        await poolConn.query(
+          `INSERT INTO visitors (id, organisation_id, full_name, phone, company, email)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            visitorId,
+            host.organisation_id,
+            visitor.name,
+            `+26097${String(1000000 + visitorIndex).slice(-7)}`,
+            visitor.company,
+            `${visitor.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+          ],
+        );
+
+        const visitId = generateId('visit');
+        await poolConn.query(
+          `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, pass_code, expected_at, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            visitId,
+            host.organisation_id,
+            siteId,
+            visitorId,
+            host.id,
+            categoryId || null,
+            purpose,
+            status,
+            Math.random().toString(36).slice(2, 8).toUpperCase(),
+            scheduledAt,
+            actorUserId,
+          ],
+        );
+
+        await createAppointmentForVisit(poolConn, {
+          organisationId: host.organisation_id,
+          visitId,
+          hostId: host.id,
+          scheduledAt,
+          title: visitor.purpose,
+          createdBy: actorUserId,
+        });
+
+        await poolConn.query(
+          `INSERT INTO visit_events (id, visit_id, event_type, actor_user_id, details)
+           VALUES (?, ?, 'registered', ?, ?)`,
+          [
+            generateId('evt'),
+            visitId,
+            actorUserId,
+            JSON.stringify({ status, source: 'employee_schedule_seed', date: formatDateKey(date) }),
+          ],
+        );
+
+        created += 1;
+      }
+    }
+  }
+
+  console.log(
+    `[seed] Employee appointments ready (${created} created, ${skipped} skipped) for ${hosts.length} host(s) across ${targetDates.length} day(s).`,
+  );
+  return { skipped: false, created, skipped, hosts: hosts.length, days: targetDates.length };
 }
 
 export async function seedSampleVisits(poolConn = pool, { force = false } = {}) {

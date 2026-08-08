@@ -139,12 +139,94 @@ function exportAppointmentsCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
+export function ExecutiveAppointmentsTableFooter({
+  total = 0,
+  page = 1,
+  pageSize = 7,
+  onPageChange,
+  onPageSizeChange,
+  className = '',
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const end = Math.min(safePage * pageSize, total);
+
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const maxVisible = 3;
+    let startPage = Math.max(1, safePage - 1);
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    startPage = Math.max(1, endPage - maxVisible + 1);
+    for (let i = startPage; i <= endPage; i += 1) pages.push(i);
+    return pages;
+  }, [safePage, totalPages]);
+
+  return (
+    <div className={`grid shrink-0 grid-cols-1 items-center gap-3 bg-white px-5 py-3 sm:grid-cols-[1fr_auto_1fr] ${className}`}>
+      <p className="text-sm text-gray-500 sm:justify-self-start">
+        {total === 0
+          ? 'No appointments'
+          : `Showing ${start} to ${end} of ${total} appointments`}
+      </p>
+
+      <div className="flex items-center justify-center gap-1 sm:justify-self-center">
+        <button
+          type="button"
+          onClick={() => onPageChange?.(safePage - 1)}
+          disabled={safePage <= 1}
+          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-40"
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        {pageNumbers.map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            onClick={() => onPageChange?.(pageNumber)}
+            className={`min-w-[2rem] rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+              pageNumber === safePage
+                ? 'bg-navy-900 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {pageNumber}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onPageChange?.(safePage + 1)}
+          disabled={safePage >= totalPages}
+          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-40"
+          aria-label="Next page"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      <label className="flex items-center justify-start gap-2 text-sm text-gray-500 sm:justify-self-end">
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
+          aria-label="Appointments per page"
+        >
+          {[7, 10, 25, 50].map((size) => (
+            <option key={size} value={size}>{size} / page</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 export default function ExecutiveAppointmentsTableSection({
   rows = [],
   loading = false,
   total = 0,
   page = 1,
-  pageSize = 10,
+  pageSize = 7,
   tab = 'all',
   stats = {},
   search = '',
@@ -163,21 +245,6 @@ export default function ExecutiveAppointmentsTableSection({
   onSelect,
   onView,
 }) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const start = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const end = Math.min(safePage * pageSize, total);
-
-  const pageNumbers = useMemo(() => {
-    const pages = [];
-    const maxVisible = 3;
-    let startPage = Math.max(1, safePage - 1);
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    startPage = Math.max(1, endPage - maxVisible + 1);
-    for (let i = startPage; i <= endPage; i += 1) pages.push(i);
-    return pages;
-  }, [safePage, totalPages]);
-
   return (
     <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden bg-white ${
       splitLayout ? 'flex-[1.75] lg:min-w-0' : 'rounded-2xl border border-gray-200 shadow-sm'
@@ -271,7 +338,7 @@ export default function ExecutiveAppointmentsTableSection({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-16">
             <Spinner size={32} />
@@ -363,61 +430,14 @@ export default function ExecutiveAppointmentsTableSection({
         )}
       </div>
 
-      <div className="grid shrink-0 grid-cols-1 items-center gap-3 border-t border-gray-200 bg-white px-5 py-3 sm:grid-cols-[1fr_auto_1fr]">
-        <p className="text-sm text-gray-500 sm:justify-self-start">
-          {total === 0
-            ? 'No appointments'
-            : `Showing ${start} to ${end} of ${total} appointments`}
-        </p>
-
-        <div className="flex items-center justify-center gap-1 sm:justify-self-center">
-          <button
-            type="button"
-            onClick={() => onPageChange?.(safePage - 1)}
-            disabled={safePage <= 1}
-            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-40"
-            aria-label="Previous page"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          {pageNumbers.map((pageNumber) => (
-            <button
-              key={pageNumber}
-              type="button"
-              onClick={() => onPageChange?.(pageNumber)}
-              className={`min-w-[2rem] rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
-                pageNumber === safePage
-                  ? 'bg-navy-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {pageNumber}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => onPageChange?.(safePage + 1)}
-            disabled={safePage >= totalPages}
-            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-40"
-            aria-label="Next page"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
-
-        <label className="flex items-center justify-start gap-2 text-sm text-gray-500 sm:justify-self-end">
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
-            aria-label="Appointments per page"
-          >
-            {[10, 25, 50].map((size) => (
-              <option key={size} value={size}>{size} / page</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <ExecutiveAppointmentsTableFooter
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        className={`border-t border-gray-200 ${splitLayout ? 'lg:hidden' : ''}`}
+      />
     </div>
   );
 }

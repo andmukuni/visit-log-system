@@ -230,7 +230,7 @@ export function createExecutiveRouter() {
       const statusFilter = String(req.query.status || '').trim().toLowerCase();
       const dateRange = String(req.query.range || '').trim().toLowerCase();
       const page = Math.max(1, Number(req.query.page) || 1);
-      const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize) || 10));
+      const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize) || 7));
 
       let filters = '';
       const filterParams = [];
