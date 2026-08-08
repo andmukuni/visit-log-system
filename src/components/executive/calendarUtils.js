@@ -37,6 +37,159 @@ export function addWeeks(date, weeks) {
   return addDays(date, weeks * 7);
 }
 
+export function startOfMonth(date) {
+  const d = startOfDay(date);
+  d.setDate(1);
+  return d;
+}
+
+export function addMonths(date, months) {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return startOfMonth(d);
+}
+
+export const CALENDAR_VIEW_MODES = {
+  week: {
+    id: 'week',
+    label: 'Week',
+    dayCount: 7,
+    hourHeight: 44,
+    minDayWidth: 72,
+    stepDays: 7,
+  },
+  twoWeeks: {
+    id: 'twoWeeks',
+    label: '2 weeks',
+    dayCount: 14,
+    hourHeight: 44,
+    minDayWidth: 48,
+    stepDays: 14,
+  },
+  month: {
+    id: 'month',
+    label: 'Month',
+    hourHeight: 32,
+    minDayWidth: 34,
+    stepMonths: 1,
+  },
+  twoMonths: {
+    id: 'twoMonths',
+    label: '2 months',
+    hourHeight: 24,
+    minDayWidth: 26,
+    stepMonths: 2,
+  },
+};
+
+export const CALENDAR_VIEW_OPTIONS = Object.values(CALENDAR_VIEW_MODES);
+
+export function getViewConfig(viewMode = 'week') {
+  return CALENDAR_VIEW_MODES[viewMode] || CALENDAR_VIEW_MODES.week;
+}
+
+export function gridBodyHeightPx(hourHeight = HOUR_HEIGHT_PX) {
+  return (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * hourHeight;
+}
+
+export function gridScrollHeightPx(hourHeight = HOUR_HEIGHT_PX) {
+  return gridBodyHeightPx(hourHeight) + GRID_PADDING_BOTTOM_PX;
+}
+
+export function normalizePeriodStart(date, viewMode = 'week') {
+  const config = getViewConfig(viewMode);
+  if (config.stepMonths) return startOfMonth(date);
+  return startOfWeek(date);
+}
+
+export function getPeriodDays(periodStart, viewMode = 'week') {
+  const config = getViewConfig(viewMode);
+
+  if (config.dayCount) {
+    return Array.from({ length: config.dayCount }, (_, i) => addDays(periodStart, i));
+  }
+
+  const monthStart = startOfMonth(periodStart);
+  const monthSpan = config.stepMonths || 1;
+  const end = new Date(monthStart.getFullYear(), monthStart.getMonth() + monthSpan, 0);
+  const days = [];
+  let cursor = new Date(monthStart);
+
+  while (cursor <= end) {
+    days.push(new Date(cursor));
+    cursor = addDays(cursor, 1);
+  }
+
+  return days;
+}
+
+export function isInPeriod(day, periodStart, viewMode = 'week') {
+  const days = getPeriodDays(periodStart, viewMode);
+  if (days.length === 0) return false;
+  const target = startOfDay(day).getTime();
+  const start = startOfDay(days[0]).getTime();
+  const end = startOfDay(days[days.length - 1]).getTime() + DAY_MS;
+  return target >= start && target < end;
+}
+
+export function formatPeriodRange(periodStart, viewMode = 'week') {
+  const days = getPeriodDays(periodStart, viewMode);
+  if (days.length === 0) return '';
+
+  const first = days[0];
+  const last = days[days.length - 1];
+
+  if (viewMode === 'month') {
+    return first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  }
+
+  if (viewMode === 'twoMonths') {
+    const sameYear = first.getFullYear() === last.getFullYear();
+    const startFmt = first.toLocaleDateString(undefined, { month: 'long' });
+    const endFmt = last.toLocaleDateString(undefined, {
+      month: 'long',
+      year: sameYear ? undefined : 'numeric',
+    });
+    return sameYear
+      ? `${startFmt} – ${endFmt}, ${last.getFullYear()}`
+      : `${startFmt} – ${endFmt}`;
+  }
+
+  const sameMonth = isSameMonth(first, last);
+  const startFmt = first.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  const endFmt = last.toLocaleDateString(undefined, sameMonth ? { day: 'numeric' } : { month: 'long', day: 'numeric' });
+  const year = last.getFullYear();
+  return `${startFmt} – ${endFmt}, ${year}`;
+}
+
+export function periodQueryRange(periodStart, viewMode = 'week') {
+  const days = getPeriodDays(periodStart, viewMode);
+  if (days.length === 0) {
+    return { from: toDateInputValue(periodStart), to: toDateInputValue(addDays(periodStart, 7)) };
+  }
+
+  return {
+    from: toDateInputValue(days[0]),
+    to: toDateInputValue(addDays(days[days.length - 1], 1)),
+  };
+}
+
+export function navigatePeriod(periodStart, viewMode = 'week', direction = 1) {
+  const config = getViewConfig(viewMode);
+  if (config.stepMonths) {
+    return addMonths(periodStart, config.stepMonths * direction);
+  }
+  return addDays(periodStart, config.stepDays * direction);
+}
+
+export function compareViewDensity(fromMode = 'week', toMode = 'week', periodStart = new Date()) {
+  const fromDays = getPeriodDays(periodStart, fromMode).length;
+  const toDays = getPeriodDays(periodStart, toMode).length;
+  if (toDays > fromDays) return 'expand';
+  if (toDays < fromDays) return 'shrink';
+  return 'neutral';
+}
+
 export function isSameDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
@@ -129,9 +282,7 @@ export function formatDayHeader(date, today = new Date()) {
 }
 
 export function weekQueryRange(weekStart) {
-  const from = toDateInputValue(weekStart);
-  const to = toDateInputValue(addDays(weekStart, 7));
-  return { from, to };
+  return periodQueryRange(weekStart, 'week');
 }
 
 export function currentTimeIndicator(today = new Date()) {
@@ -142,17 +293,26 @@ export function currentTimeIndicator(today = new Date()) {
   return `${((minutes - gridStart) / (gridEnd - gridStart)) * 100}%`;
 }
 
-export function currentTimePositionPx(now = new Date()) {
+export function currentTimePositionPx(now = new Date(), bodyHeightPx = GRID_BODY_HEIGHT_PX) {
   const minutes = now.getHours() * 60 + now.getMinutes();
   const gridStart = CALENDAR_START_HOUR * 60;
   const gridEnd = CALENDAR_END_HOUR * 60;
   if (minutes < gridStart || minutes > gridEnd) return null;
   const ratio = (minutes - gridStart) / (gridEnd - gridStart);
-  return ratio * GRID_BODY_HEIGHT_PX;
+  return ratio * bodyHeightPx;
 }
 
 export function formatCurrentTimeLabel(now = new Date()) {
   return now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Compact live clock for the 56px time gutter. */
+export function formatGutterLiveTime(now = new Date()) {
+  const parts = formatCurrentTimeLabel(now).split(' ');
+  return {
+    clock: parts[0] || formatCurrentTimeLabel(now),
+    period: parts.slice(1).join(' '),
+  };
 }
 
 export function addMinutes(date, minutes) {
@@ -229,13 +389,33 @@ export function computeSlotRect(columnEl, startAt, endAt, columnHeightPx = GRID_
 
 export const QUICK_ADD_POPOVER_WIDTH = 448;
 export const QUICK_ADD_POPOVER_GAP = 10;
+export const QUICK_ADD_POPOVER_MARGIN = 12;
+
+/** Keep a fixed popover fully inside the viewport. */
+export function clampPopoverToViewport({ left, top, width, height, margin = QUICK_ADD_POPOVER_MARGIN } = {}) {
+  if (typeof window === 'undefined') {
+    return { left, top };
+  }
+
+  const maxLeft = window.innerWidth - width - margin;
+  const maxTop = window.innerHeight - height - margin;
+
+  return {
+    left: Math.min(Math.max(margin, left), Math.max(margin, maxLeft)),
+    top: Math.min(Math.max(margin, top), Math.max(margin, maxTop)),
+  };
+}
 
 /** Place popover to the left of the selected slot (Google Calendar style). */
-export function computeQuickAddPopoverPosition(slotRect, { width = QUICK_ADD_POPOVER_WIDTH, gap = QUICK_ADD_POPOVER_GAP } = {}) {
+export function computeQuickAddPopoverPosition(slotRect, {
+  width = QUICK_ADD_POPOVER_WIDTH,
+  gap = QUICK_ADD_POPOVER_GAP,
+  margin = QUICK_ADD_POPOVER_MARGIN,
+  maxHeight: maxHeightOverride,
+} = {}) {
   if (!slotRect || typeof window === 'undefined') return null;
 
-  const margin = 12;
-  const estimatedHeight = 520;
+  const maxHeight = maxHeightOverride ?? window.innerHeight - margin * 2;
   let left = slotRect.left - width - gap;
   let placement = 'left';
 
@@ -247,9 +427,10 @@ export function computeQuickAddPopoverPosition(slotRect, { width = QUICK_ADD_POP
   left = Math.min(Math.max(margin, left), window.innerWidth - width - margin);
 
   let top = slotRect.top - 8;
-  top = Math.min(Math.max(margin, top), window.innerHeight - estimatedHeight - margin);
+  top = Math.min(top, window.innerHeight - margin - maxHeight);
+  top = Math.max(margin, top);
 
-  return { left, top, width, placement };
+  return { left, top, width, maxHeight, placement };
 }
 
 export function toIsoLocalDateTime(date) {

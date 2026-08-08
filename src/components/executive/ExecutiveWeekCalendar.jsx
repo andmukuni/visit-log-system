@@ -1,35 +1,40 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck, Users } from 'lucide-react';
+import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck, Users } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import { executiveApi } from '../../utils/visitorApi';
 import { useToast } from '../../context/ToastContext';
 import {
   addMinutes,
-  addWeeks,
+  CALENDAR_VIEW_OPTIONS,
+  compareViewDensity,
+  getPeriodDays,
+  getViewConfig,
+  gridBodyHeightPx,
+  gridScrollHeightPx,
+  formatPeriodRange,
+  navigatePeriod,
+  normalizePeriodStart,
+  isInPeriod,
+  isSameDay,
+  isSameMonth,
+  periodQueryRange,
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
   currentTimeIndicator,
   currentTimePositionPx,
   DEFAULT_EVENT_MINUTES,
   eventLayout,
-  formatCurrentTimeLabel,
+  formatGutterLiveTime,
   formatDayHeader,
   formatHourLabel,
   formatTimeRange,
-  formatWeekRange,
   getMonthGrid,
-  getWeekDays,
-  GRID_BODY_HEIGHT_PX,
-  GRID_SCROLL_HEIGHT_PX,
   GRID_VIEWPORT_HEIGHT_PX,
   HOUR_LABELS,
   HOUR_HEIGHT_PX,
   initialGridScrollTop,
-  isInWeek,
-  isSameDay,
-  isSameMonth,
   slotFromPointer,
   startOfWeek,
   startOfDay,
@@ -42,14 +47,70 @@ const HOURS = Array.from(
   (_, i) => CALENDAR_START_HOUR + i,
 );
 
-function hourLabelTop(hour) {
-  return (hour - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
+function hourLabelTop(hour, hourHeight = HOUR_HEIGHT_PX) {
+  return (hour - CALENDAR_START_HOUR) * hourHeight;
+}
+
+function ViewModeSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = getViewConfig(value);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleClick = (event) => {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative ml-auto">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-white/20 transition-colors hover:bg-white/25"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected.label}
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full z-50 mt-1 min-w-[9.5rem] overflow-hidden rounded-xl border border-navy-100 bg-white py-1 shadow-lg"
+          role="listbox"
+        >
+          {CALENDAR_VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="option"
+              aria-selected={option.id === value}
+              onClick={() => {
+                onChange(option.id);
+                setOpen(false);
+              }}
+              className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                option.id === value
+                  ? 'bg-navy-50 font-semibold text-navy-900'
+                  : 'text-navy-700 hover:bg-navy-50'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const EVENT_COLORS = {
   vip: 'bg-purple-100 border-purple-300 text-purple-900',
   vvip: 'bg-amber-100 border-amber-300 text-amber-900',
-  standard: 'bg-blue-100 border-blue-300 text-blue-900',
+  standard: 'bg-navy-100 border-navy-300 text-navy-900',
 };
 
 function eventColor(classification, visitStatus) {
@@ -61,7 +122,7 @@ function eventColor(classification, visitStatus) {
   return EVENT_COLORS.standard;
 }
 
-function MiniMonth({ anchorDate, weekStart, focusedDay, onPickDate, onMonthChange }) {
+function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, onMonthChange }) {
   const days = useMemo(() => getMonthGrid(anchorDate), [anchorDate]);
   const monthLabel = anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -98,7 +159,7 @@ function MiniMonth({ anchorDate, weekStart, focusedDay, onPickDate, onMonthChang
         {days.map((day) => {
           const inMonth = isSameMonth(day, anchorDate);
           const selected = isSameDay(day, focusedDay);
-          const inWeek = isInWeek(day, weekStart);
+          const inPeriod = isInPeriod(day, periodStart, viewMode);
           const today = isSameDay(day, new Date());
           const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 
@@ -109,13 +170,13 @@ function MiniMonth({ anchorDate, weekStart, focusedDay, onPickDate, onMonthChang
               onClick={() => onPickDate(day)}
               className={`mx-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs transition-colors ${
                 selected
-                  ? 'bg-blue-600 text-white hover:bg-blue-600 shadow-sm'
-                  : inWeek
-                    ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  ? 'bg-navy-900 text-white hover:bg-navy-900 shadow-sm'
+                  : inPeriod
+                    ? 'bg-navy-50 text-navy-700 hover:bg-navy-100'
                     : !inMonth
                       ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
                       : 'text-gray-700 hover:bg-gray-100'
-              } ${today && !selected ? 'ring-1 ring-blue-500' : ''}`}
+              } ${today && !selected ? 'ring-1 ring-navy-500' : ''}`}
               aria-label={day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               aria-pressed={selected}
             >
@@ -155,7 +216,7 @@ const GLANCE_ITEMS = [
 ];
 
 const LEGEND_ITEMS = [
-  { label: 'Standard', swatch: 'bg-blue-100 border-blue-400' },
+  { label: 'Standard', swatch: 'bg-navy-100 border-navy-500' },
   { label: 'VIP', swatch: 'bg-violet-100 border-violet-500' },
   { label: 'VVIP', swatch: 'bg-amber-100 border-amber-500' },
   { label: 'Pending', swatch: 'bg-orange-50 border-orange-500' },
@@ -273,6 +334,8 @@ export default function ExecutiveWeekCalendar({
   appointments = [],
   loading = false,
   weekStart,
+  viewMode = 'week',
+  onViewModeChange,
   onWeekChange,
   onRefresh,
 }) {
@@ -285,13 +348,24 @@ export default function ExecutiveWeekCalendar({
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
+  const [viewAnimClass, setViewAnimClass] = useState(null);
+  const prevViewModeRef = useRef(viewMode);
   const [draft, setDraft] = useState(null);
   const [referenceData, setReferenceData] = useState(null);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(() => new Date());
-  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
+  const viewConfig = useMemo(() => getViewConfig(viewMode), [viewMode]);
+  const periodDays = useMemo(() => getPeriodDays(weekStart, viewMode), [weekStart, viewMode]);
+  const gridBodyHeight = useMemo(() => gridBodyHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
+  const gridScrollHeight = useMemo(() => gridScrollHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
+  const gridTemplateColumns = useMemo(
+    () => `56px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
+    [periodDays.length, viewConfig.minDayWidth],
+  );
+  const compactHeaders = periodDays.length > 14;
   const nowLine = currentTimeIndicator(now);
-  const nowLinePx = currentTimePositionPx(now);
+  const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
+  const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
   const currentHour = now.getHours();
 
   useEffect(() => {
@@ -316,8 +390,8 @@ export default function ExecutiveWeekCalendar({
 
     const chromeHeight = toolbar.offsetHeight + dayHeaders.offsetHeight;
     const nextHeight = sidebar.offsetHeight - chromeHeight;
-    setGridViewportHeight(Math.min(GRID_SCROLL_HEIGHT_PX, Math.max(0, nextHeight)));
-  }, []);
+    setGridViewportHeight(Math.min(gridScrollHeight, Math.max(0, nextHeight)));
+  }, [gridScrollHeight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -350,35 +424,50 @@ export default function ExecutiveWeekCalendar({
       observer.disconnect();
       window.removeEventListener('resize', runSync);
     };
-  }, [syncCalendarViewport, loading, kpis, sidebarMonth, weekStart]);
+  }, [syncCalendarViewport, loading, kpis, sidebarMonth, weekStart, viewMode, gridScrollHeight]);
 
   useEffect(() => {
-    if (!isInWeek(focusedDay, weekStart)) {
+    if (prevViewModeRef.current === viewMode) return undefined;
+
+    const density = compareViewDensity(prevViewModeRef.current, viewMode, weekStart);
+    setViewAnimClass(density === 'neutral' ? null : `animate-gcal-view-${density}`);
+    prevViewModeRef.current = viewMode;
+
+    const timer = window.setTimeout(() => setViewAnimClass(null), 360);
+    return () => window.clearTimeout(timer);
+  }, [viewMode, weekStart]);
+
+  useEffect(() => {
+    if (!isInPeriod(focusedDay, weekStart, viewMode)) {
       setFocusedDay(startOfDay(weekStart));
     }
-  }, [weekStart, focusedDay]);
+  }, [weekStart, focusedDay, viewMode]);
 
-  const changeWeek = useCallback((nextWeekStart, direction = null) => {
+  const changePeriod = useCallback((nextPeriodStart, direction = null) => {
     setWeekSlideDirection(direction);
-    setSidebarMonth(new Date(nextWeekStart.getFullYear(), nextWeekStart.getMonth(), 1));
-    onWeekChange(nextWeekStart);
-  }, [onWeekChange]);
+    setSidebarMonth(new Date(nextPeriodStart.getFullYear(), nextPeriodStart.getMonth(), 1));
+    onWeekChange(normalizePeriodStart(nextPeriodStart, viewMode));
+  }, [onWeekChange, viewMode]);
+
+  const handleViewModeChange = useCallback((nextMode) => {
+    onViewModeChange?.(nextMode);
+  }, [onViewModeChange]);
 
   const handlePickDate = useCallback((day) => {
     const picked = startOfDay(day);
-    const nextWeekStart = startOfWeek(picked);
+    const nextPeriodStart = normalizePeriodStart(picked, viewMode);
     let direction = null;
 
-    if (nextWeekStart.getTime() > weekStart.getTime()) {
+    if (nextPeriodStart.getTime() > weekStart.getTime()) {
       direction = 'forward';
-    } else if (nextWeekStart.getTime() < weekStart.getTime()) {
+    } else if (nextPeriodStart.getTime() < weekStart.getTime()) {
       direction = 'backward';
     }
 
     setFocusedDay(picked);
     setSidebarMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
-    changeWeek(nextWeekStart, direction);
-  }, [weekStart, changeWeek]);
+    changePeriod(nextPeriodStart, direction);
+  }, [weekStart, viewMode, changePeriod]);
 
   useEffect(() => {
     if (loading) return undefined;
@@ -387,14 +476,41 @@ export default function ExecutiveWeekCalendar({
     if (!el) return undefined;
 
     const nowDate = new Date();
-    const hasToday = weekDays.some((day) => isSameDay(day, nowDate));
+    const hasToday = periodDays.some((day) => isSameDay(day, nowDate));
     const focusHour = hasToday
       ? Math.max(CALENDAR_START_HOUR, nowDate.getHours())
       : 8;
 
     el.scrollTop = initialGridScrollTop(focusHour, gridViewportHeight);
     return undefined;
-  }, [weekStart, loading, weekDays, gridViewportHeight]);
+  }, [weekStart, loading, periodDays, gridViewportHeight, viewMode]);
+
+  useEffect(() => {
+    if (periodDays.length <= 7) return undefined;
+
+    const grid = gridScrollRef.current;
+    const headers = dayHeadersRef.current;
+    if (!grid || !headers) return undefined;
+
+    let syncing = false;
+    const syncScroll = (source, target) => {
+      if (syncing) return;
+      syncing = true;
+      target.scrollLeft = source.scrollLeft;
+      syncing = false;
+    };
+
+    const onGridScroll = () => syncScroll(grid, headers);
+    const onHeaderScroll = () => syncScroll(headers, grid);
+
+    grid.addEventListener('scroll', onGridScroll, { passive: true });
+    headers.addEventListener('scroll', onHeaderScroll, { passive: true });
+
+    return () => {
+      grid.removeEventListener('scroll', onGridScroll);
+      headers.removeEventListener('scroll', onHeaderScroll);
+    };
+  }, [periodDays.length, viewMode, weekStart]);
 
   useEffect(() => {
     let cancelled = false;
@@ -412,10 +528,10 @@ export default function ExecutiveWeekCalendar({
     if (!currentDraft?.dayKey) return currentDraft;
     const column = document.querySelector(`[data-calendar-day="${currentDraft.dayKey}"]`);
     if (!column) return currentDraft;
-    const slotRect = computeSlotRect(column, currentDraft.startAt, currentDraft.endAt, GRID_BODY_HEIGHT_PX);
+    const slotRect = computeSlotRect(column, currentDraft.startAt, currentDraft.endAt, gridBodyHeight);
     if (!slotRect) return currentDraft;
     return { ...currentDraft, slotRect };
-  }, []);
+  }, [gridBodyHeight]);
 
   const handleSlotClick = useCallback((event, day) => {
     if (event.target.closest('[data-calendar-event]')) return;
@@ -425,7 +541,7 @@ export default function ExecutiveWeekCalendar({
     const startAt = slotFromPointer(day, offsetY, rect.height);
     const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
     const dayKey = day.toISOString();
-    const slotRect = computeSlotRect(column, startAt, endAt, GRID_BODY_HEIGHT_PX);
+    const slotRect = computeSlotRect(column, startAt, endAt, gridBodyHeight);
     setDraft({
       day,
       dayKey,
@@ -434,7 +550,7 @@ export default function ExecutiveWeekCalendar({
       title: '',
       slotRect,
     });
-  }, []);
+  }, [gridBodyHeight]);
 
   useEffect(() => {
     if (!draft) return undefined;
@@ -493,7 +609,7 @@ export default function ExecutiveWeekCalendar({
 
   const eventsByDay = useMemo(() => {
     const map = new Map();
-    for (const day of weekDays) {
+    for (const day of periodDays) {
       map.set(
         day.toDateString(),
         appointments.filter((appt) => {
@@ -503,18 +619,20 @@ export default function ExecutiveWeekCalendar({
       );
     }
     return map;
-  }, [appointments, weekDays]);
+  }, [appointments, periodDays]);
 
   const goToday = () => {
     const todayDate = startOfDay(new Date());
-    const start = startOfWeek(todayDate);
+    const start = normalizePeriodStart(todayDate, viewMode);
     let direction = null;
     if (start.getTime() > weekStart.getTime()) direction = 'forward';
     else if (start.getTime() < weekStart.getTime()) direction = 'backward';
     setFocusedDay(todayDate);
     setSidebarMonth(todayDate);
-    changeWeek(start, direction);
+    changePeriod(start, direction);
   };
+
+  const navLabel = viewConfig.label.toLowerCase();
 
   const scrollToNow = useCallback(() => {
     const el = gridScrollRef.current;
@@ -539,7 +657,8 @@ export default function ExecutiveWeekCalendar({
 
         <MiniMonth
           anchorDate={sidebarMonth}
-          weekStart={weekStart}
+          periodStart={weekStart}
+          viewMode={viewMode}
           focusedDay={focusedDay}
           onPickDate={handlePickDate}
           onMonthChange={setSidebarMonth}
@@ -570,27 +689,25 @@ export default function ExecutiveWeekCalendar({
           <div className="flex items-center gap-0.5">
             <IconButton
               icon={ChevronLeft}
-              label="Previous week"
-              tooltip="Previous week"
+              label={`Previous ${navLabel}`}
+              tooltip={`Previous ${navLabel}`}
               variant="ghost"
               size="sm"
               className="text-white/85 hover:bg-white/10 hover:text-white"
-              onClick={() => changeWeek(addWeeks(weekStart, -1), 'backward')}
+              onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, -1), 'backward')}
             />
             <IconButton
               icon={ChevronRight}
-              label="Next week"
-              tooltip="Next week"
+              label={`Next ${navLabel}`}
+              tooltip={`Next ${navLabel}`}
               variant="ghost"
               size="sm"
               className="text-white/85 hover:bg-white/10 hover:text-white"
-              onClick={() => changeWeek(addWeeks(weekStart, 1), 'forward')}
+              onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, 1), 'forward')}
             />
           </div>
-          <h2 className="text-lg font-semibold tracking-tight text-white">{formatWeekRange(weekStart)}</h2>
-          <span className="ml-auto rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-white/20">
-            Week
-          </span>
+          <h2 className="text-lg font-semibold tracking-tight text-white">{formatPeriodRange(weekStart, viewMode)}</h2>
+          <ViewModeSelect value={viewMode} onChange={handleViewModeChange} />
         </div>
 
         {loading ? (
@@ -599,40 +716,49 @@ export default function ExecutiveWeekCalendar({
           </div>
         ) : (
           <div
-            key={weekStart.toISOString()}
-            className={`flex shrink-0 flex-col ${
-              weekSlideDirection === 'forward'
-                ? 'animate-gcal-week-forward'
-                : weekSlideDirection === 'backward'
-                  ? 'animate-gcal-week-backward'
-                  : ''
+            key={`${viewMode}-${weekStart.toISOString()}`}
+            className={`gcal-period-shell flex shrink-0 flex-col ${
+              viewAnimClass
+                || (weekSlideDirection === 'forward'
+                  ? 'animate-gcal-week-forward'
+                  : weekSlideDirection === 'backward'
+                    ? 'animate-gcal-week-backward'
+                    : '')
             }`}
           >
             {/* Day headers — fixed above scroll so they never cover hour rows */}
             <div
               ref={dayHeadersRef}
-              className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50"
+              className={`shrink-0 grid border-b border-gray-200 bg-gray-50 ${periodDays.length > 7 ? 'overflow-x-auto' : ''}`}
+              style={{
+                gridTemplateColumns,
+                minWidth: periodDays.length > 7 ? `${56 + periodDays.length * viewConfig.minDayWidth}px` : undefined,
+              }}
             >
               <button
                 type="button"
                 onClick={scrollToNow}
-                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-cyan-50 hover:text-cyan-700"
+                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-navy-50 hover:text-navy-700"
                 aria-label="Jump to current time"
                 title="Jump to current time"
               >
                 <Clock size={16} strokeWidth={2} aria-hidden="true" />
               </button>
-              {weekDays.map((day) => {
+              {periodDays.map((day) => {
                 const { weekday, day: dayNum, isToday } = formatDayHeader(day, now);
                 const isFocused = isSameDay(day, focusedDay);
                 return (
-                  <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2.5 text-center">
-                    <p className="text-[11px] font-medium text-gray-500">{weekday}</p>
-                    <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                  <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2 text-center">
+                    <p className={`font-medium text-gray-500 ${compactHeaders ? 'text-[9px]' : 'text-[11px]'}`}>
+                      {compactHeaders ? weekday.charAt(0) : weekday}
+                    </p>
+                    <p className={`mt-0.5 inline-flex items-center justify-center rounded-full font-semibold ${
+                      compactHeaders ? 'h-6 w-6 text-[11px]' : 'mt-1 h-8 w-8 text-sm'
+                    } ${
                       isToday
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-navy-900 text-white'
                         : isFocused
-                          ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500'
+                          ? 'bg-navy-100 text-navy-800 ring-2 ring-navy-600'
                           : 'text-gray-800'
                     }`}
                     >
@@ -646,67 +772,69 @@ export default function ExecutiveWeekCalendar({
             {/* Time grid — viewport height matches sidebar baseline on desktop */}
             <div
               ref={gridScrollRef}
-              className="shrink-0 overflow-y-auto overflow-x-hidden"
+              className={`shrink-0 overflow-y-auto ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
               style={{ height: `${gridViewportHeight}px` }}
             >
               <div
-                className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"
-                style={{ height: `${GRID_SCROLL_HEIGHT_PX}px` }}
+                className={`gcal-period-grid relative grid ${viewAnimClass || ''}`}
+                style={{
+                  gridTemplateColumns,
+                  height: `${gridScrollHeight}px`,
+                  minWidth: `${56 + periodDays.length * viewConfig.minDayWidth}px`,
+                }}
               >
                 {/* Current hour band across the grid */}
                 {nowLinePx != null && currentHour >= CALENDAR_START_HOUR && currentHour < CALENDAR_END_HOUR && (
                   <div
                     className="pointer-events-none absolute inset-x-0 z-[5] bg-gradient-to-r from-cyan-50/90 via-sky-50/60 to-cyan-50/20"
                     style={{
-                      top: `${hourLabelTop(currentHour)}px`,
-                      height: `${HOUR_HEIGHT_PX}px`,
+                      top: `${hourLabelTop(currentHour, viewConfig.hourHeight)}px`,
+                      height: `${viewConfig.hourHeight}px`,
                     }}
                     aria-hidden="true"
                   />
                 )}
 
                 {/* Hour labels */}
-                <div className="relative z-10 border-r border-gray-200 bg-gray-50/95">
+                <div className="relative z-10 overflow-hidden border-r border-gray-200 bg-gray-50/95">
                   {HOUR_LABELS.map((hour) => {
                     const isCurrentHour = hour === currentHour;
                     return (
                       <div
                         key={hour}
-                        className={`absolute right-2 text-[11px] leading-none ${
+                        className={`absolute inset-x-0 px-1 text-right leading-tight ${
                           isCurrentHour
-                            ? 'font-bold text-[#0f294d]'
-                            : 'font-medium text-gray-400'
+                            ? 'text-[10px] font-bold text-navy-900 tabular-nums'
+                            : 'text-[11px] font-medium leading-none text-gray-400'
                         }`}
                         style={{
-                          top: `${hourLabelTop(hour)}px`,
+                          top: `${hourLabelTop(hour, viewConfig.hourHeight)}px`,
                           transform: hour === CALENDAR_START_HOUR ? 'translateY(2px)' : 'translateY(-50%)',
                         }}
                       >
-                        {formatHourLabel(hour)}
+                        {isCurrentHour ? (
+                          <>
+                            <span className="block whitespace-nowrap">{gutterLiveTime.clock}</span>
+                            {gutterLiveTime.period && (
+                              <span className="mt-0.5 block text-[9px] font-semibold leading-none text-navy-700">
+                                {gutterLiveTime.period}
+                              </span>
+                            )}
+                          </>
+                        ) : formatHourLabel(hour)}
                       </div>
                     );
                   })}
                   <div
-                    className="absolute right-2 text-[11px] leading-none font-medium text-gray-400"
-                    style={{ top: `${GRID_BODY_HEIGHT_PX}px`, transform: 'translateY(-50%)' }}
+                    className="absolute inset-x-0 px-1 text-right text-[11px] leading-none font-medium text-gray-400"
+                    style={{ top: `${gridBodyHeight}px`, transform: 'translateY(-50%)' }}
                   >
                     {formatHourLabel(CALENDAR_END_HOUR)}
                   </div>
-
-                  {nowLinePx != null && (
-                    <div
-                      className="pointer-events-none absolute inset-x-0 z-30 flex items-center justify-end pr-1"
-                      style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
-                    >
-                      <span className="rounded bg-gradient-to-r from-[#0f294d] to-cyan-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
-                        {formatCurrentTimeLabel(now)}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Day columns */}
-                {weekDays.map((day) => {
+                {periodDays.map((day) => {
                   const dayEvents = eventsByDay.get(day.toDateString()) || [];
                   const isToday = isSameDay(day, now);
 
@@ -718,7 +846,7 @@ export default function ExecutiveWeekCalendar({
                     >
                       <div
                         className="absolute inset-x-0 top-0 cursor-pointer"
-                        style={{ height: `${GRID_BODY_HEIGHT_PX}px` }}
+                        style={{ height: `${gridBodyHeight}px` }}
                         onClick={(event) => handleSlotClick(event, day)}
                       >
                       {HOURS.map((hour) => (
@@ -760,16 +888,16 @@ export default function ExecutiveWeekCalendar({
                         const color = eventColor(appt.classification, appt.visit_status);
                         const time = layout.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
                         const heightPct = parseFloat(String(layout.height).replace('%', ''));
-                        const showMeta = heightPct > 7;
+                        const showMeta = !compactHeaders && heightPct > 7;
 
                         const content = (
                           <div
                             data-calendar-event
-                            className={`absolute inset-x-1 z-10 overflow-hidden rounded-md border px-1.5 py-0.5 text-left shadow-sm ${color}`}
+                            className={`absolute z-10 overflow-hidden rounded-md border py-0.5 text-left shadow-sm ${color} ${compactHeaders ? 'inset-x-0.5 px-0.5' : 'inset-x-1 px-1.5'}`}
                             style={{ top: layout.top, height: layout.height, minHeight: '22px' }}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <p className="text-[11px] font-semibold truncate leading-tight">{appt.visitor_name || appt.title}</p>
+                            <p className={`font-semibold truncate leading-tight ${compactHeaders ? 'text-[9px]' : 'text-[11px]'}`}>{appt.visitor_name || appt.title}</p>
                             {showMeta && (
                               <p className="text-[10px] opacity-80 truncate leading-tight">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
                             )}
@@ -812,4 +940,4 @@ export default function ExecutiveWeekCalendar({
   );
 }
 
-export { startOfWeek, weekQueryRange };
+export { startOfWeek, weekQueryRange, periodQueryRange, normalizePeriodStart };

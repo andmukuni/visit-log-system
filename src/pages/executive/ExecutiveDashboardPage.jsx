@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActionToolbar, Spinner } from '../../components/ui';
-import ExecutiveWeekCalendar, { startOfWeek, weekQueryRange } from '../../components/executive/ExecutiveWeekCalendar';
+import ExecutiveWeekCalendar, { startOfWeek, periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
 import { executiveApi } from '../../utils/visitorApi';
 import { useAuth } from '../../context/AuthContext';
 import { useRegisterPageHeader } from '../../context/PageHeaderContext';
@@ -23,6 +23,7 @@ async function fetchWithRetry(fn, attempts = 2) {
 export default function ExecutiveDashboardPage() {
   const { isAuthenticated, permissions } = useAuth();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [viewMode, setViewMode] = useState('week');
   const [dashboard, setDashboard] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export default function ExecutiveDashboardPage() {
     setLoading(true);
     setError('');
 
-    const range = weekQueryRange(weekStart);
+    const range = periodQueryRange(weekStart, viewMode);
     let dashboardData = null;
     let weekAppointments = [];
     const errors = [];
@@ -58,7 +59,7 @@ export default function ExecutiveDashboardPage() {
     setAppointments(weekAppointments);
     setError(errors.join(' '));
     setLoading(false);
-  }, [weekStart, isAuthenticated]);
+  }, [weekStart, viewMode, isAuthenticated]);
 
   useEffect(() => {
     load();
@@ -66,6 +67,11 @@ export default function ExecutiveDashboardPage() {
 
   const executive = dashboard?.executive || {};
   const kpis = dashboard?.kpis || {};
+
+  const handleViewModeChange = useCallback((nextMode) => {
+    setViewMode(nextMode);
+    setWeekStart((current) => normalizePeriodStart(current, nextMode));
+  }, []);
 
   useRegisterPageHeader({ actions: <ActionToolbar /> });
 
@@ -98,6 +104,8 @@ export default function ExecutiveDashboardPage() {
         appointments={appointments}
         loading={loading}
         weekStart={weekStart}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
         onWeekChange={setWeekStart}
         onRefresh={load}
       />

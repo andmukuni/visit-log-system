@@ -276,6 +276,46 @@ body {
   animation: gcalSlotAppear 0.18s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
+@keyframes gcalViewExpand {
+  from {
+    opacity: 0.68;
+    transform: scaleX(0.96);
+    transform-origin: left center;
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes gcalViewShrink {
+  from {
+    opacity: 0.68;
+    transform: scaleX(1.04);
+    transform-origin: left center;
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.animate-gcal-view-expand {
+  animation: gcalViewExpand 0.34s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.animate-gcal-view-shrink {
+  animation: gcalViewShrink 0.34s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.gcal-period-grid {
+  transition: height 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gcal-period-shell {
+  transition: opacity 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+
 @keyframes gcalWeekSlideForward {
   from {
     opacity: 0.55;

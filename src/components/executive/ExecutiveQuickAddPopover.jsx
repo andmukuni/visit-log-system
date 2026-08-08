@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Calendar,
@@ -13,6 +13,7 @@ import { LoadingButton } from '../ui';
 import {
   addMinutes,
   applyTimeToDate,
+  clampPopoverToViewport,
   computeQuickAddPopoverPosition,
   DEFAULT_EVENT_MINUTES,
   formatLongDate,
@@ -41,11 +42,14 @@ export default function ExecutiveQuickAddPopover({
 }) {
   const [form, setForm] = useState(initialForm);
   const [visible, setVisible] = useState(false);
+  const [viewportPosition, setViewportPosition] = useState(null);
+  const popoverRef = useRef(null);
 
   useEffect(() => {
     if (!draft) {
       setForm(initialForm());
       setVisible(false);
+      setViewportPosition(null);
       return;
     }
     setForm({
@@ -70,7 +74,41 @@ export default function ExecutiveQuickAddPopover({
     [draft?.slotRect],
   );
 
+  const syncViewportPosition = () => {
+    if (!position || !popoverRef.current) return;
+
+    const rect = popoverRef.current.getBoundingClientRect();
+    const next = clampPopoverToViewport({
+      left: position.left,
+      top: position.top,
+      width: position.width,
+      height: rect.height,
+    });
+
+    setViewportPosition((current) => (
+      current?.left === next.left && current?.top === next.top ? current : next
+    ));
+  };
+
+  useLayoutEffect(() => {
+    if (!draft || !position || !visible) return undefined;
+
+    syncViewportPosition();
+
+    const onViewportChange = () => syncViewportPosition();
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+
+    return () => {
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+    };
+  }, [draft, position, visible, form.allDay]);
+
   if (!draft || !position) return null;
+
+  const renderedLeft = viewportPosition?.left ?? position.left;
+  const renderedTop = viewportPosition?.top ?? position.top;
 
   const startAt = draft.startAt;
   const endAt = draft.endAt;
@@ -125,22 +163,24 @@ export default function ExecutiveQuickAddPopover({
         onClick={onClose}
       />
       <div
+        ref={popoverRef}
         style={{
           position: 'fixed',
-          left: position.left,
-          top: position.top,
+          left: renderedLeft,
+          top: renderedTop,
           width: position.width,
+          maxHeight: position.maxHeight,
           zIndex: 60,
         }}
-        className={`rounded-3xl border border-gray-200/80 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-hidden ${
+        className={`flex max-h-[calc(100vh-24px)] flex-col rounded-3xl border border-gray-200/80 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-hidden ${
           visible
             ? (position.placement === 'left' ? 'animate-gcal-popover' : 'animate-gcal-popover-right')
             : 'opacity-0'
         }`}
         onClick={(event) => event.stopPropagation()}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="flex items-center justify-between px-4 pt-3">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between px-4 pt-3">
             <GripHorizontal size={18} className="text-gray-300" aria-hidden="true" />
             <button
               type="button"
@@ -152,7 +192,7 @@ export default function ExecutiveQuickAddPopover({
             </button>
           </div>
 
-          <div className="px-5 pb-2">
+          <div className="shrink-0 px-5 pb-2">
             <input
               autoFocus
               value={form.title}
@@ -166,7 +206,7 @@ export default function ExecutiveQuickAddPopover({
             />
           </div>
 
-          <div className="px-5 pb-1">
+          <div className="shrink-0 px-5 pb-1">
             <div className="inline-flex rounded-full bg-[#e8f0fe] p-1 text-sm">
               <span className="rounded-full bg-[#d2e3fc] px-4 py-1.5 font-medium text-[#1967d2]">
                 Appointment
@@ -174,7 +214,7 @@ export default function ExecutiveQuickAddPopover({
             </div>
           </div>
 
-          <div className="space-y-3 px-5 py-3 max-h-[52vh] overflow-y-auto">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-3">
             <div className="flex items-start gap-3">
               <Clock size={18} className="mt-3 shrink-0 text-gray-500" />
               <div className="flex-1 space-y-2">
@@ -282,7 +322,7 @@ export default function ExecutiveQuickAddPopover({
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+          <div className="flex shrink-0 items-center justify-between border-t border-gray-100 px-5 py-3">
             <button
               type="button"
               className="text-sm font-medium text-[#1a73e8] hover:underline"
