@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, RefreshCw, User, UserCheck } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import { executiveApi } from '../../utils/visitorApi';
@@ -114,14 +114,71 @@ function MiniMonth({ anchorDate, weekStart, onPickDate, onMonthChange }) {
   );
 }
 
-function SidebarStat({ label, value, hint }) {
+const GLANCE_ACCENTS = {
+  sky: {
+    iconWrap: 'bg-sky-100 text-sky-700',
+    value: 'text-sky-950',
+  },
+  violet: {
+    iconWrap: 'bg-violet-100 text-violet-700',
+    value: 'text-violet-950',
+  },
+  emerald: {
+    iconWrap: 'bg-emerald-100 text-emerald-700',
+    value: 'text-emerald-950',
+  },
+  amber: {
+    iconWrap: 'bg-amber-100 text-amber-700',
+    value: 'text-amber-950',
+  },
+};
+
+const GLANCE_ITEMS = [
+  { key: 'todayAppointments', label: 'Today', icon: CalendarCheck, accent: 'sky' },
+  { key: 'weekAppointments', label: 'This week', icon: CalendarDays, accent: 'violet' },
+  { key: 'onSiteNow', label: 'On-site', icon: UserCheck, accent: 'emerald' },
+  { key: 'pendingApprovals', label: 'Pending', icon: Clock3, accent: 'amber' },
+];
+
+function ExecutiveGlancePanel({ kpis = {} }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-xl font-semibold text-gray-900">{value}</p>
-      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+    <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
+      <div className="border-b border-navy-100 bg-gradient-to-r from-navy-50/90 to-white px-3.5 py-2.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">At a glance</p>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-y divide-navy-100/80">
+        {GLANCE_ITEMS.map(({ key, label, icon: Icon, accent }) => {
+          const value = Number(kpis[key] ?? 0);
+          const theme = GLANCE_ACCENTS[accent];
+          const highlight = key === 'pendingApprovals' && value > 0;
+
+          return (
+            <div key={key} className="group p-3 transition-colors hover:bg-navy-50/40">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] font-medium leading-tight text-navy-500">{label}</p>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.iconWrap}`}>
+                  <Icon size={14} strokeWidth={2.25} aria-hidden="true" />
+                </span>
+              </div>
+              <p className={`mt-2 text-2xl font-bold tabular-nums tracking-tight ${theme.value}`}>
+                {value}
+              </p>
+              {highlight && (
+                <p className="mt-1 text-[10px] font-medium text-amber-700">Needs review</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+function executiveInitials(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 export default function ExecutiveWeekCalendar({
@@ -282,10 +339,15 @@ export default function ExecutiveWeekCalendar({
     <div className="flex flex-col lg:flex-row gap-4 min-h-0">
       {/* Left sidebar — Google Calendar style */}
       <aside className="w-full lg:w-64 shrink-0 space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
-            <p className="font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
+              {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
+              <p className="truncate font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
+            </div>
           </div>
           {onRefresh && (
             <IconButton icon={RefreshCw} label="Refresh" tooltip="Refresh" variant="ghost" size="sm" onClick={onRefresh} />
@@ -302,22 +364,26 @@ export default function ExecutiveWeekCalendar({
           onMonthChange={setSidebarMonth}
         />
 
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">At a glance</p>
-          <div className="grid grid-cols-2 gap-2">
-            <SidebarStat label="Today" value={kpis.todayAppointments ?? 0} />
-            <SidebarStat label="This week" value={kpis.weekAppointments ?? 0} />
-            <SidebarStat label="On-site" value={kpis.onSiteNow ?? 0} />
-            <SidebarStat label="Pending" value={kpis.pendingApprovals ?? 0} />
-          </div>
-        </div>
+        <ExecutiveGlancePanel kpis={kpis} />
 
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Legend</p>
-          <div className="space-y-1.5 text-xs text-gray-600">
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-blue-200 border border-blue-300" /> Standard visitor</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-purple-200 border border-purple-300" /> VIP / VVIP</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-orange-100 border border-orange-300" /> Pending approval</div>
+          <div className="space-y-2 text-xs text-gray-600">
+            <div className="flex items-center gap-2.5">
+              <span className="h-3.5 w-3.5 shrink-0 rounded-sm bg-blue-600 shadow-sm ring-1 ring-blue-700/40" />
+              Standard visitor
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="flex shrink-0 gap-0.5">
+                <span className="h-3.5 w-3.5 rounded-sm bg-violet-600 shadow-sm ring-1 ring-violet-700/40" />
+                <span className="h-3.5 w-3.5 rounded-sm bg-amber-500 shadow-sm ring-1 ring-amber-600/40" />
+              </span>
+              VIP / VVIP
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="h-3.5 w-3.5 shrink-0 rounded-sm bg-orange-500 shadow-sm ring-1 ring-orange-600/40" />
+              Pending approval
+            </div>
           </div>
         </div>
 
