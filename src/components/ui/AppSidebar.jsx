@@ -306,7 +306,7 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
       }`}
     >
       <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-800 px-5 sm:px-6">
-        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-3 min-w-0">
+        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management' : (title || APP_NAME)} className="flex items-center gap-3 min-w-0">
           <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${executiveTheme ? 'h-10 w-10' : 'h-11 w-11'}`}>
             <img
               src={LOGO_PATH}
@@ -318,9 +318,8 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
             />
           </span>
           {executiveTheme ? (
-            <span className="min-w-0 leading-tight">
-              <span className="block text-sm font-black uppercase tracking-[0.06em] text-white sm:text-[15px]">Visitor Management</span>
-              <span className="mt-0.5 block text-xs font-medium tracking-wide text-amber-400">Executive Portal</span>
+            <span className="min-w-0 truncate text-sm font-black uppercase tracking-[0.06em] text-white sm:text-[15px]">
+              Visitor Management
             </span>
           ) : (
             <span className="truncate text-2xl font-black uppercase leading-none tracking-tight text-white">
