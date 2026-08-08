@@ -147,6 +147,10 @@ export function createExecutiveRouter() {
               `AND vis.status IN ('completed', 'checked_out')
                AND vis.updated_at >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`,
             ),
+            completedThisMonth: await countVisits(
+              `AND vis.status IN ('completed', 'checked_out')
+               AND vis.updated_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+            ),
           },
           nextAppointment: nextAppointment || null,
           todaySchedule,
@@ -168,39 +172,168 @@ export function createExecutiveRouter() {
       const orgId = ctx.scope.organisation_id;
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
-      const window = String(req.query.window || 'upcoming').toLowerCase();
+      const baseParams = [orgId, hostId, userId];
+
+      const appointmentSelect = `
+        SELECT a.id, a.title, a.scheduled_at, a.status,
+               vis.id AS visit_id, vis.status AS visit_status, vis.purpose, vis.pass_code,
+               v.full_name AS visitor_name, v.company, v.phone, v.email,
+               h.name AS host_name,
+               s.name AS site_name,
+               COALESCE(vc.classification, 'standard') AS classification,
+               vc.name AS category_name,
+               COALESCE(vc.default_duration_minutes, 60) AS duration_minutes
+        FROM appointments a
+        INNER JOIN visits vis ON vis.id = a.visit_id
+        INNER JOIN visitors v ON v.id = vis.visitor_id
+        LEFT JOIN hosts h ON h.id = vis.host_id
+        LEFT JOIN sites s ON s.id = vis.site_id
+        LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
+        WHERE a.organisation_id = ? AND ${hostVisitFilter('vis')}
+      `;
+
       const from = String(req.query.from || '').trim();
       const to = String(req.query.to || '').trim();
+      const isListMode = req.query.tab != null
+        || req.query.page != null
+        || req.query.search != null
+        || req.query.list === '1';
 
-      let dateFilter = 'AND a.scheduled_at >= CURDATE()';
-      if (window === 'today') dateFilter = 'AND DATE(a.scheduled_at) = CURDATE()';
-      if (window === 'past') dateFilter = 'AND a.scheduled_at < NOW()';
-      if (from && to) {
-        dateFilter = 'AND a.scheduled_at >= ? AND a.scheduled_at < ?';
+      if (!isListMode) {
+        const window = String(req.query.window || 'upcoming').toLowerCase();
+        let dateFilter = 'AND a.scheduled_at >= CURDATE()';
+        if (window === 'today') dateFilter = 'AND DATE(a.scheduled_at) = CURDATE()';
+        if (window === 'past') dateFilter = 'AND a.scheduled_at < NOW()';
+        if (from && to) {
+          dateFilter = 'AND a.scheduled_at >= ? AND a.scheduled_at < ?';
+        }
+
+        const queryParams = [...baseParams];
+        if (from && to) {
+          queryParams.push(`${from} 00:00:00`, `${to} 00:00:00`);
+        }
+
+        const [rows] = await pool.query(
+          `${appointmentSelect}
+           ${dateFilter}
+           ORDER BY a.scheduled_at ASC
+           LIMIT 100`,
+          queryParams,
+        );
+
+        return res.json({ ok: true, data: rows });
       }
 
-      const queryParams = [orgId, hostId, userId];
-      if (from && to) {
-        queryParams.push(`${from} 00:00:00`, `${to} 00:00:00`);
+      const tab = String(req.query.tab || 'all').toLowerCase();
+      const search = String(req.query.search || '').trim().toLowerCase();
+      const classification = String(req.query.classification || '').trim().toLowerCase();
+      const statusFilter = String(req.query.status || '').trim().toLowerCase();
+      const dateRange = String(req.query.range || '').trim().toLowerCase();
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize) || 10));
+
+      let filters = '';
+      const filterParams = [];
+
+      if (tab === 'awaiting') {
+        filters += ` AND vis.status IN ('pending_approval', 'pre_registered')`;
+      } else if (tab === 'today') {
+        filters += ` AND DATE(a.scheduled_at) = CURDATE()`;
+      } else if (tab === 'week') {
+        filters += ` AND a.scheduled_at >= CURDATE() AND a.scheduled_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+      } else if (tab === 'month') {
+        filters += ` AND YEAR(a.scheduled_at) = YEAR(CURDATE()) AND MONTH(a.scheduled_at) = MONTH(CURDATE())`;
+      } else if (tab === 'completed') {
+        filters += ` AND vis.status IN ('completed', 'checked_out')`;
+      } else if (tab === 'cancelled') {
+        filters += ` AND vis.status IN ('cancelled', 'rejected')`;
       }
+
+      if (dateRange === 'today') {
+        filters += ` AND DATE(a.scheduled_at) = CURDATE()`;
+      } else if (dateRange === 'week') {
+        filters += ` AND a.scheduled_at >= CURDATE() AND a.scheduled_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+      } else if (dateRange === 'month') {
+        filters += ` AND YEAR(a.scheduled_at) = YEAR(CURDATE()) AND MONTH(a.scheduled_at) = MONTH(CURDATE())`;
+      }
+
+      if (classification) {
+        filters += ` AND LOWER(COALESCE(vc.classification, 'standard')) = ?`;
+        filterParams.push(classification);
+      }
+
+      if (statusFilter) {
+        filters += ` AND LOWER(vis.status) = ?`;
+        filterParams.push(statusFilter);
+      }
+
+      if (search) {
+        filters += ` AND (
+          LOWER(v.full_name) LIKE ?
+          OR LOWER(v.company) LIKE ?
+          OR LOWER(vis.purpose) LIKE ?
+          OR LOWER(a.title) LIKE ?
+          OR LOWER(h.name) LIKE ?
+          OR LOWER(v.phone) LIKE ?
+        )`;
+        const like = `%${search}%`;
+        filterParams.push(like, like, like, like, like, like);
+      }
+
+      const countSql = `
+        SELECT COUNT(*) AS count
+        FROM appointments a
+        INNER JOIN visits vis ON vis.id = a.visit_id
+        INNER JOIN visitors v ON v.id = vis.visitor_id
+        LEFT JOIN hosts h ON h.id = vis.host_id
+        LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
+        WHERE a.organisation_id = ? AND ${hostVisitFilter('vis')}
+        ${filters}
+      `;
+
+      const [[totalRow]] = await pool.query(countSql, [...baseParams, ...filterParams]);
+      const total = Number(totalRow?.count || 0);
+      const offset = (page - 1) * pageSize;
 
       const [rows] = await pool.query(
-        `SELECT a.id, a.title, a.scheduled_at, a.status,
-                vis.id AS visit_id, vis.status AS visit_status, vis.purpose, vis.pass_code,
-                v.full_name AS visitor_name, v.company, v.phone,
-                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name
-         FROM appointments a
-         INNER JOIN visits vis ON vis.id = a.visit_id
-         INNER JOIN visitors v ON v.id = vis.visitor_id
-         LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
-         WHERE a.organisation_id = ? AND ${hostVisitFilter('vis')}
-         ${dateFilter}
-         ORDER BY a.scheduled_at ASC
-         LIMIT 100`,
-        queryParams,
+        `${appointmentSelect}
+         ${filters}
+         ORDER BY a.scheduled_at DESC
+         LIMIT ? OFFSET ?`,
+        [...baseParams, ...filterParams, pageSize, offset],
       );
 
-      return res.json({ ok: true, data: rows });
+      const countByTab = async (extra = '') => {
+        const [[row]] = await pool.query(
+          `SELECT COUNT(*) AS count
+           FROM appointments a
+           INNER JOIN visits vis ON vis.id = a.visit_id
+           WHERE a.organisation_id = ? AND ${hostVisitFilter('vis')}
+           ${extra}`,
+          baseParams,
+        );
+        return Number(row?.count || 0);
+      };
+
+      const stats = {
+        today: await countByTab('AND DATE(a.scheduled_at) = CURDATE()'),
+        week: await countByTab(
+          'AND a.scheduled_at >= CURDATE() AND a.scheduled_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)',
+        ),
+        awaiting: await countByTab(`AND vis.status IN ('pending_approval', 'pre_registered')`),
+        all: await countByTab(''),
+      };
+
+      return res.json({
+        ok: true,
+        data: {
+          rows,
+          total,
+          page,
+          pageSize,
+          stats,
+        },
+      });
     } catch (error) {
       console.error('[executive/appointments]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to load appointments.' });

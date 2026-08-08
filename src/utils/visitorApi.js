@@ -223,6 +223,10 @@ export const executiveApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/executive/appointments${qs ? `?${qs}` : ''}`);
   },
+  listAppointments: (params = {}) => {
+    const qs = new URLSearchParams({ list: '1', ...params }).toString();
+    return apiFetch(`/admin/executive/appointments?${qs}`);
+  },
   createAppointment: (payload) => apiFetch('/admin/executive/appointments', {
     method: 'POST',
     body: JSON.stringify(payload),

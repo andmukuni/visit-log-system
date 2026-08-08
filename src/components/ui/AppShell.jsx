@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
@@ -28,13 +28,14 @@ function getShellBreadcrumbs() {
 
 function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
   const location = useLocation();
+  const mainRef = useRef(null);
   const { user } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
   const shellBreadcrumbs = getShellBreadcrumbs();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
   }, [location.pathname]);
 
   return (
@@ -47,8 +48,8 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
         />
       )}
 
-      <div className="md:ml-[var(--sidebar-width)] flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 flex h-24 shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-transparent px-4 sm:px-6">
+      <div className="md:ml-[var(--sidebar-width)] flex h-screen min-h-0 flex-col overflow-hidden">
+        <header className="z-30 flex h-24 shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-navy-50 px-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
@@ -81,8 +82,11 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
           </div>
         </header>
 
-        <div className="flex flex-1">
-          <main className="min-w-0 flex-1 overflow-x-clip">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <main
+            ref={mainRef}
+            className="min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain"
+          >
             <div className="p-4 sm:p-6 lg:px-8 pb-6 pt-4">
               <Suspense fallback={<PortalOutletLoader />}>
                 <Outlet />
@@ -134,7 +138,7 @@ function ShellBody({ portalId, title }) {
 
   return (
     <SidebarProvider portalId={portalId}>
-      <div className="min-h-screen bg-navy-50">
+      <div className="h-screen overflow-hidden bg-navy-50">
         <AppSidebar
           title={title}
           sidebarOpen={sidebarOpen}
