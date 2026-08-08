@@ -596,7 +596,7 @@ export default function ExecutiveWeekCalendar({
           compact={sidebarCompact}
         />
 
-        <ExecutiveGlancePanel kpis={kpis} compact={sidebarCompact} />
+        <ExecutiveGlancePanel kpis={kpis} compact />
 
         <ExecutiveNextAppointmentCard
           appointment={nextAppointment}
