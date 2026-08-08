@@ -79,6 +79,10 @@ export default function ExecutiveQuickAddPopover({
         siteId: referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '',
       });
       openedSessionIdRef.current = draft.sessionId;
+      if (draft.openFullEditor) {
+        setShowFullEditor(true);
+        return undefined;
+      }
       const frame = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(frame);
     }
@@ -226,7 +230,10 @@ export default function ExecutiveQuickAddPopover({
         referenceData={referenceData}
         appointments={appointments}
         saving={saving}
-        onClose={() => setShowFullEditor(false)}
+        onClose={() => {
+          setShowFullEditor(false);
+          if (draft?.openFullEditor) onClose();
+        }}
         onSave={onSave}
         onDraftChange={onDraftChange}
       />

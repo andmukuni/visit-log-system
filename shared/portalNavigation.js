@@ -49,7 +49,7 @@ export const PORTALS = {
     id: 'executive',
     label: 'Executive Portal',
     routePrefix: '/executive',
-    navSections: { primary: 'My Office' },
+    navSections: { primary: '' },
   },
   management: {
     id: 'management',
@@ -156,10 +156,10 @@ export const PORTAL_NAVIGATION = {
   ],
   executive: [
     { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
-    { key: 'appointments', name: 'My Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
-    { key: 'visitors', name: 'My Visitors', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
-    { key: 'contacts', name: 'My Contacts', to: '/executive/contacts', permission: 'executive.contacts', section: 'primary' },
-    { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary' },
+    { key: 'calendar', name: 'My Calendar', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
+    { key: 'appointments', name: 'Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
+    { key: 'register', name: 'Visitor Register', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
+    { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary', badgeKey: 'notifications' },
   ],
   management: [
     { key: 'dashboard', name: 'Executive Dashboard', to: '/management', permission: 'management.dashboard', end: true, section: 'primary' },

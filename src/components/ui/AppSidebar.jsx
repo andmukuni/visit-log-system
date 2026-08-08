@@ -8,13 +8,16 @@ import { PORTALS } from '../../../shared/portalNavigation.js';
 import { APP_NAME, SIDEBAR_BRAND_NAME, LOGO_PATH } from '../../../shared/branding.js';
 import { useSidebarNav } from '../../context/SidebarContext';
 import { useAuth } from '../../context/AuthContext';
+import { notificationsApi } from '../../utils/visitorApi';
 
-const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentIndex = 0 }) {
+const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentIndex = 0, executiveTheme = false }) {
   return (
     <span
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm transition-colors ${
         isActive
-          ? `${getKpiAccentBgClass(accentIndex)} text-navy-950`
+          ? executiveTheme
+            ? 'bg-amber-400/20 text-amber-300'
+            : `${getKpiAccentBgClass(accentIndex)} text-navy-950`
           : 'border border-navy-700 bg-navy-900 text-navy-400 group-hover:border-navy-600 group-hover:bg-navy-800 group-hover:text-navy-200'
       }`}
     >
@@ -23,7 +26,13 @@ const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentI
   );
 });
 
-const SidebarNavLink = memo(function SidebarNavLink({ item, onNavigate, accentIndex = 0 }) {
+const SidebarNavLink = memo(function SidebarNavLink({
+  item,
+  onNavigate,
+  accentIndex = 0,
+  executiveTheme = false,
+  badgeCount = 0,
+}) {
   return (
     <NavLink
       to={item.to}
@@ -31,18 +40,29 @@ const SidebarNavLink = memo(function SidebarNavLink({ item, onNavigate, accentIn
       onClick={() => onNavigate?.()}
       aria-label={item.name}
       className={({ isActive }) =>
-        `group flex items-center gap-3 -mx-4 py-2.5 pl-7 pr-4 text-sm font-medium transition-colors rounded-r-xl ${
+        `group relative flex items-center gap-3 -mx-4 py-2.5 pl-7 pr-4 text-sm font-medium transition-colors rounded-r-xl ${
           isActive
-            ? 'bg-cyan-600/10 text-cyan-400'
+            ? executiveTheme
+              ? 'bg-navy-900/80 text-amber-300 before:absolute before:left-0 before:top-1/2 before:h-8 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-400'
+              : 'bg-cyan-600/10 text-cyan-400'
             : 'text-navy-300 hover:bg-navy-800 hover:text-white'
         }`
       }
     >
       {({ isActive }) => (
         <>
-          <SidebarNavIcon iconKey={item.key} isActive={isActive} accentIndex={accentIndex} />
+          <SidebarNavIcon
+            iconKey={item.key}
+            isActive={isActive}
+            accentIndex={accentIndex}
+            executiveTheme={executiveTheme}
+          />
           <span className="min-w-0 flex-1 truncate">{item.name}</span>
-          {isActive ? (
+          {badgeCount > 0 ? (
+            <span className="ml-auto inline-flex min-h-[20px] min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#1a73e8] px-1.5 text-[10px] font-bold text-white">
+              {badgeCount > 9 ? '9+' : badgeCount}
+            </span>
+          ) : isActive && !executiveTheme ? (
             <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-cyan-400" aria-hidden="true" />
           ) : null}
         </>
@@ -51,17 +71,33 @@ const SidebarNavLink = memo(function SidebarNavLink({ item, onNavigate, accentIn
   );
 });
 
-const SidebarNavSection = memo(function SidebarNavSection({ label, items, onNavigate, bordered = false }) {
+const SidebarNavSection = memo(function SidebarNavSection({
+  label,
+  items,
+  onNavigate,
+  bordered = false,
+  executiveTheme = false,
+  notificationBadgeCount = 0,
+}) {
   if (!items.length) return null;
 
   return (
     <div className={bordered ? 'pt-4 mt-4 border-t border-navy-800' : undefined}>
-      <p className="px-3 text-[10px] font-semibold text-navy-500 uppercase tracking-wider mb-2">
-        {label}
-      </p>
+      {label ? (
+        <p className="px-3 text-[10px] font-semibold text-navy-500 uppercase tracking-wider mb-2">
+          {label}
+        </p>
+      ) : null}
       <div className="space-y-1">
         {items.map((item, index) => (
-          <SidebarNavLink key={item.key} item={item} accentIndex={index} onNavigate={onNavigate} />
+          <SidebarNavLink
+            key={item.key}
+            item={item}
+            accentIndex={index}
+            onNavigate={onNavigate}
+            executiveTheme={executiveTheme}
+            badgeCount={item.badgeKey === 'notifications' ? notificationBadgeCount : 0}
+          />
         ))}
       </div>
     </div>
@@ -104,7 +140,7 @@ function getUserInitials(name = '') {
     .join('') || 'U';
 }
 
-const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate }) {
+const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate, executiveTheme = false, roleLabel = '' }) {
   const { user, logout } = useAuth();
   const { portalId } = useSidebarNav();
   const navigate = useNavigate();
@@ -113,6 +149,8 @@ const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate }) {
 
   const displayName = user.name || 'User';
   const portalLabel = PORTALS[portalId]?.label?.replace(/ Portal$/, '') || 'Portal';
+  const subtitle = executiveTheme && roleLabel ? roleLabel : user.email;
+  const metaLabel = executiveTheme ? portalLabel : portalLabel;
 
   const handleLogout = () => {
     onNavigate?.();
@@ -123,15 +161,19 @@ const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate }) {
   return (
     <div className="sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 p-4">
       <div className="flex items-center gap-3 rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-navy-700 text-sm font-semibold text-white shadow-inner">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-inner ${
+          executiveTheme ? 'bg-navy-800 ring-2 ring-amber-400/30' : 'bg-gradient-to-br from-cyan-500 to-navy-700'
+        }`}>
           {getUserInitials(displayName)}
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-          <p className="truncate text-xs text-navy-400">{user.email}</p>
-          <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide text-cyan-400/90">
-            {portalLabel}
-          </p>
+          <p className="truncate text-xs text-navy-400">{subtitle}</p>
+          {!executiveTheme && (
+            <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide text-cyan-400/90">
+              {metaLabel}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -218,7 +260,38 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
     accessiblePortals,
     sectionLabels,
     navRevision,
+    portalId,
   } = useSidebarNav();
+  const { user } = useAuth();
+  const executiveTheme = portalId === 'executive';
+  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
+
+  useEffect(() => {
+    if (!executiveTheme) {
+      setNotificationBadgeCount(0);
+      return undefined;
+    }
+
+    let cancelled = false;
+    notificationsApi.list(true)
+      .then((rows) => {
+        if (!cancelled) setNotificationBadgeCount(Array.isArray(rows) ? rows.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setNotificationBadgeCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [executiveTheme, navRevision]);
+
+  const executiveRoleLabel = (() => {
+    const name = String(user?.name || '').toUpperCase();
+    if (name.includes('DCEO')) return 'Deputy CEO';
+    if (name.includes('CEO')) return 'Chief Executive Officer';
+    return 'Executive';
+  })();
 
   return (
     <aside
@@ -226,9 +299,9 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}
     >
-      <div className="flex h-16 items-center justify-between px-6 border-b border-navy-800">
-        <Link to={routePrefix} aria-label={title || APP_NAME} className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center">
+      <div className={`flex items-center justify-between border-b border-navy-800 px-6 ${executiveTheme ? 'min-h-16 py-3' : 'h-16'}`}>
+        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-2.5 min-w-0">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full">
             <img
               src={LOGO_PATH}
               alt=""
@@ -238,9 +311,17 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
               className="h-full w-full object-contain"
             />
           </span>
-          <span className="truncate text-3xl font-black uppercase leading-none tracking-tight text-white">
-            {SIDEBAR_BRAND_NAME}
-          </span>
+          {executiveTheme ? (
+            <span className="min-w-0 leading-none">
+              <span className="block text-[13px] font-bold uppercase tracking-[0.08em] text-white">Visitor</span>
+              <span className="block text-[13px] font-bold uppercase tracking-[0.08em] text-white">Management</span>
+              <span className="mt-1 block text-[11px] font-medium tracking-wide text-amber-400">Executive Portal</span>
+            </span>
+          ) : (
+            <span className="truncate text-3xl font-black uppercase leading-none tracking-tight text-white">
+              {SIDEBAR_BRAND_NAME}
+            </span>
+          )}
         </Link>
         <button
           type="button"
@@ -253,24 +334,42 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
       </div>
 
       <SidebarScrollNav navRevision={navRevision}>
-        <SidebarNavSection label={sectionLabels.primary} items={primary} onNavigate={onCloseSidebar} />
+        <SidebarNavSection
+          label={sectionLabels.primary}
+          items={primary}
+          onNavigate={onCloseSidebar}
+          executiveTheme={executiveTheme}
+          notificationBadgeCount={notificationBadgeCount}
+        />
         {sectionLabels.system && (
           <SidebarNavSection
             label={sectionLabels.system}
             items={system}
             onNavigate={onCloseSidebar}
             bordered
+            executiveTheme={executiveTheme}
+            notificationBadgeCount={notificationBadgeCount}
           />
         )}
         <PortalSwitcher accessiblePortals={accessiblePortals} onNavigate={onCloseSidebar} />
       </SidebarScrollNav>
 
-      <SidebarUserProfile onNavigate={onCloseSidebar} />
+      <SidebarUserProfile
+        onNavigate={onCloseSidebar}
+        executiveTheme={executiveTheme}
+        roleLabel={executiveRoleLabel}
+      />
 
       {settings.length > 0 && (
         <div className="shrink-0 border-t border-navy-800 p-4 space-y-1">
           {settings.map((item, index) => (
-            <SidebarNavLink key={item.key} item={item} accentIndex={index} onNavigate={onCloseSidebar} />
+            <SidebarNavLink
+              key={item.key}
+              item={item}
+              accentIndex={index}
+              onNavigate={onCloseSidebar}
+              executiveTheme={executiveTheme}
+            />
           ))}
         </div>
       )}

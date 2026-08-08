@@ -23,50 +23,45 @@ function PageTitleIcon({ icon: Icon, iconKey, compact = false, tall = false, cla
   );
 }
 
+export function ShellPageTitle({ title, subtitle, iconKey }) {
+  if (!title && !subtitle) return null;
+
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 items-center gap-2.5">
+        {iconKey ? <PageTitleIcon iconKey={iconKey} compact /> : null}
+        <div className="min-w-0">
+          {title ? (
+            <h1 className="truncate text-lg font-bold leading-tight text-navy-900 sm:text-xl">
+              {title}
+            </h1>
+          ) : null}
+          {subtitle ? (
+            <p className="truncate text-xs text-navy-400 sm:text-sm">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PageHeader({
   title,
   subtitle,
   breadcrumbs: _breadcrumbs = EMPTY_BREADCRUMBS,
   actions,
-  icon,
+  icon: _icon,
   iconKey,
 }) {
-  useRegisterPageHeader({ title, subtitle, breadcrumbs: EMPTY_BREADCRUMBS, actions, iconKey });
+  useRegisterPageHeader({
+    title,
+    subtitle,
+    breadcrumbs: EMPTY_BREADCRUMBS,
+    actions,
+    iconKey,
+  });
 
-  const hasTitleBlock = Boolean(title || subtitle);
-
-  return (
-    <div className="mb-6">
-      {hasTitleBlock && (
-        <div
-          className={`mt-1 grid gap-x-3 gap-y-0.5 ${
-            title && subtitle
-              ? 'grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto] items-center'
-              : 'grid-cols-[auto_minmax(0,1fr)] items-center'
-          }`}
-        >
-          {(icon || iconKey) && (
-            <PageTitleIcon
-              icon={icon}
-              iconKey={iconKey}
-              tall={Boolean(title && subtitle)}
-              className={title && subtitle ? 'row-span-2 self-center' : undefined}
-            />
-          )}
-          {title && (
-            <h1 className={`text-2xl font-bold text-navy-900 ${title && subtitle ? 'col-start-2 row-start-1' : 'col-start-2'}`}>
-              {title}
-            </h1>
-          )}
-          {subtitle && (
-            <p className={`text-sm text-navy-400 ${title ? 'col-start-2 row-start-2' : 'col-start-2'}`}>
-              {subtitle}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return null;
 }
 
 export { PageTitleIcon };

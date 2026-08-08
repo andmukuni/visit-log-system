@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
 import AppSidebar from './AppSidebar';
+import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
@@ -47,7 +48,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
       )}
 
       <div className="md:ml-[var(--sidebar-width)] flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-white px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-transparent px-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
@@ -59,6 +60,12 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
             </button>
             {shellBreadcrumbs.length > 0 ? (
               <Breadcrumbs items={shellBreadcrumbs} variant="shell" className="min-w-0 flex-1" />
+            ) : pageHeader.title || pageHeader.subtitle ? (
+              <ShellPageTitle
+                title={pageHeader.title}
+                subtitle={pageHeader.subtitle}
+                iconKey={pageHeader.iconKey}
+              />
             ) : (
               <div className="hidden md:block">
                 <p className="text-sm text-navy-400">

@@ -63,7 +63,7 @@ export const CALENDAR_VIEW_MODES = {
     label: 'Week',
     dayCount: 7,
     hourHeight: 52,
-    minDayWidth: 96,
+    minDayWidth: 108,
     stepDays: 7,
   },
   twoWeeks: {

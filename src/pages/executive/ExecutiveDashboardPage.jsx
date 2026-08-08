@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActionToolbar, Spinner } from '../../components/ui';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PageHeader, Spinner } from '../../components/ui';
 import ExecutiveWeekCalendar, { startOfWeek, periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
-import { executiveApi } from '../../utils/visitorApi';
+import ExecutiveDashboardHeaderActions from '../../components/executive/ExecutiveDashboardHeaderActions';
+import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
+import { executiveApi, notificationsApi } from '../../utils/visitorApi';
 import { useAuth } from '../../context/AuthContext';
-import { useRegisterPageHeader } from '../../context/PageHeaderContext';
 
 async function fetchWithRetry(fn, attempts = 2) {
   let lastError;
@@ -28,6 +29,8 @@ export default function ExecutiveDashboardPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [newAppointmentTrigger, setNewAppointmentTrigger] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -65,15 +68,38 @@ export default function ExecutiveDashboardPage() {
     load();
   }, [load, permissions]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+
+    let cancelled = false;
+    notificationsApi.list(true)
+      .then((rows) => {
+        if (!cancelled) setUnreadCount(Array.isArray(rows) ? rows.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, dashboard]);
+
   const executive = dashboard?.executive || {};
   const kpis = dashboard?.kpis || {};
+  const dashboardTitle = useMemo(() => {
+    if (executive?.title) return `${executive.title} Dashboard`;
+    return 'Executive Dashboard';
+  }, [executive?.title]);
 
   const handleViewModeChange = useCallback((nextMode) => {
     setViewMode(nextMode);
     setWeekStart((current) => normalizePeriodStart(current, nextMode));
   }, []);
 
-  useRegisterPageHeader({ actions: <ActionToolbar /> });
+  const handleNewAppointment = useCallback(() => {
+    setNewAppointmentTrigger((current) => current + 1);
+  }, []);
 
   if (!isAuthenticated) {
     return (
@@ -85,6 +111,17 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader
+        title={dashboardTitle}
+        subtitle={formatExecutiveDashboardDate()}
+        actions={(
+          <ExecutiveDashboardHeaderActions
+            onNewAppointment={handleNewAppointment}
+            unreadCount={unreadCount}
+          />
+        )}
+      />
+
       {error && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {error}
@@ -101,6 +138,7 @@ export default function ExecutiveDashboardPage() {
       <ExecutiveWeekCalendar
         executive={executive}
         kpis={kpis}
+        nextAppointment={dashboard?.nextAppointment}
         appointments={appointments}
         loading={loading}
         weekStart={weekStart}
@@ -108,6 +146,7 @@ export default function ExecutiveDashboardPage() {
         onViewModeChange={handleViewModeChange}
         onWeekChange={setWeekStart}
         onRefresh={load}
+        newAppointmentTrigger={newAppointmentTrigger}
       />
     </div>
   );

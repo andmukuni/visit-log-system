@@ -90,9 +90,9 @@ export function createExecutiveRouter() {
 
       const [[nextAppointment]] = await pool.query(
         `SELECT a.id AS appointment_id, a.title, a.scheduled_at, a.status AS appointment_status,
-                vis.id AS visit_id, vis.status AS visit_status,
+                vis.id AS visit_id, vis.status AS visit_status, vis.purpose,
                 v.full_name AS visitor_name, v.company,
-                COALESCE(vc.classification, 'standard') AS classification
+                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name
          FROM appointments a
          INNER JOIN visits vis ON vis.id = a.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id

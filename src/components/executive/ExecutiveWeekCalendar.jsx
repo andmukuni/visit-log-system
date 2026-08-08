@@ -1,13 +1,20 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, Clock3, Filter, User, UserCheck, Users } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, CalendarDays, Filter } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import ExecutiveAppointmentDetailPanel from './ExecutiveAppointmentDetailPanel';
 import ExecutiveCalendarEventCard from './ExecutiveCalendarEventCard';
+import {
+  ExecutiveCalendarLegend,
+  ExecutiveGlancePanel,
+  ExecutiveNextAppointmentCard,
+  ExecutiveQuickActions,
+  mapNextAppointmentToCalendarRow,
+} from './ExecutiveDashboardWidgets';
 import { executiveApi } from '../../utils/visitorApi';
 import { useToast } from '../../context/ToastContext';
 import {
+  addDays,
   addMinutes,
   CALENDAR_VIEW_OPTIONS,
   compareViewDensity,
@@ -36,6 +43,7 @@ import {
   formatTimeRange,
   getMonthGrid,
   GRID_VIEWPORT_HEIGHT_PX,
+  GRID_PADDING_BOTTOM_PX,
   HOUR_LABELS,
   HOUR_HEIGHT_PX,
   initialGridScrollTop,
@@ -103,7 +111,7 @@ function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, 
   const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
-    <div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold text-gray-800">{monthLabel}</p>
         <div className="flex items-center gap-0.5">
@@ -164,158 +172,25 @@ function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, 
   );
 }
 
-const GLANCE_ACCENTS = {
-  sky: {
-    iconWrap: 'bg-sky-100 text-sky-700',
-    value: 'text-sky-950',
-  },
-  violet: {
-    iconWrap: 'bg-violet-100 text-violet-700',
-    value: 'text-violet-950',
-  },
-  emerald: {
-    iconWrap: 'bg-emerald-100 text-emerald-700',
-    value: 'text-emerald-950',
-  },
-  amber: {
-    iconWrap: 'bg-amber-100 text-amber-700',
-    value: 'text-amber-950',
-  },
-};
-
-const GLANCE_ITEMS = [
-  { key: 'todayAppointments', label: 'Today', icon: CalendarCheck, accent: 'sky' },
-  { key: 'weekAppointments', label: 'This week', icon: CalendarDays, accent: 'violet' },
-  { key: 'onSiteNow', label: 'On-site', icon: UserCheck, accent: 'emerald' },
-  { key: 'pendingApprovals', label: 'Pending', icon: Clock3, accent: 'amber' },
-];
-
-const LEGEND_ITEMS = [
-  { label: 'Standard', swatch: 'bg-navy-100 border-navy-300' },
-  { label: 'VIP', swatch: 'bg-violet-100 border-violet-300' },
-  { label: 'VVIP', swatch: 'bg-amber-100 border-amber-300' },
-  { label: 'Pending', swatch: 'bg-orange-50 border-orange-300' },
-];
-
-const SIDEBAR_LINKS = [
-  {
-    to: '/executive/visitors',
-    label: 'My visitors',
-    description: 'View visitor records',
-    icon: Users,
-    accent: 'bg-sky-100 text-sky-700',
-  },
-  {
-    to: '/executive/notifications',
-    label: 'Notifications',
-    description: 'Alerts and updates',
-    icon: Bell,
-    accent: 'bg-violet-100 text-violet-700',
-  },
-];
-
-function ExecutiveSidebarLinks() {
-  return (
-    <div className="rounded-2xl border border-navy-100 bg-white p-2 shadow-sm">
-      <div className="space-y-1">
-        {SIDEBAR_LINKS.map(({ to, label, description, icon: Icon, accent }) => (
-          <Link
-            key={to}
-            to={to}
-            className="group flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-navy-50"
-          >
-            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>
-              <Icon size={16} strokeWidth={2.25} aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-navy-900">{label}</span>
-              <span className="block truncate text-[11px] text-navy-400">{description}</span>
-            </span>
-            <ChevronRight
-              size={14}
-              className="shrink-0 text-navy-300 transition-transform group-hover:translate-x-0.5 group-hover:text-navy-500"
-              aria-hidden="true"
-            />
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ExecutiveLegendPanel({ className = '' }) {
-  return (
-    <div className={`rounded-2xl border border-navy-100 bg-white p-3 shadow-sm ${className}`}>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-navy-500">Visit type</p>
-      <div className="flex flex-wrap gap-2 sm:gap-3">
-        {LEGEND_ITEMS.map(({ label, swatch }) => (
-          <div key={label} className="flex min-w-0 items-center gap-2 rounded-lg bg-navy-50/40 px-2.5 py-1.5">
-            <span className={`h-3 w-5 shrink-0 rounded border ${swatch}`} aria-hidden="true" />
-            <span className="truncate text-[11px] font-medium text-navy-700">{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ExecutiveGlancePanel({ kpis = {} }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
-      <div className="border-b border-navy-100 bg-gradient-to-r from-navy-50/90 to-white px-3.5 py-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">At a glance</p>
-      </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-navy-100/80">
-        {GLANCE_ITEMS.map(({ key, label, icon: Icon, accent }) => {
-          const value = Number(kpis[key] ?? 0);
-          const theme = GLANCE_ACCENTS[accent];
-          const highlight = key === 'pendingApprovals' && value > 0;
-
-          return (
-            <div key={key} className="group p-3 transition-colors hover:bg-navy-50/40">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[11px] font-medium leading-tight text-navy-500">{label}</p>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.iconWrap}`}>
-                  <Icon size={14} strokeWidth={2.25} aria-hidden="true" />
-                </span>
-              </div>
-              <p className={`mt-2 text-2xl font-bold tabular-nums tracking-tight ${theme.value}`}>
-                {value}
-              </p>
-              {highlight && (
-                <p className="mt-1 text-[10px] font-medium text-amber-700">Needs review</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function executiveInitials(name = '') {
-  const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return null;
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
 export default function ExecutiveWeekCalendar({
+  className = '',
   executive,
   kpis = {},
   appointments = [],
+  nextAppointment = null,
   loading = false,
   weekStart,
   viewMode = 'week',
   onViewModeChange,
   onWeekChange,
   onRefresh,
+  newAppointmentTrigger = 0,
 }) {
   const toast = useToast();
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
-  const [gridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
+  const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -328,8 +203,16 @@ export default function ExecutiveWeekCalendar({
   const [now, setNow] = useState(() => new Date());
   const viewConfig = useMemo(() => getViewConfig(viewMode), [viewMode]);
   const periodDays = useMemo(() => getPeriodDays(weekStart, viewMode), [weekStart, viewMode]);
-  const gridBodyHeight = useMemo(() => gridBodyHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
-  const gridScrollHeight = useMemo(() => gridScrollHeightPx(viewConfig.hourHeight), [viewConfig.hourHeight]);
+  const hourSpan = CALENDAR_END_HOUR - CALENDAR_START_HOUR;
+  const layoutHourHeight = useMemo(() => {
+    const baseHeight = viewConfig.hourHeight;
+    const viewportBody = gridViewportHeight - GRID_PADDING_BOTTOM_PX;
+    if (viewportBody <= 0) return baseHeight;
+    const stretchedHeight = viewportBody / hourSpan;
+    return Math.max(baseHeight, stretchedHeight);
+  }, [gridViewportHeight, viewConfig.hourHeight, hourSpan]);
+  const gridBodyHeight = useMemo(() => gridBodyHeightPx(layoutHourHeight), [layoutHourHeight]);
+  const gridScrollHeight = useMemo(() => gridScrollHeightPx(layoutHourHeight), [layoutHourHeight]);
   const gridTemplateColumns = useMemo(
     () => `52px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
     [periodDays.length, viewConfig.minDayWidth],
@@ -405,6 +288,24 @@ export default function ExecutiveWeekCalendar({
   }, [weekStart, loading, periodDays, gridViewportHeight, viewMode]);
 
   useEffect(() => {
+    const scrollEl = gridScrollRef.current;
+    if (!scrollEl) return undefined;
+
+    const syncViewportHeight = () => {
+      const nextHeight = scrollEl.clientHeight;
+      if (nextHeight > 0) {
+        setGridViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+      }
+    };
+
+    syncViewportHeight();
+    const observer = new ResizeObserver(syncViewportHeight);
+    observer.observe(scrollEl);
+
+    return () => observer.disconnect();
+  }, [loading, viewMode, weekStart, periodDays.length, layoutHourHeight]);
+
+  useEffect(() => {
     if (periodDays.length <= 7) return undefined;
 
     const grid = gridScrollRef.current;
@@ -451,6 +352,39 @@ export default function ExecutiveWeekCalendar({
     if (!slotRect) return currentDraft;
     return { ...currentDraft, slotRect };
   }, [gridBodyHeight]);
+
+  const openNewAppointment = useCallback(() => {
+    const nowDate = new Date();
+    let startAt = new Date(nowDate);
+    startAt.setMinutes(0, 0, 0);
+    startAt.setHours(startAt.getHours() + 1);
+
+    if (startAt.getHours() < CALENDAR_START_HOUR) {
+      startAt.setHours(CALENDAR_START_HOUR, 0, 0, 0);
+    }
+    if (startAt.getHours() >= CALENDAR_END_HOUR) {
+      startAt = addDays(startOfDay(nowDate), 1);
+      startAt.setHours(CALENDAR_START_HOUR, 0, 0, 0);
+    }
+
+    const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+    const day = startOfDay(startAt);
+    setDraft({
+      day,
+      dayKey: day.toISOString(),
+      startAt,
+      endAt,
+      title: '',
+      slotRect: null,
+      sessionId: `header-${Date.now()}`,
+      openFullEditor: true,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!newAppointmentTrigger) return;
+    openNewAppointment();
+  }, [newAppointmentTrigger, openNewAppointment]);
 
   const handleSlotClick = useCallback((event, day) => {
     if (event.target.closest('[data-calendar-event]')) return;
@@ -569,20 +503,37 @@ export default function ExecutiveWeekCalendar({
     el.scrollTo({ top: initialGridScrollTop(focusHour, gridViewportHeight), behavior: 'smooth' });
   }, [now, gridViewportHeight]);
 
-  return (
-    <div className="flex min-h-0 flex-col gap-4 lg:flex-row lg:items-start">
-      {/* Left sidebar — executive profile, mini-month, KPIs, legend, quick links */}
-      <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white shadow-sm ring-2 ring-navy-100">
-            {executiveInitials(executive?.name) || <User size={18} strokeWidth={2} aria-hidden="true" />}
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm text-gray-500">{executive?.title || 'Executive'}</p>
-            <p className="truncate font-semibold text-gray-900">{executive?.name || 'Calendar'}</p>
-          </div>
-        </div>
+  const mappedNextAppointment = useMemo(
+    () => mapNextAppointmentToCalendarRow(nextAppointment),
+    [nextAppointment],
+  );
 
+  const handleViewNextAppointment = useCallback(() => {
+    if (!mappedNextAppointment) return;
+    setSelectedAppointment(mappedNextAppointment);
+  }, [mappedNextAppointment]);
+
+  const handleRescheduleNextAppointment = useCallback(() => {
+    if (!nextAppointment?.scheduled_at) return;
+    const startAt = new Date(nextAppointment.scheduled_at);
+    if (Number.isNaN(startAt.getTime())) return;
+    const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+    const day = startOfDay(startAt);
+    setDraft({
+      day,
+      dayKey: day.toISOString(),
+      startAt,
+      endAt,
+      title: nextAppointment.title || nextAppointment.visitor_name || '',
+      slotRect: null,
+      sessionId: `reschedule-${Date.now()}`,
+      openFullEditor: true,
+    });
+  }, [nextAppointment]);
+
+  return (
+    <div className={`flex min-h-0 flex-col gap-4 lg:flex-row lg:items-stretch ${className}`.trim()}>
+      <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-72 xl:w-80">
         <MiniMonth
           anchorDate={sidebarMonth}
           periodStart={weekStart}
@@ -594,14 +545,17 @@ export default function ExecutiveWeekCalendar({
 
         <ExecutiveGlancePanel kpis={kpis} />
 
-        <div className="space-y-2">
-          <ExecutiveSidebarLinks />
-        </div>
+        <ExecutiveNextAppointmentCard
+          appointment={nextAppointment}
+          onViewDetails={handleViewNextAppointment}
+          onReschedule={handleRescheduleNextAppointment}
+        />
+
+        <ExecutiveQuickActions kpis={kpis} onNewAppointment={openNewAppointment} />
       </aside>
 
-      {/* Main calendar + legend */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm max-h-[calc(100vh-11rem)]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-[520px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:min-h-0">
         {/* Toolbar */}
         <div
           ref={toolbarRef}
@@ -653,13 +607,13 @@ export default function ExecutiveWeekCalendar({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-24">
+          <div className="flex min-h-[280px] flex-1 items-center justify-center">
             <Spinner size={32} />
           </div>
         ) : (
           <div
             key={`${viewMode}-${weekStart.toISOString()}`}
-            className={`gcal-period-shell flex shrink-0 flex-col ${
+            className={`gcal-period-shell flex min-h-0 flex-1 flex-col ${
               viewAnimClass
                 || (weekSlideDirection === 'forward'
                   ? 'animate-gcal-week-forward'
@@ -699,8 +653,7 @@ export default function ExecutiveWeekCalendar({
             {/* Time grid — viewport height matches sidebar baseline on desktop */}
             <div
               ref={gridScrollRef}
-              className={`shrink-0 overflow-y-auto ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
-              style={{ height: `${gridViewportHeight}px` }}
+              className={`min-h-0 flex-1 overflow-y-auto ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
             >
               <div
                 className={`gcal-period-grid relative grid ${viewAnimClass || ''}`}
@@ -724,7 +677,7 @@ export default function ExecutiveWeekCalendar({
                     <GutterHourMark
                       key={hour}
                       hour={hour}
-                      hourHeight={viewConfig.hourHeight}
+                      hourHeight={layoutHourHeight}
                     />
                   ))}
                   {nowLinePx != null && (
@@ -752,7 +705,7 @@ export default function ExecutiveWeekCalendar({
                       className={`relative border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : ''}`}
                     >
                       <div
-                        className={`absolute inset-x-0 top-0 ${pastDay ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`absolute top-0 ${pastDay ? 'cursor-not-allowed' : 'cursor-pointer'} left-0 right-0`}
                         style={{ height: `${gridBodyHeight}px` }}
                         onClick={pastDay ? undefined : (event) => handleSlotClick(event, day)}
                       >
@@ -768,8 +721,12 @@ export default function ExecutiveWeekCalendar({
                       {draft && isSameDay(day, draft.day) && draftPreview && (
                         <div
                           data-calendar-event
-                          className="absolute inset-x-1.5 z-[25] overflow-hidden rounded-lg border border-[#1a73e8]/40 bg-[#039be5] px-2 py-1.5 text-left shadow-sm pointer-events-none animate-gcal-slot"
-                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '28px' }}
+                          className="absolute left-1 right-1 z-[25] overflow-hidden rounded-md border border-[#1a73e8]/40 bg-[#039be5] px-1.5 py-1 text-left shadow-sm pointer-events-none animate-gcal-slot"
+                          style={{
+                            top: draftPreview.top,
+                            height: draftPreview.height,
+                            minHeight: '46px',
+                          }}
                         >
                           <p className="truncate text-[10px] font-medium text-white/90">
                             {formatTimeRange(draft.startAt, draft.endAt)}
@@ -803,9 +760,8 @@ export default function ExecutiveWeekCalendar({
             </div>
           </div>
         )}
+      <ExecutiveCalendarLegend />
       </div>
-
-      <ExecutiveLegendPanel />
       </div>
 
       <ExecutiveAppointmentDetailPanel
