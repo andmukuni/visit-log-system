@@ -52,6 +52,9 @@ const labelMap = {
   past: 'Past',
   closed: 'Closed',
   free: 'Free',
+  expected: 'Expected',
+  approved: 'Approved',
+  pending_approval: 'Pending approval',
 };
 
 function formatStatusLabel(status, normalized) {

@@ -4,6 +4,7 @@ import { Bell, CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRig
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import ExecutiveAppointmentDetailPanel from './ExecutiveAppointmentDetailPanel';
+import ExecutiveCalendarEventCard from './ExecutiveCalendarEventCard';
 import { executiveApi } from '../../utils/visitorApi';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -158,20 +159,6 @@ function ViewModeSelect({ value, onChange }) {
   );
 }
 
-const EVENT_COLORS = {
-  vip: 'bg-purple-100 border-purple-300 text-purple-900',
-  vvip: 'bg-amber-100 border-amber-300 text-amber-900',
-  standard: 'bg-navy-100 border-navy-300 text-navy-900',
-};
-
-function eventColor(classification, visitStatus) {
-  const key = String(classification || 'standard').toLowerCase();
-  if (key === 'vip' || key === 'vvip') return EVENT_COLORS[key];
-  if (visitStatus === 'pending_approval' || visitStatus === 'pre_registered') {
-    return 'bg-orange-50 border-orange-300 text-orange-900';
-  }
-  return EVENT_COLORS.standard;
-}
 
 function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, onMonthChange }) {
   const days = useMemo(() => getMonthGrid(anchorDate), [anchorDate]);
@@ -267,10 +254,10 @@ const GLANCE_ITEMS = [
 ];
 
 const LEGEND_ITEMS = [
-  { label: 'Standard', swatch: 'bg-navy-100 border-navy-500' },
-  { label: 'VIP', swatch: 'bg-violet-100 border-violet-500' },
-  { label: 'VVIP', swatch: 'bg-amber-100 border-amber-500' },
-  { label: 'Pending', swatch: 'bg-orange-50 border-orange-500' },
+  { label: 'Standard', swatch: 'bg-navy-100 border-navy-300' },
+  { label: 'VIP', swatch: 'bg-violet-100 border-violet-300' },
+  { label: 'VVIP', swatch: 'bg-amber-100 border-amber-300' },
+  { label: 'Pending', swatch: 'bg-orange-50 border-orange-300' },
 ];
 
 const SIDEBAR_LINKS = [
@@ -326,10 +313,7 @@ function ExecutiveLegendPanel() {
       <div className="grid grid-cols-2 gap-1.5">
         {LEGEND_ITEMS.map(({ label, swatch }) => (
           <div key={label} className="flex min-w-0 items-center gap-2 rounded-lg bg-navy-50/40 px-2 py-1.5">
-            <span
-              className={`h-3 w-5 shrink-0 rounded border ${swatch}`}
-              aria-hidden="true"
-            />
+            <span className={`h-3 w-5 shrink-0 rounded border ${swatch}`} aria-hidden="true" />
             <span className="truncate text-[11px] font-medium text-navy-700">{label}</span>
           </div>
         ))}
@@ -922,10 +906,10 @@ export default function ExecutiveWeekCalendar({
                       {draft && isSameDay(day, draft.day) && draftPreview && (
                         <div
                           data-calendar-event
-                          className="absolute inset-x-1 z-[25] overflow-hidden rounded-md bg-[#039be5] px-2 py-1 text-left shadow-md pointer-events-none animate-gcal-slot"
-                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '22px' }}
+                          className="absolute inset-x-1 z-[25] overflow-hidden rounded-md border border-[#1a73e8]/40 bg-[#039be5] px-1.5 py-px text-left shadow-sm pointer-events-none animate-gcal-slot"
+                          style={{ top: draftPreview.top, height: draftPreview.height, minHeight: '18px' }}
                         >
-                          <p className="text-[11px] font-semibold truncate text-white">
+                          <p className="truncate text-[11px] font-semibold leading-[1.15] text-white">
                             {draft.title?.trim() || '(No title)'}
                           </p>
                         </div>
@@ -935,33 +919,15 @@ export default function ExecutiveWeekCalendar({
                       {dayEvents.map((appt) => {
                         const layout = eventLayout(appt.scheduled_at, DEFAULT_EVENT_MINUTES);
                         if (!layout) return null;
-                        const color = eventColor(appt.classification, appt.visit_status);
-                        const time = layout.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-                        const heightPct = parseFloat(String(layout.height).replace('%', ''));
-                        const showMeta = !compactHeaders && heightPct > 7;
-
-                        const content = (
-                          <button
-                            type="button"
-                            data-calendar-event
-                            className={`absolute z-10 block w-full overflow-hidden rounded-md border py-0.5 text-left shadow-sm ${color} ${compactHeaders ? 'inset-x-0.5 px-0.5' : 'inset-x-1 px-1.5'}`}
-                            style={{ top: layout.top, height: layout.height, minHeight: '22px' }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setSelectedAppointment(appt);
-                            }}
-                          >
-                            <p className={`font-semibold truncate leading-tight ${compactHeaders ? 'text-[9px]' : 'text-[11px]'}`}>{appt.visitor_name || appt.title}</p>
-                            {showMeta && (
-                              <p className="text-[10px] opacity-80 truncate leading-tight">{time}{appt.company ? ` · ${appt.company}` : ''}</p>
-                            )}
-                          </button>
-                        );
 
                         return (
-                          <div key={appt.id || appt.appointment_id}>
-                            {content}
-                          </div>
+                          <ExecutiveCalendarEventCard
+                            key={appt.id || appt.appointment_id}
+                            appointment={appt}
+                            layout={layout}
+                            compactHeaders={compactHeaders}
+                            onSelect={setSelectedAppointment}
+                          />
                         );
                       })}
                       </div>

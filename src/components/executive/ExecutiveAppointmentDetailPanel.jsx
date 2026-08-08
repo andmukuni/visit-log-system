@@ -6,6 +6,7 @@ import { Spinner, StatusBadge } from '../ui';
 import { executiveApi } from '../../utils/visitorApi';
 import { formatDateTime } from '../../utils/helpers';
 import { formatLongDate } from './calendarUtils';
+import { getEventCardTheme } from './ExecutiveCalendarEventCard';
 
 const EVENT_LABELS = {
   registered: 'Registered',
@@ -15,6 +16,24 @@ const EVENT_LABELS = {
   checked_in: 'Checked in',
   checked_out: 'Checked out',
 };
+
+function DetailCard({ title, theme, children, className = '' }) {
+  return (
+    <section className={`overflow-hidden rounded-xl border bg-white shadow-sm ${theme.border} ${className}`}>
+      <div className="flex">
+        <span className={`w-1.5 shrink-0 ${theme.accent}`} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          {title && (
+            <div className="border-b border-gray-100 px-4 py-2.5">
+              <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+            </div>
+          )}
+          <div className={title ? 'px-4 py-1' : 'px-4 py-3'}>{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function DetailRow({ label, value, icon: Icon }) {
   if (!value && value !== 0) return null;
@@ -82,10 +101,15 @@ export default function ExecutiveAppointmentDetailPanel({
   if (!open || !appointment) return null;
 
   const visit = data?.visit;
+  const theme = getEventCardTheme(appointment.classification, visit?.status || appointment.visit_status);
+  const guestName = visit?.full_name || appointment.visitor_name || appointment.title || 'Guest';
+  const guestInitial = guestName.trim().charAt(0).toUpperCase() || '?';
   const scheduledAt = appointment.scheduled_at ? new Date(appointment.scheduled_at) : null;
   const scheduledLabel = scheduledAt && !Number.isNaN(scheduledAt.getTime())
     ? `${formatLongDate(scheduledAt)} · ${scheduledAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
     : '—';
+
+  const resolvedStatus = visit?.status ?? (appointment.visit_id && loading ? null : appointment.visit_status);
 
   return createPortal(
     <>
@@ -137,8 +161,8 @@ export default function ExecutiveAppointmentDetailPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           <div className="mb-5 flex flex-wrap items-center gap-2">
-            {(visit?.status || appointment.visit_status) && (
-              <StatusBadge status={visit?.status || appointment.visit_status} />
+            {resolvedStatus && (
+              <StatusBadge status={resolvedStatus} />
             )}
             {appointment.classification && appointment.classification !== 'standard' && (
               <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium capitalize text-orange-800 ring-1 ring-orange-200">
@@ -160,8 +184,26 @@ export default function ExecutiveAppointmentDetailPanel({
           )}
 
           {!loading && !error && (
-            <div className="space-y-6">
-              <section className="rounded-xl bg-[#f8f9fa] px-4 py-3">
+            <div className="space-y-4">
+              <DetailCard theme={theme}>
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white ${theme.accent}`}>
+                    {guestInitial}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-semibold text-gray-900">{guestName}</p>
+                    {(visit?.company || appointment.company) && (
+                      <p className="mt-0.5 truncate text-sm text-gray-500">{visit?.company || appointment.company}</p>
+                    )}
+                    <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-700">
+                      <Calendar size={14} className="shrink-0 text-gray-400" aria-hidden="true" />
+                      {scheduledLabel}
+                    </p>
+                  </div>
+                </div>
+              </DetailCard>
+
+              <DetailCard title="Schedule" theme={theme}>
                 <DetailRow icon={Calendar} label="When" value={scheduledLabel} />
                 <DetailRow
                   icon={Clock}
@@ -171,47 +213,37 @@ export default function ExecutiveAppointmentDetailPanel({
                 {visit?.pass_code && (
                   <DetailRow icon={User} label="Pass code" value={visit.pass_code} />
                 )}
-              </section>
+              </DetailCard>
 
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-gray-900">Guest</h3>
-                <div className="rounded-xl border border-gray-200 px-4 py-1">
-                  <DetailRow
-                    icon={User}
-                    label="Name"
-                    value={visit?.full_name || appointment.visitor_name}
-                  />
-                  <DetailRow
-                    icon={Phone}
-                    label="Phone"
-                    value={visit?.phone || appointment.phone}
-                  />
-                  <DetailRow icon={Mail} label="Email" value={visit?.email} />
-                  <DetailRow label="Company" value={visit?.company || appointment.company} />
-                </div>
-              </section>
+              <DetailCard title="Guest" theme={theme}>
+                <DetailRow icon={User} label="Name" value={guestName} />
+                <DetailRow icon={Phone} label="Phone" value={visit?.phone || appointment.phone} />
+                <DetailRow icon={Mail} label="Email" value={visit?.email} />
+                <DetailRow label="Company" value={visit?.company || appointment.company} />
+              </DetailCard>
 
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-gray-900">Meeting details</h3>
-                <div className="rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800">
+              <DetailCard title="Meeting details" theme={theme}>
+                <p className="py-2 text-sm leading-relaxed text-gray-800">
                   {visit?.purpose || appointment.purpose || 'No description provided.'}
-                </div>
-              </section>
+                </p>
+              </DetailCard>
 
               {(data?.events || []).length > 0 && (
-                <section>
-                  <h3 className="mb-3 text-sm font-semibold text-gray-900">Timeline</h3>
-                  <ol className="space-y-3">
+                <DetailCard title="Timeline" theme={theme}>
+                  <ol className="space-y-3 py-2">
                     {data.events.map((evt) => (
-                      <li key={evt.id} className="border-l-2 border-cyan-200 pl-3 text-sm">
-                        <p className="font-medium text-gray-900">
-                          {EVENT_LABELS[evt.event_type] || evt.event_type}
-                        </p>
-                        <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(evt.created_at)}</p>
+                      <li key={evt.id} className="flex gap-3 text-sm">
+                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${theme.accent}`} aria-hidden="true" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900">
+                            {EVENT_LABELS[evt.event_type] || evt.event_type}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(evt.created_at)}</p>
+                        </div>
                       </li>
                     ))}
                   </ol>
-                </section>
+                </DetailCard>
               )}
 
               {!visit && !appointment.visit_id && (

@@ -156,7 +156,25 @@ async function seedHostDemoVisit(poolConn = pool) {
   );
 }
 
+async function repairExecutiveSelfScheduledVisits(poolConn = pool) {
+  const [result] = await poolConn.query(
+    `UPDATE visits vis
+     INNER JOIN hosts h ON h.id = vis.host_id
+     INNER JOIN users u ON u.id = h.user_id
+     SET vis.status = 'expected',
+         vis.approved_at = COALESCE(vis.approved_at, NOW()),
+         vis.updated_at = NOW()
+     WHERE vis.created_by = u.id
+       AND vis.status IN ('pending_approval', 'pre_registered')`,
+  );
+  if (result.affectedRows > 0) {
+    console.log(`[seed] Repaired ${result.affectedRows} executive self-scheduled visit(s) to expected.`);
+  }
+}
+
 async function seedExecutiveDemoVisits(poolConn = pool) {
+  await repairExecutiveSelfScheduledVisits(poolConn);
+
   const executiveEmails = ['dceo@demo.org', 'ceo@demo.org'];
   for (const email of executiveEmails) {
     const [[hostUser]] = await poolConn.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
@@ -186,7 +204,7 @@ async function seedExecutiveDemoVisits(poolConn = pool) {
     const demoVisitors = email.includes('dceo')
       ? [
           { name: 'Ambassador Ngoma', company: 'Foreign Affairs', hourOffset: 2, status: 'approved', purpose: 'Policy briefing' },
-          { name: 'Dr. Mwila', company: 'Health Board', hourOffset: 4, status: 'pending_approval', purpose: 'Board review', vip: true },
+          { name: 'Dr. Mwila', company: 'Health Board', hourOffset: 4, status: 'expected', purpose: 'Board review', vip: true },
         ]
       : [
           { name: 'James Mulenga', company: 'Investor Group', hourOffset: 3, status: 'approved', purpose: 'Investment update' },
