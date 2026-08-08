@@ -142,7 +142,7 @@ function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, 
   const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
-    <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-4'}`}>
+    <div className={`shrink-0 rounded-2xl border border-gray-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-4'}`}>
       <div className={`flex items-center justify-between ${compact ? 'mb-2' : 'mb-3'}`}>
         <p className={`font-semibold text-gray-800 ${compact ? 'text-xs' : 'text-sm'}`}>{monthLabel}</p>
         <div className="flex items-center gap-0.5">
@@ -598,18 +598,22 @@ export default function ExecutiveWeekCalendar({
 
         <ExecutiveGlancePanel kpis={kpis} compact />
 
-        <ExecutiveNextAppointmentCard
-          appointment={nextAppointment}
-          onViewDetails={handleViewNextAppointment}
-          onReschedule={handleRescheduleNextAppointment}
-          compact={sidebarCompact}
-        />
+        <div className="shrink-0">
+          <ExecutiveNextAppointmentCard
+            appointment={nextAppointment}
+            onViewDetails={handleViewNextAppointment}
+            onReschedule={handleRescheduleNextAppointment}
+            compact={sidebarCompact}
+          />
+        </div>
 
-        <ExecutiveQuickActions
-          kpis={kpis}
-          onNewAppointment={openNewAppointment}
-          compact={sidebarCompact}
-        />
+        <div className="shrink-0">
+          <ExecutiveQuickActions
+            kpis={kpis}
+            onNewAppointment={openNewAppointment}
+            compact={sidebarCompact}
+          />
+        </div>
       </aside>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

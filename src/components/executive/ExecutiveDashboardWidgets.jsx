@@ -44,16 +44,16 @@ const GLANCE_ITEMS = [
 
 export function ExecutiveGlancePanel({ kpis = {}, compact = false }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className={`border-b border-gray-100 ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}`}>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-navy-900">Today at a Glance</p>
       </div>
-      <div className={`grid grid-cols-2 ${compact ? 'gap-1.5 p-2' : 'gap-1.5 p-2.5'}`}>
+      <div className={`grid grid-cols-2 grid-rows-2 ${compact ? 'gap-1.5 p-2' : 'gap-1.5 p-2.5'}`}>
         {GLANCE_ITEMS.map(({ key, label, icon: Icon, iconWrap, valueClass }) => (
           <div
             key={key}
-            className={`flex aspect-square min-h-[84px] flex-col items-center justify-center rounded-lg bg-navy-50/50 ${
-              compact ? 'px-1 py-1.5' : 'px-1.5 py-2'
+            className={`flex min-h-[92px] flex-col items-center justify-center rounded-lg bg-navy-50/50 ${
+              compact ? 'px-1 py-2' : 'px-1.5 py-2.5'
             }`}
           >
             <span className={`flex shrink-0 items-center justify-center rounded-md ${iconWrap} ${
@@ -63,13 +63,13 @@ export function ExecutiveGlancePanel({ kpis = {}, compact = false }) {
               <Icon size={compact ? 13 : 15} strokeWidth={2.25} aria-hidden="true" />
             </span>
             <p className={`mt-1 font-bold tabular-nums leading-none tracking-tight ${valueClass} ${
-              compact ? 'text-base' : 'text-lg'
+              compact ? 'text-sm' : 'text-lg'
             }`}
             >
               {Number(kpis[key] ?? 0)}
             </p>
-            <p className={`mt-0.5 line-clamp-2 text-center font-medium leading-tight text-gray-600 ${
-              compact ? 'text-[9px]' : 'text-[10px]'
+            <p className={`mt-1 line-clamp-2 text-center font-medium leading-snug text-gray-600 ${
+              compact ? 'text-[10px]' : 'text-[11px]'
             }`}
             >
               {label}
