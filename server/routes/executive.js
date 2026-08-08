@@ -320,26 +320,25 @@ export function createExecutiveRouter() {
         );
       }
 
-      let status = 'pre_registered';
+      // Executive self-scheduling implies host approval unless category policy requires escalation.
+      let status = 'expected';
       if (categoryId) {
         const [[cat]] = await pool.query(
           `SELECT requires_approval FROM visitor_categories WHERE id = ? AND organisation_id = ?`,
           [categoryId, ctx.scope.organisation_id],
         );
         if (cat?.requires_approval) status = 'pending_approval';
-        else status = 'approved';
-      } else {
-        status = 'pending_approval';
       }
 
       const visitId = generateId('visit');
       const passCode = generatePassCode();
       const inviteToken = generateInviteToken();
       const meetingTitle = title?.trim() || purpose?.trim() || `Meeting with ${visitorName.trim()}`;
+      const hostApproved = status === 'expected' || status === 'approved';
 
       await pool.query(
-        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${hostApproved ? 'NOW()' : 'NULL'})`,
         [
           visitId,
           ctx.scope.organisation_id,
@@ -372,7 +371,17 @@ export function createExecutiveRouter() {
         details: { status, source: 'executive_calendar' },
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+      if (hostApproved) {
+        await writeVisitEvent(pool, {
+          visitId,
+          eventType: 'approved',
+          actorUserId: userId,
+          details: { status, source: 'executive_calendar', selfApproved: true },
+        });
+        await notifyVisitEvent(pool, { visitId, eventType: 'approved', actorUserId: userId });
+      } else {
+        await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+      }
 
       await writeAuditLog(pool, {
         organisationId: ctx.scope.organisation_id,

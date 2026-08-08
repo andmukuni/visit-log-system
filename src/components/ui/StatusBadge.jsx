@@ -22,6 +22,7 @@ const colorMap = {
   free: { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-600/20', icon: CheckCircle2 },
   waived: { bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/20', icon: CheckCircle2 },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20', icon: CheckCircle2 },
+  expected: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
   pre_registered: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
   pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/20', icon: Clock },
   checked_in: { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/20', icon: LogIn },
