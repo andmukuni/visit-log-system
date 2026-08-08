@@ -134,6 +134,19 @@ export function currentTimeIndicator(today = new Date()) {
   return `${((minutes - gridStart) / (gridEnd - gridStart)) * 100}%`;
 }
 
+export function currentTimePositionPx(now = new Date()) {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const gridStart = CALENDAR_START_HOUR * 60;
+  const gridEnd = CALENDAR_END_HOUR * 60;
+  if (minutes < gridStart || minutes > gridEnd) return null;
+  const ratio = (minutes - gridStart) / (gridEnd - gridStart);
+  return ratio * GRID_BODY_HEIGHT_PX;
+}
+
+export function formatCurrentTimeLabel(now = new Date()) {
+  return now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 export function addMinutes(date, minutes) {
   const d = new Date(date);
   d.setMinutes(d.getMinutes() + minutes);

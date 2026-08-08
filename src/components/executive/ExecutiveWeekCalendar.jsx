@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, User, UserCheck } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import { executiveApi } from '../../utils/visitorApi';
@@ -11,8 +11,10 @@ import {
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
   currentTimeIndicator,
+  currentTimePositionPx,
   DEFAULT_EVENT_MINUTES,
   eventLayout,
+  formatCurrentTimeLabel,
   formatDayHeader,
   formatHourLabel,
   formatTimeRange,
@@ -236,9 +238,18 @@ export default function ExecutiveWeekCalendar({
   const [draft, setDraft] = useState(null);
   const [referenceData, setReferenceData] = useState(null);
   const [saving, setSaving] = useState(false);
-  const today = new Date();
+  const [now, setNow] = useState(() => new Date());
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
-  const nowLine = currentTimeIndicator(today);
+  const nowLine = currentTimeIndicator(now);
+  const nowLinePx = currentTimePositionPx(now);
+  const currentHour = now.getHours();
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     setSidebarMonth(weekStart);
@@ -250,10 +261,10 @@ export default function ExecutiveWeekCalendar({
     const el = gridScrollRef.current;
     if (!el) return undefined;
 
-    const now = new Date();
-    const hasToday = weekDays.some((day) => isSameDay(day, now));
+    const nowDate = new Date();
+    const hasToday = weekDays.some((day) => isSameDay(day, nowDate));
     const focusHour = hasToday
-      ? Math.max(CALENDAR_START_HOUR, now.getHours())
+      ? Math.max(CALENDAR_START_HOUR, nowDate.getHours())
       : 8;
 
     el.scrollTop = initialGridScrollTop(focusHour);
@@ -375,6 +386,13 @@ export default function ExecutiveWeekCalendar({
     setSidebarMonth(start);
   };
 
+  const scrollToNow = useCallback(() => {
+    const el = gridScrollRef.current;
+    if (!el) return;
+    const focusHour = Math.max(CALENDAR_START_HOUR, now.getHours());
+    el.scrollTo({ top: initialGridScrollTop(focusHour), behavior: 'smooth' });
+  }, [now]);
+
   return (
     <div className="flex flex-col lg:flex-row gap-4 min-h-0">
       {/* Left sidebar — Google Calendar style */}
@@ -454,9 +472,17 @@ export default function ExecutiveWeekCalendar({
           <>
             {/* Day headers — fixed above scroll so they never cover hour rows */}
             <div className="shrink-0 grid grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-gray-200 bg-gray-50">
-              <div className="border-r border-gray-200 bg-gray-50" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={scrollToNow}
+                className="flex items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                aria-label="Jump to current time"
+                title="Jump to current time"
+              >
+                <Clock size={16} strokeWidth={2} aria-hidden="true" />
+              </button>
               {weekDays.map((day) => {
-                const { weekday, day: dayNum, isToday } = formatDayHeader(day, today);
+                const { weekday, day: dayNum, isToday } = formatDayHeader(day, now);
                 return (
                   <div key={day.toISOString()} className="border-l border-gray-200 bg-gray-50 py-2.5 text-center">
                     <p className="text-[11px] font-medium text-gray-500">{weekday}</p>
@@ -481,32 +507,62 @@ export default function ExecutiveWeekCalendar({
                 className="grid grid-cols-[56px_repeat(7,minmax(0,1fr))] relative"
                 style={{ height: `${GRID_SCROLL_HEIGHT_PX}px` }}
               >
-                {/* Hour labels */}
-                <div className="relative border-r border-gray-200 bg-gray-50">
-                  {HOUR_LABELS.map((hour) => (
-                    <div
-                      key={hour}
-                      className="absolute right-2 text-[11px] leading-none text-gray-400"
-                      style={{
-                        top: `${hourLabelTop(hour)}px`,
-                        transform: hour === CALENDAR_START_HOUR ? 'translateY(2px)' : 'translateY(-50%)',
-                      }}
-                    >
-                      {formatHourLabel(hour)}
-                    </div>
-                  ))}
+                {/* Current hour band across the grid */}
+                {nowLinePx != null && currentHour >= CALENDAR_START_HOUR && currentHour < CALENDAR_END_HOUR && (
                   <div
-                    className="absolute right-2 text-[11px] leading-none text-gray-400"
+                    className="pointer-events-none absolute inset-x-0 z-[5] bg-red-50/50"
+                    style={{
+                      top: `${hourLabelTop(currentHour)}px`,
+                      height: `${HOUR_HEIGHT_PX}px`,
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+
+                {/* Hour labels */}
+                <div className="relative z-10 border-r border-gray-200 bg-gray-50/95">
+                  {HOUR_LABELS.map((hour) => {
+                    const isCurrentHour = hour === currentHour;
+                    return (
+                      <div
+                        key={hour}
+                        className={`absolute right-2 text-[11px] leading-none ${
+                          isCurrentHour
+                            ? 'font-bold text-red-600'
+                            : 'font-medium text-gray-400'
+                        }`}
+                        style={{
+                          top: `${hourLabelTop(hour)}px`,
+                          transform: hour === CALENDAR_START_HOUR ? 'translateY(2px)' : 'translateY(-50%)',
+                        }}
+                      >
+                        {formatHourLabel(hour)}
+                      </div>
+                    );
+                  })}
+                  <div
+                    className="absolute right-2 text-[11px] leading-none font-medium text-gray-400"
                     style={{ top: `${GRID_BODY_HEIGHT_PX}px`, transform: 'translateY(-50%)' }}
                   >
                     {formatHourLabel(CALENDAR_END_HOUR)}
                   </div>
+
+                  {nowLinePx != null && (
+                    <div
+                      className="pointer-events-none absolute inset-x-0 z-30 flex items-center justify-end pr-1"
+                      style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
+                    >
+                      <span className="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm">
+                        {formatCurrentTimeLabel(now)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Day columns */}
                 {weekDays.map((day) => {
                   const dayEvents = eventsByDay.get(day.toDateString()) || [];
-                  const isToday = isSameDay(day, today);
+                  const isToday = isSameDay(day, now);
 
                   return (
                     <div
