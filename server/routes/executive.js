@@ -10,7 +10,7 @@ import { generateInviteToken } from '../platformSchema.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
-import { createAppointmentForVisit } from '../accessSchema.js';
+import { createAppointmentForVisit, upsertHostContact } from '../accessSchema.js';
 import { formatVisitListResponse, formatVisitResponse, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 
 function executiveVisitSql(extraWhere = '', orderBy = 'vis.expected_at ASC, vis.created_at DESC') {
@@ -374,6 +374,16 @@ export function createExecutiveRouter() {
         targetId: appointmentId,
       });
 
+      await upsertHostContact(pool, {
+        organisationId: ctx.scope.organisation_id,
+        hostId: ctx.host.id,
+        visitorId,
+        fullName: visitorName,
+        email,
+        phone,
+        company,
+      });
+
       const [[appointment]] = await pool.query(
         `SELECT a.id, a.title, a.scheduled_at, a.status,
                 vis.id AS visit_id, vis.status AS visit_status, vis.purpose,
@@ -391,6 +401,52 @@ export function createExecutiveRouter() {
     } catch (error) {
       console.error('[executive/appointments POST]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to create appointment.' });
+    }
+  });
+
+  router.get('/contacts', async (req, res) => {
+    try {
+      const ctx = await getExecutiveContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const hostId = ctx.host?.id;
+      if (!hostId) {
+        return res.status(403).json({
+          ok: false,
+          message: 'No host profile is linked to this account. Contact your administrator.',
+        });
+      }
+
+      const orgId = ctx.scope.organisation_id;
+      const search = String(req.query.q || req.query.search || '').trim().toLowerCase();
+      const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 8));
+
+      let sql = `
+        SELECT id, full_name, email, phone, company, visitor_id, use_count, last_used_at, created_at
+        FROM host_contacts
+        WHERE organisation_id = ? AND host_id = ?
+      `;
+      const params = [orgId, hostId];
+
+      if (search) {
+        sql += ` AND (
+          LOWER(full_name) LIKE ?
+          OR LOWER(company) LIKE ?
+          OR LOWER(COALESCE(email, '')) LIKE ?
+          OR COALESCE(phone, '') LIKE ?
+        )`;
+        const like = `%${search}%`;
+        params.push(like, like, like, `%${String(req.query.q || req.query.search || '').trim()}%`);
+      }
+
+      sql += ` ORDER BY last_used_at DESC, use_count DESC, full_name ASC LIMIT ?`;
+      params.push(limit);
+
+      const [rows] = await pool.query(sql, params);
+      return res.json({ ok: true, data: rows });
+    } catch (error) {
+      console.error('[executive/contacts]', error.message);
+      return res.status(500).json({ ok: false, message: 'Unable to load contacts.' });
     }
   });
 

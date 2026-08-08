@@ -114,6 +114,26 @@ export async function ensureAccessSchema() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS host_contacts (
+      id VARCHAR(90) PRIMARY KEY,
+      organisation_id VARCHAR(90) NOT NULL,
+      host_id VARCHAR(90) NOT NULL,
+      visitor_id VARCHAR(90),
+      full_name VARCHAR(255) NOT NULL,
+      email VARCHAR(255),
+      phone VARCHAR(80),
+      company VARCHAR(255),
+      use_count INT DEFAULT 1,
+      last_used_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_host_contacts_host (host_id),
+      INDEX idx_host_contacts_org (organisation_id),
+      INDEX idx_host_contacts_name (host_id, full_name)
+    )
+  `);
+
   const categoryColumns = [
     { name: 'classification', ddl: "ADD COLUMN classification VARCHAR(20) DEFAULT 'standard'" },
   ];
@@ -243,4 +263,64 @@ export async function upsertVisitorContactDetails(poolConn, visitorId, {
        updated_at = NOW()`,
     [visitorId, idType || null, idNumber || null, confidentialNotes || null],
   );
+}
+
+export async function upsertHostContact(poolConn, {
+  organisationId,
+  hostId,
+  visitorId,
+  fullName,
+  email,
+  phone,
+  company,
+}) {
+  const name = String(fullName || '').trim();
+  if (!organisationId || !hostId || !name) return null;
+
+  const phoneNorm = String(phone || '').trim() || null;
+  const emailNorm = String(email || '').trim() || null;
+  const companyNorm = String(company || '').trim() || null;
+
+  let existing = null;
+  if (phoneNorm) {
+    const [[row]] = await poolConn.query(
+      `SELECT id FROM host_contacts
+       WHERE host_id = ? AND organisation_id = ? AND phone = ?
+       LIMIT 1`,
+      [hostId, organisationId, phoneNorm],
+    );
+    existing = row;
+  }
+  if (!existing) {
+    const [[row]] = await poolConn.query(
+      `SELECT id FROM host_contacts
+       WHERE host_id = ? AND organisation_id = ? AND LOWER(full_name) = LOWER(?)
+       LIMIT 1`,
+      [hostId, organisationId, name],
+    );
+    existing = row;
+  }
+
+  if (existing?.id) {
+    await poolConn.query(
+      `UPDATE host_contacts
+       SET full_name = ?, email = ?, phone = ?, company = ?,
+           visitor_id = COALESCE(?, visitor_id),
+           use_count = use_count + 1,
+           last_used_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [name, emailNorm, phoneNorm, companyNorm, visitorId || null, existing.id],
+    );
+    return existing.id;
+  }
+
+  const id = generateId('hct');
+  await poolConn.query(
+    `INSERT INTO host_contacts (
+      id, organisation_id, host_id, visitor_id, full_name, email, phone, company, use_count, last_used_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
+    [id, organisationId, hostId, visitorId || null, name, emailNorm, phoneNorm, companyNorm],
+  );
+  return id;
 }

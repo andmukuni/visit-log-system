@@ -441,6 +441,39 @@ export function formatTime12Compact(date) {
     .replace(/\s/g, '');
 }
 
+export function parseTimeInputValue(value) {
+  const [hours = 0, minutes = 0] = String(value || '09:00').split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  let hour12 = hours % 12;
+  if (hour12 === 0) hour12 = 12;
+  const snappedMinute = Math.round(minutes / 30) * 30 % 60;
+  return { hour12, minute: snappedMinute, period };
+}
+
+export function toTimeInputFromParts({ hour12, minute, period }) {
+  let hours24 = hour12 % 12;
+  if (period === 'PM') hours24 += 12;
+  if (period === 'AM' && hour12 === 12) hours24 = 0;
+  if (period === 'PM' && hour12 === 12) hours24 = 12;
+  return `${String(hours24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+export function formatTimePickerLabel(value) {
+  const { hour12, minute, period } = parseTimeInputValue(value);
+  return `${hour12}:${String(minute).padStart(2, '0')}${period.toLowerCase()}`;
+}
+
+export function resolveExecutiveSiteId(formSiteId, referenceData) {
+  return formSiteId || referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '';
+}
+
+export function resolveExecutiveSiteLabel(referenceData, siteId) {
+  const resolvedId = siteId || resolveExecutiveSiteId('', referenceData);
+  const site = referenceData?.sites?.find((entry) => entry.id === resolvedId);
+  if (!site) return null;
+  return `${site.name}${site.code ? ` (${site.code})` : ''}`;
+}
+
 export function formatLongDate(date) {
   return date.toLocaleDateString(undefined, {
     weekday: 'long',

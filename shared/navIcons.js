@@ -73,7 +73,7 @@ export const NAV_ICONS = {
   zones: 'Map',
   zones_emergency: 'Map',
   unresolved: 'UserX',
-  contacts: 'Phone',
+  contacts: 'ContactRound',
   previous: 'History',
   export: 'Printer',
 };

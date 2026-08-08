@@ -17,12 +17,15 @@ import {
 } from 'lucide-react';
 import { LoadingButton } from '../ui';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
+import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import {
   buildDraftScheduleUpdate,
   formatShortDate,
   formatTime12Compact,
   formatTimezoneShort,
   isSameDay,
+  resolveExecutiveSiteId,
+  resolveExecutiveSiteLabel,
   setScheduleEndDate,
   setScheduleEndTime,
   setScheduleStartTime,
@@ -211,6 +214,18 @@ export default function ExecutiveAppointmentModal({
 
   const sameDay = isSameDay(startAt, endAt);
   const timezoneLabel = formatTimezoneShort(startAt);
+  const resolvedSiteId = resolveExecutiveSiteId(form.siteId, referenceData);
+  const resolvedSiteLabel = resolveExecutiveSiteLabel(referenceData, resolvedSiteId) || 'Office location';
+
+  const handleContactSelect = (contact) => {
+    setForm((prev) => ({
+      ...prev,
+      visitorName: contact.visitorName || prev.visitorName,
+      company: contact.company || prev.company,
+      phone: contact.phone || prev.phone,
+      email: contact.email || prev.email,
+    }));
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -221,7 +236,7 @@ export default function ExecutiveAppointmentModal({
       phone: form.phone.trim(),
       email: form.email?.trim() || '',
       purpose: form.purpose.trim(),
-      siteId: form.siteId,
+      siteId: resolvedSiteId,
       categoryId: form.categoryId || undefined,
       scheduledAt: toIsoLocalDateTime(startAt),
       allDay: form.allDay,
@@ -366,18 +381,9 @@ export default function ExecutiveAppointmentModal({
               {activeTab === 'details' ? (
                 <div className="space-y-0">
                   <FieldRow icon={MapPin}>
-                    <GraySelect
-                      value={form.siteId}
-                      onChange={(event) => setForm((prev) => ({ ...prev, siteId: event.target.value }))}
-                      required
-                    >
-                      <option value="">Add location</option>
-                      {(referenceData?.sites || []).map((site) => (
-                        <option key={site.id} value={site.id}>
-                          {site.name}{site.code ? ` (${site.code})` : ''}
-                        </option>
-                      ))}
-                    </GraySelect>
+                    <p className="rounded-md bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800">
+                      {resolvedSiteLabel}
+                    </p>
                   </FieldRow>
 
                   <FieldRow icon={Bell}>
@@ -487,11 +493,13 @@ export default function ExecutiveAppointmentModal({
                 <h3 className="text-sm font-medium text-[#1a73e8]">Guests</h3>
               </div>
 
-              <GrayInput
+              <ExecutiveContactAutocomplete
                 value={form.visitorName}
-                onChange={(event) => setForm((prev) => ({ ...prev, visitorName: event.target.value }))}
+                onChange={(visitorName) => setForm((prev) => ({ ...prev, visitorName }))}
+                onSelectContact={handleContactSelect}
                 placeholder="Add guests"
                 required
+                inputClassName="w-full rounded-md border-0 bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30"
               />
 
               <div className="mt-3 space-y-2">

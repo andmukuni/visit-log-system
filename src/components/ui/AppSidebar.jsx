@@ -1,11 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { ChevronDown, X } from 'lucide-react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { ChevronDown, LogOut, X } from 'lucide-react';
 import NavIcon from './NavIcon';
 import { getKpiAccentBgClass } from './PortalKpiCard';
 import { PORTAL_ICONS } from '../../../shared/navIcons.js';
+import { PORTALS } from '../../../shared/portalNavigation.js';
 import { APP_NAME, SIDEBAR_BRAND_NAME, LOGO_PATH } from '../../../shared/branding.js';
 import { useSidebarNav } from '../../context/SidebarContext';
+import { useAuth } from '../../context/AuthContext';
 
 const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentIndex = 0 }) {
   return (
@@ -88,6 +90,58 @@ const PortalSwitcher = memo(function PortalSwitcher({ accessiblePortals, onNavig
             <span className="truncate">{portal.label.replace(/ Portal$/, '')}</span>
           </Link>
         ))}
+      </div>
+    </div>
+  );
+});
+
+function getUserInitials(name = '') {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'U';
+}
+
+const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate }) {
+  const { user, logout } = useAuth();
+  const { portalId } = useSidebarNav();
+  const navigate = useNavigate();
+
+  if (!user) return null;
+
+  const displayName = user.name || 'User';
+  const portalLabel = PORTALS[portalId]?.label?.replace(/ Portal$/, '') || 'Portal';
+
+  const handleLogout = () => {
+    onNavigate?.();
+    logout();
+    navigate('/admin/login');
+  };
+
+  return (
+    <div className="sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 p-4">
+      <div className="flex items-center gap-3 rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-navy-700 text-sm font-semibold text-white shadow-inner">
+          {getUserInitials(displayName)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+          <p className="truncate text-xs text-navy-400">{user.email}</p>
+          <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide text-cyan-400/90">
+            {portalLabel}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="shrink-0 rounded-lg p-2 text-navy-400 transition-colors hover:bg-navy-800 hover:text-red-300"
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </div>
   );
@@ -210,6 +264,8 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         )}
         <PortalSwitcher accessiblePortals={accessiblePortals} onNavigate={onCloseSidebar} />
       </SidebarScrollNav>
+
+      <SidebarUserProfile onNavigate={onCloseSidebar} />
 
       {settings.length > 0 && (
         <div className="shrink-0 border-t border-navy-800 p-4 space-y-1">

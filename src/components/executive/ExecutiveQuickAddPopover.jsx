@@ -4,23 +4,24 @@ import {
   Calendar,
   Clock,
   GripHorizontal,
-  MapPin,
   TextAlignStart,
   UserPlus,
   X,
 } from 'lucide-react';
 import ExecutiveAppointmentModal from './ExecutiveAppointmentModal';
+import ExecutiveQuickAddSchedule from './ExecutiveQuickAddSchedule';
+import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import { LoadingButton } from '../ui';
 import {
   buildDraftScheduleUpdate,
   clampPopoverToViewport,
   computeQuickAddPopoverPosition,
-  formatLongDate,
+  resolveExecutiveSiteId,
+  resolveExecutiveSiteLabel,
   setScheduleEndTime,
   setScheduleStartTime,
   toAllDaySchedule,
   toIsoLocalDateTime,
-  toTimeInputValue,
 } from './calendarUtils';
 
 const initialForm = () => ({
@@ -50,6 +51,7 @@ export default function ExecutiveQuickAddPopover({
   const [form, setForm] = useState(initialForm);
   const [visible, setVisible] = useState(false);
   const [showFullEditor, setShowFullEditor] = useState(false);
+  const [activeTimePicker, setActiveTimePicker] = useState(null);
   const [viewportPosition, setViewportPosition] = useState(null);
   const popoverRef = useRef(null);
   const openedSessionIdRef = useRef(null);
@@ -60,6 +62,7 @@ export default function ExecutiveQuickAddPopover({
       setForm(initialForm());
       setVisible(false);
       setShowFullEditor(false);
+      setActiveTimePicker(null);
       setViewportPosition(null);
       openedSessionIdRef.current = null;
       return undefined;
@@ -136,15 +139,15 @@ export default function ExecutiveQuickAddPopover({
       window.removeEventListener('resize', onViewportChange);
       window.removeEventListener('scroll', onViewportChange, true);
     };
-  }, [draft, position, visible, form.allDay]);
+  }, [draft, position, visible, form.allDay, activeTimePicker]);
 
   if (!draft || !position) return null;
 
   const startAt = draft.startAt;
   const endAt = draft.endAt;
-  const startTime = toTimeInputValue(startAt);
-  const endTime = toTimeInputValue(endAt);
   const calendarLabel = `${executive?.title || 'Executive'} office`;
+  const resolvedSiteId = resolveExecutiveSiteId(form.siteId, referenceData);
+  const resolvedSiteLabel = resolveExecutiveSiteLabel(referenceData, resolvedSiteId);
 
   const updateTimes = (nextStart, nextEnd) => {
     onDraftChange(buildDraftScheduleUpdate(draft, nextStart, nextEnd));
@@ -178,6 +181,16 @@ export default function ExecutiveQuickAddPopover({
     setForm((prev) => ({ ...prev, allDay: checked }));
   };
 
+  const handleContactSelect = (contact) => {
+    setForm((prev) => ({
+      ...prev,
+      visitorName: contact.visitorName || prev.visitorName,
+      company: contact.company || prev.company,
+      phone: contact.phone || prev.phone,
+      email: contact.email || prev.email,
+    }));
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     onSave({
@@ -187,7 +200,7 @@ export default function ExecutiveQuickAddPopover({
       phone: form.phone.trim(),
       email: form.email?.trim() || '',
       purpose: form.purpose.trim(),
-      siteId: form.siteId,
+      siteId: resolvedSiteId,
       categoryId: form.categoryId || undefined,
       scheduledAt: toIsoLocalDateTime(startAt),
       allDay: form.allDay,
@@ -279,29 +292,15 @@ export default function ExecutiveQuickAddPopover({
             <div className="flex items-start gap-3">
               <Clock size={18} className="mt-3 shrink-0 text-gray-500" />
               <div className="flex-1 space-y-2">
-                <div className="rounded-xl bg-[#f1f3f4] px-4 py-3">
-                  <p className="text-sm font-medium text-gray-800">{formatLongDate(startAt)}</p>
-                  {!form.allDay ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={(event) => handleStartTime(event.target.value)}
-                        className="rounded-lg border-0 bg-white px-2.5 py-1.5 text-sm shadow-sm"
-                      />
-                      <span className="text-gray-400">–</span>
-                      <input
-                        type="time"
-                        value={endTime}
-                        onChange={(event) => handleEndTime(event.target.value)}
-                        className="rounded-lg border-0 bg-white px-2.5 py-1.5 text-sm shadow-sm"
-                      />
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm text-gray-600">All day</p>
-                  )}
-                  <p className="mt-2 text-xs text-gray-500">Does not repeat</p>
-                </div>
+                <ExecutiveQuickAddSchedule
+                  startAt={startAt}
+                  endAt={endAt}
+                  allDay={form.allDay}
+                  activeTimePicker={activeTimePicker}
+                  onActiveTimePickerChange={setActiveTimePicker}
+                  onStartTimeChange={handleStartTime}
+                  onEndTimeChange={handleEndTime}
+                />
                 <label className="flex items-center gap-2 text-sm text-gray-600">
                   <input
                     type="checkbox"
@@ -319,12 +318,12 @@ export default function ExecutiveQuickAddPopover({
                 <button type="button" className="text-sm text-gray-600 hover:text-gray-800 text-left">
                   Add guest
                 </button>
-                <input
+                <ExecutiveContactAutocomplete
                   value={form.visitorName}
-                  onChange={(event) => setForm((prev) => ({ ...prev, visitorName: event.target.value }))}
+                  onChange={(visitorName) => setForm((prev) => ({ ...prev, visitorName }))}
+                  onSelectContact={handleContactSelect}
                   placeholder="Visitor name"
                   required
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -341,23 +340,6 @@ export default function ExecutiveQuickAddPopover({
                   />
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <MapPin size={18} className="mt-2 shrink-0 text-gray-500" />
-              <select
-                value={form.siteId}
-                onChange={(event) => setForm((prev) => ({ ...prev, siteId: event.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
-                required
-              >
-                <option value="">Add location</option>
-                {(referenceData?.sites || []).map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {site.name}{site.code ? ` (${site.code})` : ''}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div className="flex items-start gap-3">
@@ -378,7 +360,10 @@ export default function ExecutiveQuickAddPopover({
                   <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#039be5]" />
                   {calendarLabel}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Busy · Default visibility · Notify 30 minutes before</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {resolvedSiteLabel ? `${resolvedSiteLabel} · ` : ''}
+                  Busy · Default visibility · Notify 30 minutes before
+                </p>
               </div>
             </div>
           </div>

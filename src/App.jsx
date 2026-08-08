@@ -66,6 +66,7 @@ const ManagementExportHistoryPage = lazy(() => import('./pages/management/Manage
 const ExecutiveDashboardPage = lazy(() => import('./pages/executive/ExecutiveDashboardPage'));
 const ExecutiveAppointmentsPage = lazy(() => import('./pages/executive/ExecutiveAppointmentsPage'));
 const ExecutiveVisitorsPage = lazy(() => import('./pages/executive/ExecutiveVisitorsPage'));
+const ExecutiveContactsPage = lazy(() => import('./pages/executive/ExecutiveContactsPage'));
 const ExecutiveVisitDetailPage = lazy(() => import('./pages/executive/ExecutiveVisitDetailPage'));
 const ExecutiveNotificationsPage = lazy(() => import('./pages/executive/ExecutiveNotificationsPage'));
 
@@ -371,6 +372,7 @@ export const router = createBrowserRouter([
           { index: true, element: <ExecutiveDashboardPage /> },
           { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
           { path: 'visitors', element: <ExecutiveVisitorsPage /> },
+          { path: 'contacts', element: <ExecutiveContactsPage /> },
           { path: 'visitors/:id', element: <ExecutiveVisitDetailPage /> },
           { path: 'notifications', element: <ExecutiveNotificationsPage /> },
         ],

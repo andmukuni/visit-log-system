@@ -232,4 +232,12 @@ export const executiveApi = {
     return apiFetch(`/admin/executive/visits${qs ? `?${qs}` : ''}`);
   },
   getVisit: (id) => apiFetch(`/admin/executive/visits/${id}`),
+  getContacts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/executive/contacts${qs ? `?${qs}` : ''}`);
+  },
+  searchContacts: (params = {}) => {
+    const qs = new URLSearchParams({ limit: 8, ...params }).toString();
+    return apiFetch(`/admin/executive/contacts?${qs}`);
+  },
 };

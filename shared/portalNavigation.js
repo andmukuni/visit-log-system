@@ -158,6 +158,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary' },
     { key: 'appointments', name: 'My Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
     { key: 'visitors', name: 'My Visitors', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
+    { key: 'contacts', name: 'My Contacts', to: '/executive/contacts', permission: 'executive.contacts', section: 'primary' },
     { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary' },
   ],
   management: [

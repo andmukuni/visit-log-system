@@ -113,6 +113,7 @@ const EXECUTIVE_PERMISSIONS = [
   { key: 'executive.calendar', name: 'View my appointments', group: 'Executive' },
   { key: 'executive.appointments', name: 'Manage executive appointments', group: 'Executive' },
   { key: 'executive.visits', name: 'View my visitors', group: 'Executive' },
+  { key: 'executive.contacts', name: 'Manage my contacts', group: 'Executive' },
   { key: 'executive.full_contact', name: 'View full VIP/VVIP contact details', group: 'Executive' },
   { key: 'executive.assign_vip', name: 'Assign VIP/VVIP classification', group: 'Executive' },
 ];
@@ -122,6 +123,7 @@ export const EXECUTIVE_PORTAL_KEYS = [
   'executive.calendar',
   'executive.appointments',
   'executive.visits',
+  'executive.contacts',
   'executive.full_contact',
   'host.notifications',
 ];
