@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck } from 'lucide-react';
+import { Bell, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock, Clock3, User, UserCheck, Users } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
 import { executiveApi } from '../../utils/visitorApi';
@@ -160,6 +160,52 @@ const LEGEND_ITEMS = [
   { label: 'VVIP', swatch: 'bg-amber-100 border-amber-500' },
   { label: 'Pending', swatch: 'bg-orange-50 border-orange-500' },
 ];
+
+const SIDEBAR_LINKS = [
+  {
+    to: '/executive/visitors',
+    label: 'My visitors',
+    description: 'View visitor records',
+    icon: Users,
+    accent: 'bg-sky-100 text-sky-700',
+  },
+  {
+    to: '/executive/notifications',
+    label: 'Notifications',
+    description: 'Alerts and updates',
+    icon: Bell,
+    accent: 'bg-violet-100 text-violet-700',
+  },
+];
+
+function ExecutiveSidebarLinks() {
+  return (
+    <div className="rounded-2xl border border-navy-100 bg-white p-2 shadow-sm">
+      <div className="space-y-1">
+        {SIDEBAR_LINKS.map(({ to, label, description, icon: Icon, accent }) => (
+          <Link
+            key={to}
+            to={to}
+            className="group flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-navy-50"
+          >
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>
+              <Icon size={16} strokeWidth={2.25} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-navy-900">{label}</span>
+              <span className="block truncate text-[11px] text-navy-400">{description}</span>
+            </span>
+            <ChevronRight
+              size={14}
+              className="shrink-0 text-navy-300 transition-transform group-hover:translate-x-0.5 group-hover:text-navy-500"
+              aria-hidden="true"
+            />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ExecutiveLegendPanel() {
   return (
@@ -448,10 +494,7 @@ export default function ExecutiveWeekCalendar({
 
         <ExecutiveLegendPanel />
 
-        <div className="space-y-1 text-sm">
-          <Link to="/executive/visitors" className="block rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50">My visitors</Link>
-          <Link to="/executive/notifications" className="block rounded-lg px-3 py-2 text-blue-600 hover:bg-blue-50">Notifications</Link>
-        </div>
+        <ExecutiveSidebarLinks />
       </aside>
 
       {/* Main calendar */}
