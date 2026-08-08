@@ -44,23 +44,23 @@ const KPI_ITEMS = [
   },
 ];
 
-export default function ExecutiveAppointmentsKpiRow({ kpis = {} }) {
+export default function ExecutiveAppointmentsKpiRow({ kpis = {}, className = '' }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 ${className}`.trim()}>
       {KPI_ITEMS.map(({ key, primaryLabel, secondaryLabel, icon: Icon, iconWrap }) => (
         <div
           key={key}
-          className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-5 py-5 shadow-sm"
+          className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm"
         >
-          <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${iconWrap}`}>
-            <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${iconWrap}`}>
+            <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-3xl font-bold leading-none tabular-nums text-slate-900">
+            <p className="text-xl font-bold leading-none tabular-nums text-slate-900 sm:text-2xl">
               {Number(kpis[key] ?? 0)}
             </p>
-            <p className="mt-2.5 text-sm font-semibold text-gray-600">{primaryLabel}</p>
-            <p className="mt-1 text-xs text-gray-400">{secondaryLabel}</p>
+            <p className="mt-1 text-[11px] font-semibold leading-tight text-gray-600 sm:text-xs">{primaryLabel}</p>
+            <p className="mt-0.5 hidden text-[10px] leading-tight text-gray-400 sm:block">{secondaryLabel}</p>
           </div>
         </div>
       ))}

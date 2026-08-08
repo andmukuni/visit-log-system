@@ -305,26 +305,25 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}
     >
-      <div className={`flex items-center justify-between border-b border-navy-800 px-6 ${executiveTheme ? 'min-h-24 py-5' : 'h-24'}`}>
-        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-4 min-w-0">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full">
+      <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-800 px-5 sm:px-6">
+        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management Executive Portal' : (title || APP_NAME)} className="flex items-center gap-3 min-w-0">
+          <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${executiveTheme ? 'h-10 w-10' : 'h-11 w-11'}`}>
             <img
               src={LOGO_PATH}
               alt=""
-              width={56}
-              height={56}
+              width={executiveTheme ? 40 : 44}
+              height={executiveTheme ? 40 : 44}
               decoding="async"
               className="h-full w-full object-contain"
             />
           </span>
           {executiveTheme ? (
-            <span className="min-w-0 leading-none">
-              <span className="block text-[17px] font-black uppercase tracking-[0.08em] text-white">Visitor</span>
-              <span className="block text-[17px] font-black uppercase tracking-[0.08em] text-white">Management</span>
-              <span className="mt-2 block text-sm font-medium tracking-wide text-amber-400">Executive Portal</span>
+            <span className="min-w-0 leading-tight">
+              <span className="block text-sm font-black uppercase tracking-[0.06em] text-white sm:text-[15px]">Visitor Management</span>
+              <span className="mt-0.5 block text-xs font-medium tracking-wide text-amber-400">Executive Portal</span>
             </span>
           ) : (
-            <span className="truncate text-3xl font-black uppercase leading-none tracking-tight text-white">
+            <span className="truncate text-2xl font-black uppercase leading-none tracking-tight text-white">
               {SIDEBAR_BRAND_NAME}
             </span>
           )}

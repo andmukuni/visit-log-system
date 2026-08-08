@@ -49,7 +49,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
       )}
 
       <div className="md:ml-[var(--sidebar-width)] flex h-screen min-h-0 flex-col overflow-hidden">
-        <header className="z-30 flex h-24 shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-navy-50 px-4 sm:px-6">
+        <header className="z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-navy-50 px-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
@@ -96,7 +96,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
 
           {content && !collapsed && (
             <aside className="hidden xl:block w-[var(--panel-width)] shrink-0 p-4 pl-0">
-              <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto space-y-4">
+              <div className="sticky top-[var(--header-height)] max-h-[calc(100vh-var(--header-height))] overflow-y-auto space-y-4">
                 {content}
               </div>
             </aside>

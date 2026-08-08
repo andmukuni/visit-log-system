@@ -64,7 +64,7 @@ function FilterDropdown({ label, icon: Icon, value, onChange, options }) {
   return (
     <label className="relative inline-flex shrink-0">
       <span
-        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors sm:gap-2 sm:px-3 sm:py-2 sm:text-sm ${
           isActive
             ? 'border-[#1a73e8]/30 bg-sky-50 text-[#1a73e8]'
             : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -163,7 +163,7 @@ export function ExecutiveAppointmentsTableFooter({
   }, [safePage, totalPages]);
 
   return (
-    <div className={`grid shrink-0 grid-cols-1 items-center gap-3 bg-white px-5 py-3 sm:grid-cols-[1fr_auto_1fr] ${className}`}>
+    <div className={`grid shrink-0 grid-cols-1 items-center gap-2 bg-white px-4 py-2 sm:grid-cols-[1fr_auto_1fr] sm:gap-3 sm:px-5 sm:py-2.5 ${className}`}>
       <p className="text-sm text-gray-500 sm:justify-self-start">
         {total === 0
           ? 'No appointments'
@@ -246,11 +246,11 @@ export default function ExecutiveAppointmentsTableSection({
   onView,
 }) {
   return (
-    <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden bg-white ${
-      splitLayout ? 'flex-[1.75] lg:min-w-0' : 'rounded-2xl border border-gray-200 shadow-sm'
+    <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white ${
+      splitLayout ? 'lg:min-w-0 lg:flex-[1.75]' : ''
     }`}>
-      <div className="border-b border-gray-200">
-        <div className="flex gap-0 overflow-x-auto px-5 pt-1">
+      <div className="shrink-0 border-b border-gray-200">
+        <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
           {TABS.map(({ id, label, badgeKey }) => {
             const active = tab === id;
             const badge = badgeKey ? stats[badgeKey] : null;
@@ -259,7 +259,7 @@ export default function ExecutiveAppointmentsTableSection({
                 key={id}
                 type="button"
                 onClick={() => onTabChange?.(id)}
-                className={`relative shrink-0 whitespace-nowrap px-4 pb-3 pt-3 text-sm font-semibold transition-colors ${
+                className={`relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold transition-colors sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm ${
                   active
                     ? 'text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8]'
                     : 'text-gray-500 hover:text-gray-800'
@@ -279,11 +279,11 @@ export default function ExecutiveAppointmentsTableSection({
         </div>
       </div>
 
-      <div className="border-b border-gray-200 px-5 py-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="shrink-0 border-b border-gray-200 px-4 py-2 sm:px-5 sm:py-2.5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <label className="relative block min-w-0 flex-1">
             <Search
-              size={16}
+              size={15}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               aria-hidden="true"
             />
@@ -292,11 +292,11 @@ export default function ExecutiveAppointmentsTableSection({
               value={search}
               onChange={(e) => onSearchChange?.(e.target.value)}
               placeholder="Search by visitor name, purpose or host..."
-              className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
             />
           </label>
 
-          <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
             <FilterDropdown
               label="Date range"
               icon={Calendar}
@@ -320,9 +320,9 @@ export default function ExecutiveAppointmentsTableSection({
             />
             <button
               type="button"
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
             >
-              <SlidersHorizontal size={15} aria-hidden="true" />
+              <SlidersHorizontal size={14} aria-hidden="true" />
               More Filters
             </button>
           </div>
@@ -330,34 +330,34 @@ export default function ExecutiveAppointmentsTableSection({
           <button
             type="button"
             onClick={() => exportAppointmentsCsv(rows)}
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 lg:self-center"
+            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm lg:self-center"
           >
-            <Download size={15} aria-hidden="true" />
+            <Download size={14} aria-hidden="true" />
             Export
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <Spinner size={32} />
+          <div className="flex justify-center py-10">
+            <Spinner size={28} />
           </div>
         ) : rows.length === 0 ? (
-          <div className="px-6 py-16 text-center text-sm text-gray-500">
+          <div className="px-6 py-10 text-center text-sm text-gray-500">
             No appointments match your filters.
           </div>
         ) : (
           <table className="min-w-full text-sm">
-            <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            <thead className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-[11px]">
               <tr>
-                <th className="whitespace-nowrap px-5 py-3">Time</th>
-                <th className="whitespace-nowrap px-4 py-3">Visitor</th>
-                <th className="whitespace-nowrap px-4 py-3">Type</th>
-                <th className="min-w-[180px] px-4 py-3">Purpose</th>
-                <th className="whitespace-nowrap px-4 py-3">Host</th>
-                <th className="whitespace-nowrap px-4 py-3">Status</th>
-                <th className="whitespace-nowrap px-5 py-3 text-right">Actions</th>
+                <th className="whitespace-nowrap px-4 py-2 sm:px-5">Time</th>
+                <th className="whitespace-nowrap px-3 py-2 sm:px-4">Visitor</th>
+                <th className="whitespace-nowrap px-3 py-2 sm:px-4">Type</th>
+                <th className="min-w-[140px] px-3 py-2 sm:min-w-[180px] sm:px-4">Purpose</th>
+                <th className="whitespace-nowrap px-3 py-2 sm:px-4">Host</th>
+                <th className="whitespace-nowrap px-3 py-2 sm:px-4">Status</th>
+                <th className="whitespace-nowrap px-4 py-2 text-right sm:px-5">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -376,30 +376,30 @@ export default function ExecutiveAppointmentsTableSection({
                         : 'border-l-[3px] border-l-transparent hover:bg-gray-50/70'
                     }`}
                   >
-                    <td className="whitespace-nowrap px-5 py-4 align-top">
+                    <td className="whitespace-nowrap px-4 py-2.5 align-top sm:px-5 sm:py-3">
                       <p className="font-semibold tabular-nums text-gray-900">{range}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">{dayLabel}</p>
+                      <p className="mt-0.5 text-[11px] text-gray-500 sm:text-xs">{dayLabel}</p>
                     </td>
-                    <td className="px-4 py-4 align-top">
+                    <td className="px-3 py-2.5 align-top sm:px-4 sm:py-3">
                       <p className="font-semibold text-gray-900">{row.visitor_name || '—'}</p>
-                      {row.phone && <p className="mt-0.5 text-xs text-gray-500">{row.phone}</p>}
+                      {row.phone && <p className="mt-0.5 text-[11px] text-gray-500 sm:text-xs">{row.phone}</p>}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-4 align-top">
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top sm:px-4 sm:py-3">
                       <VisitorTypeCell classification={row.classification} categoryName={row.category_name} />
                     </td>
-                    <td className="px-4 py-4 align-top">
+                    <td className="px-3 py-2.5 align-top sm:px-4 sm:py-3">
                       <p className="font-semibold text-gray-900">{purposeTitle}</p>
                       {purposeSubtitle && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{purposeSubtitle}</p>
+                        <p className="mt-0.5 line-clamp-1 text-[11px] text-gray-500 sm:line-clamp-2 sm:text-xs">{purposeSubtitle}</p>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-4 align-top text-gray-700">
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top text-gray-700 sm:px-4 sm:py-3">
                       {row.host_name || '—'}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-4 align-top">
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top sm:px-4 sm:py-3">
                       <AppointmentStatusPill visitStatus={row.visit_status} />
                     </td>
-                    <td className="whitespace-nowrap px-5 py-4 align-top text-right">
+                    <td className="whitespace-nowrap px-4 py-2.5 align-top text-right sm:px-5 sm:py-3">
                       <div className="inline-flex items-center gap-0.5">
                         <button
                           type="button"
@@ -407,18 +407,18 @@ export default function ExecutiveAppointmentsTableSection({
                             event.stopPropagation();
                             onView?.(row);
                           }}
-                          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white hover:text-navy-700"
+                          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-navy-700"
                           aria-label={`View ${row.visitor_name || 'appointment'}`}
                         >
-                          <Eye size={16} />
+                          <Eye size={15} />
                         </button>
                         <button
                           type="button"
                           onClick={(event) => event.stopPropagation()}
-                          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white hover:text-navy-700"
+                          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-navy-700"
                           aria-label="More actions"
                         >
-                          <MoreVertical size={16} />
+                          <MoreVertical size={15} />
                         </button>
                       </div>
                     </td>

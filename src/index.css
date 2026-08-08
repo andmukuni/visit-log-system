@@ -36,7 +36,8 @@
 
 :root {
   --sidebar-width: 18rem;
-  --header-height: 3.5rem;
+  --header-height: 5rem;
+  --shell-content-padding-y: 2.5rem;
   --panel-width: 20rem;
   --surface-main: #eef0f4;
   --surface-card: #ffffff;

@@ -6,9 +6,10 @@ export const CALENDAR_VISIBLE_HOURS = 11;
 export const HOUR_HEIGHT_PX = 52;
 export const DEFAULT_EVENT_MINUTES = 60;
 export const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
-export const GRID_PADDING_BOTTOM_PX = 12;
+export const GRID_PADDING_BOTTOM_PX = 0;
 export const GRID_SCROLL_HEIGHT_PX = GRID_BODY_HEIGHT_PX + GRID_PADDING_BOTTOM_PX;
 export const GRID_VIEWPORT_HEIGHT_PX = CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT_PX;
+export const MIN_FIT_HOUR_HEIGHT_PX = 22;
 export const HOUR_LABELS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
   (_, i) => CALENDAR_START_HOUR + i,
@@ -25,6 +26,11 @@ export function startOfWeek(date) {
   const d = startOfDay(date);
   d.setDate(d.getDate() - d.getDay());
   return d;
+}
+
+/** First day of the visible week range (today-anchored, not Sunday-based). */
+export function startOfVisibleWeek(date) {
+  return startOfDay(date);
 }
 
 export function addDays(date, days) {
@@ -65,6 +71,7 @@ export const CALENDAR_VIEW_MODES = {
     hourHeight: 52,
     minDayWidth: 108,
     stepDays: 7,
+    todayFirst: true,
   },
   twoWeeks: {
     id: 'twoWeeks',
@@ -104,10 +111,18 @@ export function gridScrollHeightPx(hourHeight = HOUR_HEIGHT_PX) {
   return gridBodyHeightPx(hourHeight) + GRID_PADDING_BOTTOM_PX;
 }
 
+export function fitHourHeight(viewportHeightPx, hourSpan, preferredHourHeight = HOUR_HEIGHT_PX) {
+  const viewportBody = Math.max(0, viewportHeightPx - GRID_PADDING_BOTTOM_PX);
+  if (viewportBody <= 0 || hourSpan <= 0) return preferredHourHeight;
+  const fittedHeight = viewportBody / hourSpan;
+  return Math.max(MIN_FIT_HOUR_HEIGHT_PX, fittedHeight);
+}
+
 export function normalizePeriodStart(date, viewMode = 'week') {
   const config = getViewConfig(viewMode);
   if (config.stepMonths) return startOfMonth(date);
   if (config.dayCount === 1) return startOfDay(date);
+  if (config.todayFirst) return startOfVisibleWeek(date);
   return startOfWeek(date);
 }
 
@@ -220,7 +235,7 @@ export function isScheduleInPast(startAt, now = new Date()) {
 export const FUTURE_SCHEDULE_ERROR = 'Appointments cannot be scheduled in the past.';
 
 export function isInWeek(day, weekStart) {
-  const start = startOfWeek(weekStart).getTime();
+  const start = startOfVisibleWeek(weekStart).getTime();
   const end = start + (7 * DAY_MS);
   const target = startOfDay(day).getTime();
   return target >= start && target < end;
@@ -300,12 +315,17 @@ export function formatTimeRange24(start, end) {
   return `${formatClockTime(start)} - ${formatClockTime(end)}`;
 }
 
-/** Scroll position that keeps the given hour near the top of the 12-hour viewport. */
-export function initialGridScrollTop(hour, viewportHeightPx = GRID_VIEWPORT_HEIGHT_PX) {
-  const visibleHours = viewportHeightPx / HOUR_HEIGHT_PX;
+/** Scroll position that keeps the given hour near the top of the visible grid viewport. */
+export function initialGridScrollTop(
+  hour,
+  viewportHeightPx = GRID_VIEWPORT_HEIGHT_PX,
+  hourHeight = HOUR_HEIGHT_PX,
+) {
+  const visibleHours = viewportHeightPx / hourHeight;
+  const bodyHeight = gridBodyHeightPx(hourHeight);
   const offsetHours = Math.max(0, hour - 1);
-  const maxScroll = Math.max(0, GRID_BODY_HEIGHT_PX - visibleHours * HOUR_HEIGHT_PX);
-  return Math.min(offsetHours * HOUR_HEIGHT_PX, maxScroll);
+  const maxScroll = Math.max(0, bodyHeight - visibleHours * hourHeight);
+  return Math.min(offsetHours * hourHeight, maxScroll);
 }
 
 export function formatDayHeader(date, today = new Date()) {

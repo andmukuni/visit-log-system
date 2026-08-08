@@ -39,11 +39,11 @@ function DetailRow({ icon: Icon, label, value }) {
 
 function DetailSection({ title, children }) {
   return (
-    <section className="mt-7">
-      <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-400">
+    <section className="mt-4 sm:mt-5">
+      <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
         {title}
       </h3>
-      <div className="mt-2 grid grid-cols-[16px_1fr] gap-x-3">{children}</div>
+      <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">{children}</div>
     </section>
   );
 }
@@ -61,11 +61,11 @@ export function ExecutiveAppointmentsDetailActions({
   );
 
   return (
-    <div className={`flex shrink-0 gap-3 px-5 py-3 ${className}`}>
+    <div className={`flex shrink-0 gap-2 px-4 py-2 sm:gap-3 sm:px-5 sm:py-2.5 ${className}`}>
       <button
         type="button"
         onClick={() => onReschedule?.(appointment, { start, end })}
-        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1a73e8] bg-white px-3 py-2.5 text-sm font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
       >
         <CalendarCheck size={16} aria-hidden="true" />
         Reschedule
@@ -73,7 +73,7 @@ export function ExecutiveAppointmentsDetailActions({
       {appointment.visit_id ? (
         <Link
           to={`/executive/visitors/${appointment.visit_id}`}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
         >
           <Edit3 size={16} aria-hidden="true" />
           View / Edit
@@ -82,7 +82,7 @@ export function ExecutiveAppointmentsDetailActions({
         <button
           type="button"
           disabled
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy-900/40 px-3 py-2.5 text-sm font-semibold text-white"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900/40 px-2.5 py-2 text-xs font-semibold text-white sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
         >
           <Edit3 size={16} aria-hidden="true" />
           View / Edit
@@ -151,8 +151,8 @@ export default function ExecutiveAppointmentsDetailSidebar({
   const access = 'Main Reception';
 
   return (
-    <aside className="flex min-h-0 w-full flex-col border-l border-gray-200 bg-white lg:min-w-[320px] lg:max-w-[400px] lg:flex-1">
-      <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
+    <aside className="flex min-h-0 w-full flex-col overflow-hidden border-l border-gray-200 bg-white lg:min-w-[280px] lg:max-w-[360px] lg:flex-1">
+      <div className="flex shrink-0 items-center justify-between px-4 pb-1.5 pt-3 sm:px-5 sm:pt-3.5">
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${displayStatus.bg} ${displayStatus.text}`}>
           {displayStatus.label}
         </span>
@@ -166,7 +166,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
         </button>
       </div>
 
-      <div className="overflow-y-auto px-5 pb-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
         {loading && (
           <div className="flex justify-center py-16">
             <Spinner size={28} />
@@ -181,22 +181,22 @@ export default function ExecutiveAppointmentsDetailSidebar({
 
         {!loading && !error && (
           <>
-            <div className="flex items-start gap-3 pt-1">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-                <CalendarCheck size={20} strokeWidth={2} aria-hidden="true" />
+            <div className="flex items-start gap-2.5 pt-0.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 sm:h-10 sm:w-10 sm:rounded-xl">
+                <CalendarCheck size={18} strokeWidth={2} aria-hidden="true" />
               </span>
               <div className="min-w-0 pt-0.5">
-                <p className="text-sm text-gray-500">{dateLabel}</p>
-                <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                  <p className="text-[1.75rem] font-bold leading-none tabular-nums text-navy-900">
+                <p className="text-xs text-gray-500">{dateLabel}</p>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+                  <p className="text-xl font-bold leading-none tabular-nums text-navy-900 sm:text-2xl">
                     {range}
                   </p>
-                  <p className="text-sm text-gray-400">{durationLabel}</p>
+                  <p className="text-xs text-gray-400">{durationLabel}</p>
                 </div>
               </div>
             </div>
 
-            <h2 className="mt-5 text-[1.35rem] font-bold leading-tight text-navy-900">
+            <h2 className="mt-3 text-lg font-bold leading-tight text-navy-900 sm:mt-4 sm:text-xl">
               {title}
             </h2>
             <span className={`mt-2.5 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${categoryTag.className}`}>

@@ -245,17 +245,17 @@ export default function ExecutiveAppointmentsPage() {
   ), [openNewAppointment, unreadCount]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-[calc(100dvh-var(--header-height)-var(--shell-content-padding-y))] min-h-0 flex-col gap-2.5 overflow-hidden sm:gap-3">
       <PageHeader
         title="Appointments"
         subtitle="View, manage and approve all appointments."
         actions={pageActions}
       />
 
-      <ExecutiveAppointmentsKpiRow kpis={kpis} />
+      <ExecutiveAppointmentsKpiRow kpis={kpis} className="shrink-0" />
 
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-start">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row lg:items-stretch">
           <ExecutiveAppointmentsTableSection
             rows={rows}
             loading={loading}
@@ -297,7 +297,7 @@ export default function ExecutiveAppointmentsPage() {
         </div>
 
         {selected && (
-          <div className="hidden border-t border-gray-200 lg:flex lg:items-stretch">
+          <div className="hidden shrink-0 border-t border-gray-200 lg:flex lg:items-stretch">
             <div className="min-w-0 flex-[1.75]">
               <ExecutiveAppointmentsTableFooter
                 total={total}
@@ -307,7 +307,7 @@ export default function ExecutiveAppointmentsPage() {
                 onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
               />
             </div>
-            <div className="flex min-w-[320px] max-w-[400px] flex-1 items-center border-l border-gray-200">
+            <div className="flex min-w-[280px] max-w-[360px] flex-1 items-center border-l border-gray-200">
               <ExecutiveAppointmentsDetailActions
                 appointment={selected}
                 onReschedule={openReschedule}

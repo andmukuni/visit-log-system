@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Spinner } from '../../components/ui';
-import ExecutiveWeekCalendar, { startOfWeek, periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
+import ExecutiveWeekCalendar, { periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
 import ExecutiveDashboardHeaderActions from '../../components/executive/ExecutiveDashboardHeaderActions';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
 import { executiveApi, notificationsApi } from '../../utils/visitorApi';
@@ -23,7 +23,7 @@ async function fetchWithRetry(fn, attempts = 2) {
 
 export default function ExecutiveDashboardPage() {
   const { isAuthenticated, permissions } = useAuth();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [weekStart, setWeekStart] = useState(() => normalizePeriodStart(new Date(), 'week'));
   const [viewMode, setViewMode] = useState('week');
   const [dashboard, setDashboard] = useState(null);
   const [appointments, setAppointments] = useState([]);
@@ -110,7 +110,7 @@ export default function ExecutiveDashboardPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-[calc(100dvh-var(--header-height)-var(--shell-content-padding-y))] min-h-0 flex-col overflow-hidden">
       <PageHeader
         title={dashboardTitle}
         subtitle={formatExecutiveDashboardDate()}
@@ -123,7 +123,7 @@ export default function ExecutiveDashboardPage() {
       />
 
       {error && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-2 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {error}
           <button
             type="button"
@@ -136,6 +136,7 @@ export default function ExecutiveDashboardPage() {
       )}
 
       <ExecutiveWeekCalendar
+        className="min-h-0 flex-1 overflow-hidden"
         executive={executive}
         kpis={kpis}
         nextAppointment={dashboard?.nextAppointment}

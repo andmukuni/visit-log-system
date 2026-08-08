@@ -20,6 +20,7 @@ import {
   compareViewDensity,
   getPeriodDays,
   getViewConfig,
+  fitHourHeight,
   gridBodyHeightPx,
   gridScrollHeightPx,
   formatPeriodRange,
@@ -190,7 +191,9 @@ export default function ExecutiveWeekCalendar({
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
+  const sidebarRef = useRef(null);
   const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
+  const [layoutHeight, setLayoutHeight] = useState(null);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -204,15 +207,16 @@ export default function ExecutiveWeekCalendar({
   const viewConfig = useMemo(() => getViewConfig(viewMode), [viewMode]);
   const periodDays = useMemo(() => getPeriodDays(weekStart, viewMode), [weekStart, viewMode]);
   const hourSpan = CALENDAR_END_HOUR - CALENDAR_START_HOUR;
-  const layoutHourHeight = useMemo(() => {
-    const baseHeight = viewConfig.hourHeight;
-    const viewportBody = gridViewportHeight - GRID_PADDING_BOTTOM_PX;
-    if (viewportBody <= 0) return baseHeight;
-    const stretchedHeight = viewportBody / hourSpan;
-    return Math.max(baseHeight, stretchedHeight);
-  }, [gridViewportHeight, viewConfig.hourHeight, hourSpan]);
+  const layoutHourHeight = useMemo(
+    () => fitHourHeight(gridViewportHeight, hourSpan, viewConfig.hourHeight),
+    [gridViewportHeight, viewConfig.hourHeight, hourSpan],
+  );
   const gridBodyHeight = useMemo(() => gridBodyHeightPx(layoutHourHeight), [layoutHourHeight]);
   const gridScrollHeight = useMemo(() => gridScrollHeightPx(layoutHourHeight), [layoutHourHeight]);
+  const gridFitsViewport = useMemo(
+    () => gridScrollHeight <= gridViewportHeight + 1,
+    [gridScrollHeight, gridViewportHeight],
+  );
   const gridTemplateColumns = useMemo(
     () => `52px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
     [periodDays.length, viewConfig.minDayWidth],
@@ -220,6 +224,30 @@ export default function ExecutiveWeekCalendar({
   const compactHeaders = periodDays.length > 14;
   const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
   const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
+
+  useEffect(() => {
+    const sidebarEl = sidebarRef.current;
+    if (!sidebarEl) return undefined;
+
+    const syncLayoutHeight = () => {
+      if (window.innerWidth < 1024) {
+        setLayoutHeight(null);
+        return;
+      }
+      const nextHeight = sidebarEl.offsetHeight;
+      setLayoutHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+
+    syncLayoutHeight();
+    const observer = new ResizeObserver(syncLayoutHeight);
+    observer.observe(sidebarEl);
+    window.addEventListener('resize', syncLayoutHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncLayoutHeight);
+    };
+  }, [loading, kpis, nextAppointment, sidebarMonth, viewMode, weekStart]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -277,15 +305,20 @@ export default function ExecutiveWeekCalendar({
     const el = gridScrollRef.current;
     if (!el) return undefined;
 
+    if (gridFitsViewport) {
+      el.scrollTop = 0;
+      return undefined;
+    }
+
     const nowDate = new Date();
     const hasToday = periodDays.some((day) => isSameDay(day, nowDate));
     const focusHour = hasToday
       ? Math.max(CALENDAR_START_HOUR, nowDate.getHours())
       : 8;
 
-    el.scrollTop = initialGridScrollTop(focusHour, gridViewportHeight);
+    el.scrollTop = initialGridScrollTop(focusHour, gridViewportHeight, layoutHourHeight);
     return undefined;
-  }, [weekStart, loading, periodDays, gridViewportHeight, viewMode]);
+  }, [weekStart, loading, periodDays, gridViewportHeight, viewMode, gridFitsViewport, layoutHourHeight]);
 
   useEffect(() => {
     const scrollEl = gridScrollRef.current;
@@ -500,8 +533,11 @@ export default function ExecutiveWeekCalendar({
     const el = gridScrollRef.current;
     if (!el) return;
     const focusHour = Math.max(CALENDAR_START_HOUR, now.getHours());
-    el.scrollTo({ top: initialGridScrollTop(focusHour, gridViewportHeight), behavior: 'smooth' });
-  }, [now, gridViewportHeight]);
+    el.scrollTo({
+      top: initialGridScrollTop(focusHour, gridViewportHeight, layoutHourHeight),
+      behavior: 'smooth',
+    });
+  }, [now, gridViewportHeight, layoutHourHeight]);
 
   const mappedNextAppointment = useMemo(
     () => mapNextAppointmentToCalendarRow(nextAppointment),
@@ -532,8 +568,11 @@ export default function ExecutiveWeekCalendar({
   }, [nextAppointment]);
 
   return (
-    <div className={`flex min-h-0 flex-col gap-4 lg:flex-row lg:items-stretch ${className}`.trim()}>
-      <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-72 xl:w-80">
+    <div className={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-start lg:gap-4 ${className}`.trim()}>
+      <aside
+        ref={sidebarRef}
+        className="flex w-full shrink-0 flex-col gap-2 lg:w-72 xl:w-80"
+      >
         <MiniMonth
           anchorDate={sidebarMonth}
           periodStart={weekStart}
@@ -554,8 +593,11 @@ export default function ExecutiveWeekCalendar({
         <ExecutiveQuickActions kpis={kpis} onNewAppointment={openNewAppointment} />
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-[520px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:min-h-0">
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        style={layoutHeight ? { height: layoutHeight, maxHeight: layoutHeight } : undefined}
+      >
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {/* Toolbar */}
         <div
           ref={toolbarRef}
@@ -607,7 +649,7 @@ export default function ExecutiveWeekCalendar({
         </div>
 
         {loading ? (
-          <div className="flex min-h-[280px] flex-1 items-center justify-center">
+          <div className="flex min-h-0 flex-1 items-center justify-center">
             <Spinner size={32} />
           </div>
         ) : (
@@ -653,13 +695,14 @@ export default function ExecutiveWeekCalendar({
             {/* Time grid — viewport height matches sidebar baseline on desktop */}
             <div
               ref={gridScrollRef}
-              className={`min-h-0 flex-1 overflow-y-auto ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
+              className={`min-h-0 flex-1 ${gridFitsViewport ? 'overflow-y-hidden' : 'overflow-y-auto'} ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
             >
               <div
                 className={`gcal-period-grid relative grid ${viewAnimClass || ''}`}
                 style={{
                   gridTemplateColumns,
-                  height: `${gridScrollHeight}px`,
+                  height: gridFitsViewport ? '100%' : `${gridScrollHeight}px`,
+                  minHeight: gridFitsViewport ? `${gridScrollHeight}px` : undefined,
                   minWidth: `${52 + periodDays.length * viewConfig.minDayWidth}px`,
                 }}
               >
@@ -672,7 +715,7 @@ export default function ExecutiveWeekCalendar({
                 )}
 
                 {/* Hour labels + current time pill */}
-                <div className="relative z-10 border-r border-gray-200 bg-white">
+                <div className="relative z-10 min-h-full border-r border-gray-200 bg-white">
                   {HOUR_LABELS.map((hour) => (
                     <GutterHourMark
                       key={hour}
@@ -702,11 +745,11 @@ export default function ExecutiveWeekCalendar({
                     <div
                       key={day.toISOString()}
                       data-calendar-day={day.toISOString()}
-                      className={`relative border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : ''}`}
+                      className={`relative min-h-full border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : ''}`}
                     >
                       <div
                         className={`absolute top-0 ${pastDay ? 'cursor-not-allowed' : 'cursor-pointer'} left-0 right-0`}
-                        style={{ height: `${gridBodyHeight}px` }}
+                        style={{ height: gridFitsViewport ? '100%' : `${gridBodyHeight}px` }}
                         onClick={pastDay ? undefined : (event) => handleSlotClick(event, day)}
                       >
                       {HOURS.map((hour) => (
@@ -760,7 +803,7 @@ export default function ExecutiveWeekCalendar({
             </div>
           </div>
         )}
-      <ExecutiveCalendarLegend />
+      <ExecutiveCalendarLegend className="shrink-0" />
       </div>
       </div>
 

@@ -32,12 +32,12 @@ export function ShellPageTitle({ title, subtitle, iconKey }) {
         {iconKey ? <PageTitleIcon iconKey={iconKey} compact /> : null}
         <div className="min-w-0">
           {title ? (
-            <h1 className="truncate text-2xl font-bold leading-tight text-navy-900 sm:text-[1.75rem]">
+            <h1 className="truncate text-xl font-bold leading-tight text-navy-900 sm:text-2xl">
               {title}
             </h1>
           ) : null}
           {subtitle ? (
-            <p className="truncate text-base text-navy-400 sm:text-lg">{subtitle}</p>
+            <p className="truncate text-sm text-navy-400 sm:text-base">{subtitle}</p>
           ) : null}
         </div>
       </div>

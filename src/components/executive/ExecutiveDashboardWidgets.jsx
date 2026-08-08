@@ -203,9 +203,9 @@ function QuickActionRowContent({ label, icon: Icon, badge = 0, showBadge = false
   );
 }
 
-export function ExecutiveQuickActions({ kpis = {}, onNewAppointment }) {
+export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className = '' }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className={`overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`.trim()}>
       <div className="border-b border-gray-100 px-4 py-3">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-900">Quick Actions</p>
       </div>
