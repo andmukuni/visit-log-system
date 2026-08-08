@@ -12,10 +12,13 @@ import ExecutiveAppointmentModal from './ExecutiveAppointmentModal';
 import ExecutiveQuickAddSchedule from './ExecutiveQuickAddSchedule';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import { LoadingButton } from '../ui';
+import { useToast } from '../../context/ToastContext';
 import {
   buildDraftScheduleUpdate,
   clampPopoverToViewport,
   computeQuickAddPopoverPosition,
+  FUTURE_SCHEDULE_ERROR,
+  isScheduleInPast,
   resolveExecutiveSiteId,
   resolveExecutiveSiteLabel,
   setScheduleEndTime,
@@ -56,6 +59,7 @@ export default function ExecutiveQuickAddPopover({
   const popoverRef = useRef(null);
   const openedSessionIdRef = useRef(null);
   const previousScheduleRef = useRef(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!draft) {
@@ -193,6 +197,10 @@ export default function ExecutiveQuickAddPopover({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (isScheduleInPast(startAt)) {
+      toast.error(FUTURE_SCHEDULE_ERROR);
+      return;
+    }
     onSave({
       title: form.title.trim(),
       visitorName: form.visitorName.trim(),

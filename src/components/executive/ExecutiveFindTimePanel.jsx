@@ -12,6 +12,9 @@ import {
   HOUR_LABELS,
   initialGridScrollTop,
   isSameDay,
+  isPastDay,
+  isScheduleInPast,
+  FUTURE_SCHEDULE_ERROR,
   slotFromPointer,
   startOfDay,
   startOfWeek,
@@ -51,6 +54,7 @@ export default function ExecutiveFindTimePanel({
   draft,
   appointments = [],
   onDraftChange,
+  onScheduleRejected,
 }) {
   const [view, setView] = useState('day');
   const [focusDate, setFocusDate] = useState(() => startOfDay(draft?.startAt || new Date()));
@@ -103,6 +107,10 @@ export default function ExecutiveFindTimePanel({
     const rect = column.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
     const startAt = slotFromPointer(day, offsetY, GRID_BODY_HEIGHT_PX);
+    if (isPastDay(day) || isScheduleInPast(startAt)) {
+      onScheduleRejected?.(FUTURE_SCHEDULE_ERROR);
+      return;
+    }
     const endAt = addMinutes(startAt, draftDuration);
     onDraftChange?.({
       ...draft,

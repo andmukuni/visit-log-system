@@ -194,6 +194,18 @@ export function isSameDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
+export function isPastDay(day, now = new Date()) {
+  return startOfDay(day).getTime() < startOfDay(now).getTime();
+}
+
+export function isScheduleInPast(startAt, now = new Date()) {
+  const start = startAt instanceof Date ? startAt : new Date(startAt);
+  if (Number.isNaN(start.getTime())) return true;
+  return start.getTime() < now.getTime();
+}
+
+export const FUTURE_SCHEDULE_ERROR = 'Appointments cannot be scheduled in the past.';
+
 export function isInWeek(day, weekStart) {
   const start = startOfWeek(weekStart).getTime();
   const end = start + (7 * DAY_MS);

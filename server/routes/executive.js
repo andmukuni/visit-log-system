@@ -263,6 +263,14 @@ export function createExecutiveRouter() {
         return res.status(400).json({ ok: false, message: 'Appointment time is required.' });
       }
 
+      const scheduledDate = new Date(scheduledAt);
+      if (Number.isNaN(scheduledDate.getTime())) {
+        return res.status(400).json({ ok: false, message: 'Invalid appointment time.' });
+      }
+      if (scheduledDate.getTime() < Date.now()) {
+        return res.status(400).json({ ok: false, message: 'Appointments cannot be scheduled in the past.' });
+      }
+
       if (categoryId) {
         const classCheck = await assertCanAssignCategory(pool, {
           categoryId,

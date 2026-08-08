@@ -16,14 +16,17 @@ import {
   X,
 } from 'lucide-react';
 import { LoadingButton } from '../ui';
+import { useToast } from '../../context/ToastContext';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import {
   buildDraftScheduleUpdate,
+  FUTURE_SCHEDULE_ERROR,
   formatShortDate,
   formatTime12Compact,
   formatTimezoneShort,
   isSameDay,
+  isScheduleInPast,
   resolveExecutiveSiteId,
   resolveExecutiveSiteLabel,
   setScheduleEndDate,
@@ -38,7 +41,7 @@ import {
 
 const GCAL_BLUE = '#1a73e8';
 
-function SchedulePill({ label, value, type = 'text', onChange, ariaLabel }) {
+function SchedulePill({ label, value, type = 'text', onChange, ariaLabel, min }) {
   const inputRef = useRef(null);
 
   const openPicker = () => {
@@ -69,6 +72,7 @@ function SchedulePill({ label, value, type = 'text', onChange, ariaLabel }) {
         ref={inputRef}
         type={type}
         value={value}
+        min={min}
         onChange={onChange}
         aria-label={ariaLabel}
         tabIndex={-1}
@@ -140,6 +144,7 @@ export default function ExecutiveAppointmentModal({
 }) {
   const [activeTab, setActiveTab] = useState('details');
   const previousScheduleRef = useRef(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!open) {
@@ -171,6 +176,10 @@ export default function ExecutiveAppointmentModal({
   const endAt = draft.endAt;
 
   const updateSchedule = (nextStart, nextEnd) => {
+    if (isScheduleInPast(nextStart)) {
+      toast.error(FUTURE_SCHEDULE_ERROR);
+      return;
+    }
     onDraftChange?.(buildDraftScheduleUpdate(draft, nextStart, nextEnd));
   };
 
@@ -216,6 +225,7 @@ export default function ExecutiveAppointmentModal({
   const timezoneLabel = formatTimezoneShort(startAt);
   const resolvedSiteId = resolveExecutiveSiteId(form.siteId, referenceData);
   const resolvedSiteLabel = resolveExecutiveSiteLabel(referenceData, resolvedSiteId) || 'Office location';
+  const todayMinDate = toDateInputValue(new Date());
 
   const handleContactSelect = (contact) => {
     setForm((prev) => ({
@@ -229,6 +239,10 @@ export default function ExecutiveAppointmentModal({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (isScheduleInPast(startAt)) {
+      toast.error(FUTURE_SCHEDULE_ERROR);
+      return;
+    }
     onSave({
       title: form.title.trim(),
       visitorName: form.visitorName.trim(),
@@ -283,6 +297,7 @@ export default function ExecutiveAppointmentModal({
                       label={formatShortDate(startAt)}
                       value={toDateInputValue(startAt)}
                       type="date"
+                      min={todayMinDate}
                       onChange={(event) => handleStartDate(event.target.value)}
                       ariaLabel="Start date"
                     />
@@ -306,6 +321,7 @@ export default function ExecutiveAppointmentModal({
                         label={formatShortDate(endAt)}
                         value={toDateInputValue(endAt)}
                         type="date"
+                        min={todayMinDate}
                         onChange={(event) => handleEndDate(event.target.value)}
                         ariaLabel="End date"
                       />
@@ -320,6 +336,7 @@ export default function ExecutiveAppointmentModal({
                       label={formatShortDate(startAt)}
                       value={toDateInputValue(startAt)}
                       type="date"
+                      min={todayMinDate}
                       onChange={(event) => handleStartDate(event.target.value)}
                       ariaLabel="Date"
                     />
@@ -483,6 +500,7 @@ export default function ExecutiveAppointmentModal({
                   draft={draft}
                   appointments={appointments}
                   onDraftChange={onDraftChange}
+                  onScheduleRejected={(message) => toast.error(message)}
                 />
               )}
             </div>

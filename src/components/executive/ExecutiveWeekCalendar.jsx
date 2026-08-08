@@ -14,10 +14,13 @@ import {
   gridBodyHeightPx,
   gridScrollHeightPx,
   formatPeriodRange,
+  FUTURE_SCHEDULE_ERROR,
   navigatePeriod,
   normalizePeriodStart,
   isInPeriod,
   isSameDay,
+  isPastDay,
+  isScheduleInPast,
   isSameMonth,
   periodQueryRange,
   CALENDAR_END_HOUR,
@@ -586,6 +589,10 @@ export default function ExecutiveWeekCalendar({
     const rect = column.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
     const startAt = slotFromPointer(day, offsetY, rect.height);
+    if (isPastDay(day) || isScheduleInPast(startAt)) {
+      toast.error(FUTURE_SCHEDULE_ERROR);
+      return;
+    }
     const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
     const dayKey = day.toISOString();
     const slotRect = computeSlotRect(column, startAt, endAt, gridBodyHeight);
@@ -598,7 +605,7 @@ export default function ExecutiveWeekCalendar({
       slotRect,
       sessionId: `${dayKey}-${startAt.getTime()}-${Date.now()}`,
     });
-  }, [gridBodyHeight]);
+  }, [gridBodyHeight, toast]);
 
   useEffect(() => {
     if (!draft) return undefined;
@@ -633,6 +640,10 @@ export default function ExecutiveWeekCalendar({
   const handleSaveDraft = async (payload) => {
     if (!payload.visitorName) {
       toast.error('Visitor name is required.');
+      return;
+    }
+    if (payload.scheduledAt && isScheduleInPast(payload.scheduledAt)) {
+      toast.error(FUTURE_SCHEDULE_ERROR);
       return;
     }
     setSaving(true);
@@ -873,17 +884,18 @@ export default function ExecutiveWeekCalendar({
                 {periodDays.map((day) => {
                   const dayEvents = eventsByDay.get(day.toDateString()) || [];
                   const isToday = isSameDay(day, now);
+                  const pastDay = isPastDay(day, now);
 
                   return (
                     <div
                       key={day.toISOString()}
                       data-calendar-day={day.toISOString()}
-                      className="relative border-l border-gray-200"
+                      className={`relative border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : ''}`}
                     >
                       <div
-                        className="absolute inset-x-0 top-0 cursor-pointer"
+                        className={`absolute inset-x-0 top-0 ${pastDay ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                         style={{ height: `${gridBodyHeight}px` }}
-                        onClick={(event) => handleSlotClick(event, day)}
+                        onClick={pastDay ? undefined : (event) => handleSlotClick(event, day)}
                       >
                       {HOURS.map((hour) => (
                         <div
@@ -966,6 +978,10 @@ export default function ExecutiveWeekCalendar({
         saving={saving}
         onClose={() => setDraft(null)}
         onDraftChange={(nextDraft) => {
+          if (nextDraft?.startAt && isScheduleInPast(nextDraft.startAt)) {
+            toast.error(FUTURE_SCHEDULE_ERROR);
+            return;
+          }
           setDraft((current) => {
             const merged = { ...current, ...nextDraft };
             return refreshDraftSlotRect(merged);
