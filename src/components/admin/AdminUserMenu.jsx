@@ -30,7 +30,7 @@ function MenuLink({ to, icon: Icon, children, onSelect, external = false }) {
   );
 }
 
-export default function AdminUserMenu() {
+export default function AdminUserMenu({ compact = false }) {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -85,16 +85,21 @@ export default function AdminUserMenu() {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`${displayName} account menu`}
-        className={`inline-flex items-center gap-2 rounded-xl p-1 pr-2 transition-colors ${
+        className={`inline-flex items-center transition-colors ${
+          compact ? 'gap-1 rounded-lg p-0.5 pr-1' : 'gap-2 rounded-xl p-1 pr-2'
+        } ${
           open
             ? 'bg-cyan-50 text-navy-800'
             : 'text-navy-700 hover:bg-navy-50'
         }`}
       >
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-navy-900 text-base font-semibold text-white">
+        <span className={`flex items-center justify-center rounded-full bg-navy-900 font-semibold text-white ${
+          compact ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-base'
+        }`}
+        >
           {initials}
         </span>
-        <ChevronDown size={18} className={`text-navy-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={compact ? 14 : 18} className={`text-navy-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (

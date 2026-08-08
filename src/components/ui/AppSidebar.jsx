@@ -165,16 +165,29 @@ const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate, execut
   };
 
   return (
-    <div className={`sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 ${executiveTheme ? 'px-4 py-3' : 'p-4'}`}>
-      <div className={`flex items-center gap-3 ${executiveTheme ? '' : 'rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm'}`}>
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-inner ${
-          executiveTheme ? 'bg-navy-800 ring-2 ring-amber-400/30' : 'bg-gradient-to-br from-cyan-500 to-navy-700'
-        }`}>
+    <div className={`sticky bottom-0 z-20 shrink-0 border-t border-navy-800 bg-navy-950 ${
+      executiveTheme ? 'px-3 py-2' : 'p-4'
+    }`}
+    >
+      <div className={`flex items-center ${executiveTheme ? 'gap-2' : 'gap-3'} ${
+        executiveTheme ? '' : 'rounded-xl border border-navy-800 bg-navy-900/70 p-3 shadow-sm'
+      }`}
+      >
+        <span className={`flex shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-inner ${
+          executiveTheme
+            ? 'h-8 w-8 bg-navy-800 text-xs ring-2 ring-amber-400/30'
+            : 'h-10 w-10 bg-gradient-to-br from-cyan-500 to-navy-700 text-sm'
+        }`}
+        >
           {getUserInitials(displayName)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-          <p className="truncate text-xs text-navy-400">{subtitle}</p>
+          <p className={`truncate font-semibold text-white ${executiveTheme ? 'text-xs' : 'text-sm'}`}>
+            {displayName}
+          </p>
+          <p className={`truncate text-navy-400 ${executiveTheme ? 'text-[10px]' : 'text-xs'}`}>
+            {subtitle}
+          </p>
           {!executiveTheme && (
             <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-wide text-cyan-400/90">
               {metaLabel}
@@ -184,11 +197,13 @@ const SidebarUserProfile = memo(function SidebarUserProfile({ onNavigate, execut
         <button
           type="button"
           onClick={handleLogout}
-          className="shrink-0 rounded-lg p-2 text-navy-400 transition-colors hover:bg-navy-800 hover:text-red-300"
+          className={`shrink-0 rounded-lg text-navy-400 transition-colors hover:bg-navy-800 hover:text-red-300 ${
+            executiveTheme ? 'p-1' : 'p-2'
+          }`}
           aria-label="Sign out"
           title="Sign out"
         >
-          <LogOut size={16} />
+          <LogOut size={executiveTheme ? 14 : 16} />
         </button>
       </div>
     </div>
@@ -305,21 +320,35 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}
     >
-      <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-800 px-5 sm:px-6">
-        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management' : (title || APP_NAME)} className="flex items-center gap-3 min-w-0">
-          <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${executiveTheme ? 'h-10 w-10' : 'h-11 w-11'}`}>
+      <div className={`flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-800 ${
+        executiveTheme ? 'px-3 sm:px-4' : 'px-5 sm:px-6'
+      }`}
+      >
+        <Link to={routePrefix} aria-label={executiveTheme ? 'Visitor Management' : (title || APP_NAME)} className={`flex min-w-0 items-center ${executiveTheme ? 'gap-2' : 'gap-3'}`}>
+          <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${
+            executiveTheme ? 'h-8 w-8' : 'h-11 w-11'
+          }`}
+          >
             <img
               src={LOGO_PATH}
               alt=""
-              width={executiveTheme ? 40 : 44}
-              height={executiveTheme ? 40 : 44}
+              width={executiveTheme ? 32 : 44}
+              height={executiveTheme ? 32 : 44}
               decoding="async"
               className="h-full w-full object-contain"
             />
           </span>
           {executiveTheme ? (
-            <span className="min-w-0 truncate text-sm font-black uppercase tracking-[0.06em] text-white sm:text-[15px]">
-              Visitor Management
+            <span className="min-w-0">
+              <span className="block text-[11px] font-black uppercase leading-[1.05] tracking-[0.04em] text-white">
+                Visitor
+              </span>
+              <span className="block text-[11px] font-black uppercase leading-[1.05] tracking-[0.04em] text-white">
+                Management
+              </span>
+              <span className="mt-0.5 block text-[10px] font-medium leading-none text-amber-400">
+                Executive Portal
+              </span>
             </span>
           ) : (
             <span className="truncate text-2xl font-black uppercase leading-none tracking-tight text-white">
@@ -330,10 +359,12 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         <button
           type="button"
           onClick={onCloseSidebar}
-          className="md:hidden p-1.5 rounded-lg text-navy-400 hover:text-white hover:bg-navy-800 transition-colors"
+          className={`md:hidden rounded-lg text-navy-400 transition-colors hover:bg-navy-800 hover:text-white ${
+            executiveTheme ? 'p-1' : 'p-1.5'
+          }`}
           aria-label="Close menu"
         >
-          <X size={18} />
+          <X size={executiveTheme ? 16 : 18} />
         </button>
       </div>
 

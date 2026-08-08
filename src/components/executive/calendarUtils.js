@@ -1,17 +1,21 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const CALENDAR_START_HOUR = 8;
-export const CALENDAR_END_HOUR = 19;
-export const CALENDAR_VISIBLE_HOURS = 11;
-export const HOUR_HEIGHT_PX = 52;
+export const CALENDAR_START_HOUR = 0;
+export const CALENDAR_TIMELINE_HOURS = 24;
+export const CALENDAR_END_HOUR = CALENDAR_START_HOUR + CALENDAR_TIMELINE_HOURS;
+/** Approximate hours visible in the scroll viewport (~Google Calendar week view). */
+export const CALENDAR_VISIBLE_HOURS = 8;
+export const HOUR_HEIGHT_PX = 40;
+export const CALENDAR_GUTTER_WIDTH_PX = 40;
 export const DEFAULT_EVENT_MINUTES = 60;
-export const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
-export const GRID_PADDING_BOTTOM_PX = 0;
+export const GRID_BODY_HEIGHT_PX = CALENDAR_TIMELINE_HOURS * HOUR_HEIGHT_PX;
+export const GRID_PADDING_BOTTOM_PX = 16;
 export const GRID_SCROLL_HEIGHT_PX = GRID_BODY_HEIGHT_PX + GRID_PADDING_BOTTOM_PX;
 export const GRID_VIEWPORT_HEIGHT_PX = CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT_PX;
 export const MIN_FIT_HOUR_HEIGHT_PX = 22;
+/** Hour labels from 00:00 through 24:00 inclusive (24 hour spans). */
 export const HOUR_LABELS = Array.from(
-  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
+  { length: CALENDAR_TIMELINE_HOURS + 1 },
   (_, i) => CALENDAR_START_HOUR + i,
 );
 
@@ -60,16 +64,16 @@ export const CALENDAR_VIEW_MODES = {
     id: 'day',
     label: 'Day',
     dayCount: 1,
-    hourHeight: 52,
-    minDayWidth: 280,
+    hourHeight: 40,
+    minDayWidth: 220,
     stepDays: 1,
   },
   week: {
     id: 'week',
     label: 'Week',
     dayCount: 7,
-    hourHeight: 52,
-    minDayWidth: 108,
+    hourHeight: 40,
+    minDayWidth: 88,
     stepDays: 7,
     todayFirst: true,
   },
@@ -77,22 +81,22 @@ export const CALENDAR_VIEW_MODES = {
     id: 'twoWeeks',
     label: '2 weeks',
     dayCount: 14,
-    hourHeight: 44,
-    minDayWidth: 48,
+    hourHeight: 34,
+    minDayWidth: 42,
     stepDays: 14,
   },
   month: {
     id: 'month',
     label: 'Month',
-    hourHeight: 32,
-    minDayWidth: 34,
+    hourHeight: 28,
+    minDayWidth: 30,
     stepMonths: 1,
   },
   twoMonths: {
     id: 'twoMonths',
     label: '2 months',
-    hourHeight: 24,
-    minDayWidth: 26,
+    hourHeight: 22,
+    minDayWidth: 24,
     stepMonths: 2,
   },
 };
@@ -104,14 +108,14 @@ export function getViewConfig(viewMode = 'week') {
 }
 
 export function gridBodyHeightPx(hourHeight = HOUR_HEIGHT_PX) {
-  return (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * hourHeight;
+  return CALENDAR_TIMELINE_HOURS * hourHeight;
 }
 
 export function gridScrollHeightPx(hourHeight = HOUR_HEIGHT_PX) {
   return gridBodyHeightPx(hourHeight) + GRID_PADDING_BOTTOM_PX;
 }
 
-export function fitHourHeight(viewportHeightPx, hourSpan, preferredHourHeight = HOUR_HEIGHT_PX) {
+export function fitHourHeight(viewportHeightPx, hourSpan = CALENDAR_TIMELINE_HOURS, preferredHourHeight = HOUR_HEIGHT_PX) {
   const viewportBody = Math.max(0, viewportHeightPx - GRID_PADDING_BOTTOM_PX);
   if (viewportBody <= 0 || hourSpan <= 0) return preferredHourHeight;
   const fittedHeight = viewportBody / hourSpan;
@@ -300,7 +304,115 @@ export function eventLayout(scheduledAt, durationMinutes = DEFAULT_EVENT_MINUTES
   };
 }
 
+function eventTimeRange(scheduledAt, durationMinutes = DEFAULT_EVENT_MINUTES) {
+  const date = parseAppointmentDate(scheduledAt);
+  if (!date) return null;
+  const startMinutes = date.getHours() * 60 + date.getMinutes();
+  const gridStart = CALENDAR_START_HOUR * 60;
+  const gridEnd = CALENDAR_END_HOUR * 60;
+  if (startMinutes >= gridEnd || startMinutes + durationMinutes <= gridStart) return null;
+  return {
+    date,
+    startMinutes,
+    endMinutes: startMinutes + durationMinutes,
+  };
+}
+
+function eventsOverlap(a, b) {
+  return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
+}
+
+function mergeOverlapClusters(items) {
+  if (items.length <= 1) return [items];
+
+  const parent = items.map((_, index) => index);
+  const find = (index) => {
+    if (parent[index] !== index) parent[index] = find(parent[index]);
+    return parent[index];
+  };
+  const union = (a, b) => {
+    parent[find(a)] = find(b);
+  };
+
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      if (eventsOverlap(items[i], items[j])) union(i, j);
+    }
+  }
+
+  const clusters = new Map();
+  items.forEach((item, index) => {
+    const root = find(index);
+    if (!clusters.has(root)) clusters.set(root, []);
+    clusters.get(root).push(item);
+  });
+
+  return [...clusters.values()];
+}
+
+/** Side-by-side overlap layout (Google Calendar style) for a single day column. */
+export function layoutDayEventCards(appointments, durationMinutes = DEFAULT_EVENT_MINUTES) {
+  const items = appointments
+    .map((appointment) => {
+      const range = eventTimeRange(appointment.scheduled_at, durationMinutes);
+      const layout = eventLayout(appointment.scheduled_at, durationMinutes);
+      if (!range || !layout) return null;
+      return {
+        appointment,
+        layout,
+        startMinutes: range.startMinutes,
+        endMinutes: range.endMinutes,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (
+      a.startMinutes - b.startMinutes
+      || a.endMinutes - b.endMinutes
+    ));
+
+  if (!items.length) return [];
+
+  const clusters = mergeOverlapClusters(items);
+  const positioned = [];
+
+  clusters.forEach((cluster) => {
+    const columns = [];
+
+    cluster.forEach((item) => {
+      let columnIndex = 0;
+      while (columns[columnIndex]?.some((other) => eventsOverlap(other, item))) {
+        columnIndex += 1;
+      }
+      if (!columns[columnIndex]) columns[columnIndex] = [];
+      columns[columnIndex].push(item);
+      item.columnIndex = columnIndex;
+    });
+
+    const columnCount = columns.length;
+    const columnWidth = 100 / columnCount;
+
+    cluster.forEach((item) => {
+      positioned.push({
+        appointment: item.appointment,
+        layout: {
+          ...item.layout,
+          left: `${item.columnIndex * columnWidth}%`,
+          width: `${columnWidth}%`,
+        },
+        overlapColumnCount: columnCount,
+      });
+    });
+  });
+
+  return positioned.sort((a, b) => {
+    const topA = parseFloat(String(a.layout.top));
+    const topB = parseFloat(String(b.layout.top));
+    return topA - topB || a.overlapColumnCount - b.overlapColumnCount;
+  });
+}
+
 export function formatHourLabel(hour) {
+  if (hour === 24) return '24:00';
   const normalized = ((hour % 24) + 24) % 24;
   return `${String(normalized).padStart(2, '0')}:00`;
 }
@@ -321,10 +433,9 @@ export function initialGridScrollTop(
   viewportHeightPx = GRID_VIEWPORT_HEIGHT_PX,
   hourHeight = HOUR_HEIGHT_PX,
 ) {
-  const visibleHours = viewportHeightPx / hourHeight;
-  const bodyHeight = gridBodyHeightPx(hourHeight);
+  const scrollHeight = gridScrollHeightPx(hourHeight);
   const offsetHours = Math.max(0, hour - 1);
-  const maxScroll = Math.max(0, bodyHeight - visibleHours * hourHeight);
+  const maxScroll = Math.max(0, scrollHeight - viewportHeightPx);
   return Math.min(offsetHours * hourHeight, maxScroll);
 }
 

@@ -110,7 +110,7 @@ export default function ExecutiveDashboardPage() {
   }
 
   return (
-    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden overscroll-none">
       <PageHeader
         title={dashboardTitle}
         subtitle={formatExecutiveDashboardDate()}

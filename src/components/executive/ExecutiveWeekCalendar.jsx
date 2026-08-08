@@ -20,7 +20,6 @@ import {
   compareViewDensity,
   getPeriodDays,
   getViewConfig,
-  fitHourHeight,
   gridBodyHeightPx,
   gridScrollHeightPx,
   formatPeriodRange,
@@ -35,15 +34,16 @@ import {
   periodQueryRange,
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
+  CALENDAR_GUTTER_WIDTH_PX,
   currentTimePositionPx,
   DEFAULT_EVENT_MINUTES,
   eventLayout,
+  layoutDayEventCards,
   formatGutterLiveTime,
   formatDayHeader,
   formatHourLabel,
   formatTimeRange,
   getMonthGrid,
-  GRID_VIEWPORT_HEIGHT_PX,
   GRID_PADDING_BOTTOM_PX,
   HOUR_LABELS,
   HOUR_HEIGHT_PX,
@@ -59,18 +59,47 @@ const HOURS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
   (_, i) => CALENDAR_START_HOUR + i,
 );
-const MIN_SIDEBAR_SCALE = 0.72;
+
+function useSidebarCompact() {
+  const [compact, setCompact] = useState(() => (
+    typeof window !== 'undefined' && window.innerHeight < 920
+  ));
+
+  useEffect(() => {
+    const update = () => {
+      const height = window.innerHeight;
+      setCompact((current) => {
+        if (current && height > 940) return false;
+        if (!current && height < 900) return true;
+        return current;
+      });
+    };
+
+    update();
+    window.addEventListener('resize', update, { passive: true });
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  return compact;
+}
 
 function hourLabelTop(hour, hourHeight = HOUR_HEIGHT_PX) {
   return (hour - CALENDAR_START_HOUR) * hourHeight;
 }
 
-function GutterHourMark({ hour, hourHeight }) {
+function GutterHourMark({ hour, hourHeight, isFirst = false, isLast = false }) {
   const lineTop = hourLabelTop(hour, hourHeight);
+  let transform = 'translateY(-50%)';
+  if (isFirst) transform = 'translateY(0)';
+  else if (isLast) transform = 'translateY(-100%)';
+
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 z-10 flex items-start justify-end pr-2 text-[11px] font-medium tabular-nums text-gray-400"
-      style={{ top: `${lineTop}px`, transform: 'translateY(-50%)' }}
+      className="pointer-events-none absolute inset-x-0 z-10 flex items-start justify-end pr-1.5 text-[10px] font-medium tabular-nums text-gray-400"
+      style={{
+        top: `${lineTop}px`,
+        transform,
+      }}
     >
       {formatHourLabel(hour)}
     </div>
@@ -85,7 +114,7 @@ const TOOLBAR_VIEW_MODES = [
 
 function ViewModeTabs({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="tablist" aria-label="Calendar view">
+    <div className="inline-flex rounded-md bg-gray-100 p-px" role="tablist" aria-label="Calendar view">
       {TOOLBAR_VIEW_MODES.map((option) => (
         <button
           key={option.id}
@@ -93,7 +122,7 @@ function ViewModeTabs({ value, onChange }) {
           role="tab"
           aria-selected={option.id === value}
           onClick={() => onChange(option.id)}
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+          className={`rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors ${
             option.id === value
               ? 'bg-white text-[#1a73e8] shadow-sm'
               : 'text-gray-600 hover:text-gray-900'
@@ -194,11 +223,7 @@ export default function ExecutiveWeekCalendar({
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
-  const sidebarRef = useRef(null);
-  const sidebarContentRef = useRef(null);
-  const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
-  const [sidebarFit, setSidebarFit] = useState({ scale: 1, naturalHeight: 0, scrollable: false });
-  const [sidebarCompact, setSidebarCompact] = useState(false);
+  const sidebarCompact = useSidebarCompact();
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -211,63 +236,20 @@ export default function ExecutiveWeekCalendar({
   const [now, setNow] = useState(() => new Date());
   const viewConfig = useMemo(() => getViewConfig(viewMode), [viewMode]);
   const periodDays = useMemo(() => getPeriodDays(weekStart, viewMode), [weekStart, viewMode]);
-  const hourSpan = CALENDAR_END_HOUR - CALENDAR_START_HOUR;
-  const layoutHourHeight = useMemo(
-    () => fitHourHeight(gridViewportHeight, hourSpan, viewConfig.hourHeight),
-    [gridViewportHeight, viewConfig.hourHeight, hourSpan],
-  );
+  const layoutHourHeight = viewConfig.hourHeight;
   const gridBodyHeight = useMemo(() => gridBodyHeightPx(layoutHourHeight), [layoutHourHeight]);
   const gridScrollHeight = useMemo(() => gridScrollHeightPx(layoutHourHeight), [layoutHourHeight]);
-  const gridFitsViewport = useMemo(
-    () => gridScrollHeight <= gridViewportHeight + 1,
-    [gridScrollHeight, gridViewportHeight],
+  const gridMinWidth = useMemo(
+    () => CALENDAR_GUTTER_WIDTH_PX + periodDays.length * viewConfig.minDayWidth,
+    [periodDays.length, viewConfig.minDayWidth],
   );
   const gridTemplateColumns = useMemo(
-    () => `52px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
+    () => `${CALENDAR_GUTTER_WIDTH_PX}px repeat(${periodDays.length}, minmax(${viewConfig.minDayWidth}px, 1fr))`,
     [periodDays.length, viewConfig.minDayWidth],
   );
   const compactHeaders = periodDays.length > 14;
   const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
   const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
-
-  useEffect(() => {
-    const aside = sidebarRef.current;
-    const content = sidebarContentRef.current;
-    if (!aside || !content) return undefined;
-
-    const fitSidebar = () => {
-      const available = aside.clientHeight;
-      const natural = content.scrollHeight;
-      if (available <= 0 || natural <= 0) return;
-
-      const rawScale = available / natural;
-      const scale = rawScale < 1
-        ? Math.max(MIN_SIDEBAR_SCALE, rawScale)
-        : 1;
-      const scrollable = rawScale < MIN_SIDEBAR_SCALE;
-      const compact = rawScale < 0.98;
-
-      setSidebarCompact((current) => (current === compact ? current : compact));
-      setSidebarFit((current) => (
-        current.scale === scale
-          && current.naturalHeight === natural
-          && current.scrollable === scrollable
-          ? current
-          : { scale, naturalHeight: natural, scrollable }
-      ));
-    };
-
-    fitSidebar();
-    const observer = new ResizeObserver(fitSidebar);
-    observer.observe(aside);
-    observer.observe(content);
-    window.addEventListener('resize', fitSidebar);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', fitSidebar);
-    };
-  }, [loading, kpis, nextAppointment, sidebarMonth, viewMode, weekStart]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -319,48 +301,68 @@ export default function ExecutiveWeekCalendar({
     changePeriod(nextPeriodStart, direction);
   }, [weekStart, viewMode, changePeriod]);
 
-  useEffect(() => {
-    if (loading) return undefined;
-
+  const syncGridScrollPosition = useCallback((behavior = 'auto') => {
     const el = gridScrollRef.current;
-    if (!el) return undefined;
+    if (!el) return;
 
-    if (gridFitsViewport) {
-      el.scrollTop = 0;
-      return undefined;
+    const canScrollVertically = el.scrollHeight > el.clientHeight + 1;
+    if (!canScrollVertically) {
+      el.scrollTo({ top: 0, behavior });
+      return;
     }
 
     const nowDate = new Date();
     const hasToday = periodDays.some((day) => isSameDay(day, nowDate));
-    const focusHour = hasToday
-      ? Math.max(CALENDAR_START_HOUR, nowDate.getHours())
-      : 8;
+    if (!hasToday) {
+      el.scrollTo({ top: 0, behavior });
+      return;
+    }
 
-    el.scrollTop = initialGridScrollTop(focusHour, gridViewportHeight, layoutHourHeight);
-    return undefined;
-  }, [weekStart, loading, periodDays, gridViewportHeight, viewMode, gridFitsViewport, layoutHourHeight]);
+    const focusHour = Math.max(CALENDAR_START_HOUR, nowDate.getHours());
+    const nextTop = initialGridScrollTop(focusHour, el.clientHeight, layoutHourHeight);
+    el.scrollTo({ top: nextTop, behavior });
+  }, [periodDays, layoutHourHeight]);
 
-  useEffect(() => {
-    const scrollEl = gridScrollRef.current;
-    if (!scrollEl) return undefined;
+  const handleGridWheel = useCallback((event) => {
+    const el = gridScrollRef.current;
+    if (!el) return;
 
-    const syncViewportHeight = () => {
-      const nextHeight = scrollEl.clientHeight;
-      if (nextHeight > 0) {
-        setGridViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    const {
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      scrollLeft,
+      scrollWidth,
+      clientWidth,
+    } = el;
+
+    const canScrollUp = scrollTop > 0;
+    const canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
+    const canScrollLeft = scrollLeft > 0;
+    const canScrollRight = scrollLeft + clientWidth < scrollWidth - 1;
+
+    const { deltaX, deltaY } = event;
+    const verticalIntent = Math.abs(deltaY) >= Math.abs(deltaX);
+
+    if (verticalIntent) {
+      if ((deltaY < 0 && canScrollUp) || (deltaY > 0 && canScrollDown)) {
+        event.stopPropagation();
       }
-    };
+      return;
+    }
 
-    syncViewportHeight();
-    const observer = new ResizeObserver(syncViewportHeight);
-    observer.observe(scrollEl);
-
-    return () => observer.disconnect();
-  }, [loading, viewMode, weekStart, periodDays.length, layoutHourHeight]);
+    if ((deltaX < 0 && canScrollLeft) || (deltaX > 0 && canScrollRight)) {
+      event.stopPropagation();
+    }
+  }, []);
 
   useEffect(() => {
-    if (periodDays.length <= 7) return undefined;
+    if (loading) return undefined;
+    const frameId = window.requestAnimationFrame(() => syncGridScrollPosition('auto'));
+    return () => window.cancelAnimationFrame(frameId);
+  }, [weekStart, loading, viewMode, syncGridScrollPosition]);
 
+  useEffect(() => {
     const grid = gridScrollRef.current;
     const headers = dayHeadersRef.current;
     if (!grid || !headers) return undefined;
@@ -383,7 +385,7 @@ export default function ExecutiveWeekCalendar({
       grid.removeEventListener('scroll', onGridScroll);
       headers.removeEventListener('scroll', onHeaderScroll);
     };
-  }, [periodDays.length, viewMode, weekStart]);
+  }, [periodDays.length, viewMode, weekStart, gridMinWidth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -550,14 +552,8 @@ export default function ExecutiveWeekCalendar({
   const navLabel = viewConfig.label.toLowerCase();
 
   const scrollToNow = useCallback(() => {
-    const el = gridScrollRef.current;
-    if (!el) return;
-    const focusHour = Math.max(CALENDAR_START_HOUR, now.getHours());
-    el.scrollTo({
-      top: initialGridScrollTop(focusHour, gridViewportHeight, layoutHourHeight),
-      behavior: 'smooth',
-    });
-  }, [now, gridViewportHeight, layoutHourHeight]);
+    syncGridScrollPosition('smooth');
+  }, [syncGridScrollPosition]);
 
   const mappedNextAppointment = useMemo(
     () => mapNextAppointmentToCalendarRow(nextAppointment),
@@ -588,64 +584,45 @@ export default function ExecutiveWeekCalendar({
   }, [nextAppointment]);
 
   return (
-    <div className={`flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch lg:gap-4 ${className}`.trim()}>
-      <aside
-        ref={sidebarRef}
-        className={`flex min-h-0 w-full shrink-0 flex-col lg:h-full lg:w-72 xl:w-80 ${
-          sidebarFit.scrollable ? 'overflow-y-auto' : 'overflow-hidden'
-        }`}
-      >
-        <div
-          className="w-full"
-          style={sidebarFit.scale < 1 ? { height: sidebarFit.naturalHeight * sidebarFit.scale } : undefined}
-        >
-          <div
-            ref={sidebarContentRef}
-            className="flex w-full flex-col gap-2 origin-top-left"
-            style={sidebarFit.scale < 1 ? {
-              transform: `scale(${sidebarFit.scale})`,
-              width: `${100 / sidebarFit.scale}%`,
-            } : undefined}
-          >
-            <MiniMonth
-              anchorDate={sidebarMonth}
-              periodStart={weekStart}
-              viewMode={viewMode}
-              focusedDay={focusedDay}
-              onPickDate={handlePickDate}
-              onMonthChange={setSidebarMonth}
-              compact={sidebarCompact}
-            />
+    <div className={`flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden lg:flex-row lg:items-stretch lg:gap-3 ${className}`.trim()}>
+      <aside className="flex min-h-0 w-full shrink-0 flex-col gap-1.5 overflow-y-auto lg:h-full lg:w-60 xl:w-64">
+        <MiniMonth
+          anchorDate={sidebarMonth}
+          periodStart={weekStart}
+          viewMode={viewMode}
+          focusedDay={focusedDay}
+          onPickDate={handlePickDate}
+          onMonthChange={setSidebarMonth}
+          compact={sidebarCompact}
+        />
 
-            <ExecutiveGlancePanel kpis={kpis} compact={sidebarCompact} />
+        <ExecutiveGlancePanel kpis={kpis} compact={sidebarCompact} />
 
-            <ExecutiveNextAppointmentCard
-              appointment={nextAppointment}
-              onViewDetails={handleViewNextAppointment}
-              onReschedule={handleRescheduleNextAppointment}
-              compact={sidebarCompact}
-            />
+        <ExecutiveNextAppointmentCard
+          appointment={nextAppointment}
+          onViewDetails={handleViewNextAppointment}
+          onReschedule={handleRescheduleNextAppointment}
+          compact={sidebarCompact}
+        />
 
-            <ExecutiveQuickActions
-              kpis={kpis}
-              onNewAppointment={openNewAppointment}
-              compact={sidebarCompact}
-            />
-          </div>
-        </div>
+        <ExecutiveQuickActions
+          kpis={kpis}
+          onNewAppointment={openNewAppointment}
+          compact={sidebarCompact}
+        />
       </aside>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         {/* Toolbar */}
         <div
           ref={toolbarRef}
-          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-5"
+          className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-200 bg-white px-2.5 py-1.5 sm:px-3"
         >
           <button
             type="button"
             onClick={goToday}
-            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
+            className="rounded-md bg-navy-900 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-navy-800"
           >
             Today
           </button>
@@ -656,6 +633,7 @@ export default function ExecutiveWeekCalendar({
               tooltip={`Previous ${navLabel}`}
               variant="ghost"
               size="sm"
+              iconSize={14}
               onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, -1), 'backward')}
             />
             <IconButton
@@ -664,25 +642,26 @@ export default function ExecutiveWeekCalendar({
               tooltip={`Next ${navLabel}`}
               variant="ghost"
               size="sm"
+              iconSize={14}
               onClick={() => changePeriod(navigatePeriod(weekStart, viewMode, 1), 'forward')}
             />
           </div>
-          <div className="flex min-w-0 items-center gap-2 text-gray-800">
-            <CalendarDays size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
-            <h2 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+          <div className="flex min-w-0 items-center gap-1 text-gray-800">
+            <CalendarDays size={14} className="shrink-0 text-gray-500" aria-hidden="true" />
+            <h2 className="truncate text-xs font-semibold tracking-tight sm:text-sm">
               {formatPeriodRange(weekStart, viewMode)}
             </h2>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1">
             <ViewModeTabs value={viewMode} onChange={handleViewModeChange} />
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+              className="inline-flex items-center gap-0.5 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
               aria-label="Filter calendar"
             >
-              <Filter size={14} aria-hidden="true" />
+              <Filter size={12} aria-hidden="true" />
               Filter
-              <ChevronDown size={14} className="text-gray-400" aria-hidden="true" />
+              <ChevronDown size={12} className="text-gray-400" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -706,21 +685,21 @@ export default function ExecutiveWeekCalendar({
             {/* Day headers — fixed above scroll so they never cover hour rows */}
             <div
               ref={dayHeadersRef}
-              className={`shrink-0 grid border-b border-gray-200 bg-white ${periodDays.length > 7 ? 'overflow-x-auto' : ''}`}
+              className="shrink-0 overflow-x-auto grid border-b border-gray-200 bg-white"
               style={{
                 gridTemplateColumns,
-                minWidth: periodDays.length > 7 ? `${52 + periodDays.length * viewConfig.minDayWidth}px` : undefined,
+                minWidth: `${gridMinWidth}px`,
               }}
             >
               <div className="border-r border-gray-200 bg-white" aria-hidden="true" />
               {periodDays.map((day) => {
                 const { weekday, day: dayNum, isToday } = formatDayHeader(day, now);
                 return (
-                  <div key={day.toISOString()} className="border-l border-gray-200 py-2.5 text-center">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <div key={day.toISOString()} className="border-l border-gray-200 py-1.5 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                       {weekday}
                     </p>
-                    <p className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                    <p className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                       isToday ? 'bg-navy-900 text-white' : 'text-gray-800'
                     }`}
                     >
@@ -731,47 +710,51 @@ export default function ExecutiveWeekCalendar({
               })}
             </div>
 
-            {/* Time grid — viewport height matches sidebar baseline on desktop */}
+            {/* Time grid — fixed 40px rows; scrolls through full 00:00–24:00 day */}
             <div
               ref={gridScrollRef}
-              className={`min-h-0 flex-1 ${gridFitsViewport ? 'overflow-y-hidden' : 'overflow-y-auto'} ${periodDays.length > 7 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}
+              className="gcal-period-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-contain"
+              onWheel={handleGridWheel}
             >
               <div
                 className={`gcal-period-grid relative grid ${viewAnimClass || ''}`}
                 style={{
                   gridTemplateColumns,
-                  height: gridFitsViewport ? '100%' : `${gridScrollHeight}px`,
-                  minHeight: gridFitsViewport ? `${gridScrollHeight}px` : undefined,
-                  minWidth: `${52 + periodDays.length * viewConfig.minDayWidth}px`,
+                  height: `${gridScrollHeight}px`,
+                  minWidth: `${gridMinWidth}px`,
                 }}
               >
                 {nowLinePx != null && periodDays.some((day) => isSameDay(day, now)) && (
                   <div
                     className="pointer-events-none absolute right-0 z-[15] h-0.5 bg-red-500"
-                    style={{ left: '52px', top: `${nowLinePx}px` }}
+                    style={{ left: `${CALENDAR_GUTTER_WIDTH_PX}px`, top: `${nowLinePx}px` }}
                     aria-hidden="true"
                   />
                 )}
 
                 {/* Hour labels + current time pill */}
-                <div className="relative z-10 min-h-full border-r border-gray-200 bg-white">
-                  {HOUR_LABELS.map((hour) => (
-                    <GutterHourMark
-                      key={hour}
-                      hour={hour}
-                      hourHeight={layoutHourHeight}
-                    />
-                  ))}
-                  {nowLinePx != null && (
-                    <div
-                      className="pointer-events-none absolute right-0 z-30 flex justify-end pr-1"
-                      style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
-                    >
-                      <span className="rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm">
-                        {gutterLiveTime}
-                      </span>
-                    </div>
-                  )}
+                <div className="relative z-10 border-r border-gray-200 bg-white">
+                  <div className="relative" style={{ height: `${gridBodyHeight}px` }}>
+                    {HOUR_LABELS.map((hour) => (
+                      <GutterHourMark
+                        key={hour}
+                        hour={hour}
+                        hourHeight={layoutHourHeight}
+                        isFirst={hour === CALENDAR_START_HOUR}
+                        isLast={hour === CALENDAR_END_HOUR}
+                      />
+                    ))}
+                    {nowLinePx != null && (
+                      <div
+                        className="pointer-events-none absolute right-0 z-30 flex justify-end pr-1"
+                        style={{ top: `${nowLinePx}px`, transform: 'translateY(-50%)' }}
+                      >
+                        <span className="rounded bg-red-500 px-1 py-0.5 text-[9px] font-bold tabular-nums text-white shadow-sm">
+                          {gutterLiveTime}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Day columns */}
@@ -784,11 +767,11 @@ export default function ExecutiveWeekCalendar({
                     <div
                       key={day.toISOString()}
                       data-calendar-day={day.toISOString()}
-                      className={`relative min-h-full border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : ''}`}
+                      className={`relative min-h-full border-l border-gray-200 ${pastDay ? 'bg-gray-50/80' : 'bg-white'}`}
                     >
                       <div
                         className={`absolute top-0 ${pastDay ? 'cursor-not-allowed' : 'cursor-pointer'} left-0 right-0`}
-                        style={{ height: gridFitsViewport ? '100%' : `${gridBodyHeight}px` }}
+                        style={{ height: `${gridBodyHeight}px` }}
                         onClick={pastDay ? undefined : (event) => handleSlotClick(event, day)}
                       >
                       {HOURS.map((hour) => (
@@ -807,42 +790,39 @@ export default function ExecutiveWeekCalendar({
                           style={{
                             top: draftPreview.top,
                             height: draftPreview.height,
-                            minHeight: '46px',
+                            minHeight: '24px',
                           }}
                         >
-                          <p className="truncate text-[10px] font-medium text-white/90">
+                          <p className="truncate text-[8px] font-medium text-white/90">
                             {formatTimeRange(draft.startAt, draft.endAt)}
                           </p>
-                          <p className="mt-0.5 truncate text-xs font-semibold text-white">
+                          <p className="mt-px truncate text-[9px] font-semibold text-white">
                             {draft.title?.trim() || '(No title)'}
                           </p>
                         </div>
                       )}
 
-                      {/* Events */}
-                      {dayEvents.map((appt) => {
-                        const layout = eventLayout(appt.scheduled_at, DEFAULT_EVENT_MINUTES);
-                        if (!layout) return null;
-
-                        return (
-                          <ExecutiveCalendarEventCard
-                            key={appt.id || appt.appointment_id}
-                            appointment={appt}
-                            layout={layout}
-                            compactHeaders={compactHeaders}
-                            onSelect={setSelectedAppointment}
-                          />
-                        );
-                      })}
+                      {/* Events — side-by-side when overlapping */}
+                      {layoutDayEventCards(dayEvents).map(({ appointment: appt, layout, overlapColumnCount }) => (
+                        <ExecutiveCalendarEventCard
+                          key={appt.id || appt.appointment_id}
+                          appointment={appt}
+                          layout={layout}
+                          compactHeaders={compactHeaders}
+                          overlapColumnCount={overlapColumnCount}
+                          onSelect={setSelectedAppointment}
+                        />
+                      ))}
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            <ExecutiveCalendarLegend className="shrink-0" />
           </div>
         )}
-      <ExecutiveCalendarLegend className="shrink-0" />
       </div>
       </div>
 

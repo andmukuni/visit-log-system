@@ -49,15 +49,20 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
       )}
 
       <div className="md:ml-[var(--sidebar-width)] flex h-screen min-h-0 flex-col overflow-hidden">
-        <header className="z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b border-navy-100 bg-navy-50 px-4 sm:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <header className={`z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-100 bg-navy-50 ${
+          portalId === 'executive' ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'
+        }`}
+        >
+          <div className={`flex min-w-0 flex-1 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
             <button
               type="button"
               onClick={onOpenSidebar}
-              className="md:hidden p-2 rounded-lg text-navy-500 hover:bg-navy-100 hover:text-navy-700 transition-colors"
+              className={`md:hidden rounded-lg text-navy-500 transition-colors hover:bg-navy-100 hover:text-navy-700 ${
+                portalId === 'executive' ? 'p-1.5' : 'p-2'
+              }`}
               aria-label="Open menu"
             >
-              <Menu size={20} />
+              <Menu size={portalId === 'executive' ? 18 : 20} />
             </button>
             {shellBreadcrumbs.length > 0 ? (
               <Breadcrumbs items={shellBreadcrumbs} variant="shell" className="min-w-0 flex-1" />
@@ -66,19 +71,20 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
                 title={pageHeader.title}
                 subtitle={pageHeader.subtitle}
                 iconKey={pageHeader.iconKey}
+                compact={portalId === 'executive'}
               />
             ) : (
               <div className="hidden md:block">
-                <p className="text-sm text-navy-400">
+                <p className={`text-navy-400 ${portalId === 'executive' ? 'text-xs' : 'text-sm'}`}>
                   Welcome back,{' '}
                   <span className="font-medium text-navy-700">{user?.name?.split(' ')[0] || 'there'}</span>
                 </p>
               </div>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className={`flex shrink-0 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
             {pageHeader.actions}
-            <AdminUserMenu />
+            <AdminUserMenu compact={portalId === 'executive'} />
           </div>
         </header>
 
@@ -126,6 +132,17 @@ function ShellBody({ portalId, title }) {
   }, [portalId, permissions, hasPermission, navigate]);
 
   useEffect(() => {
+    if (portalId === 'executive') {
+      document.documentElement.dataset.portal = 'executive';
+    } else {
+      delete document.documentElement.dataset.portal;
+    }
+    return () => {
+      delete document.documentElement.dataset.portal;
+    };
+  }, [portalId]);
+
+  useEffect(() => {
     if (!sidebarOpen) {
       document.body.style.overflow = '';
       return;
@@ -138,7 +155,7 @@ function ShellBody({ portalId, title }) {
 
   return (
     <SidebarProvider portalId={portalId}>
-      <div className="h-screen overflow-hidden bg-navy-50">
+      <div className={`h-screen overflow-hidden bg-navy-50 portal-${portalId}`}>
         <AppSidebar
           title={title}
           sidebarOpen={sidebarOpen}

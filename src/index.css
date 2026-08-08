@@ -64,6 +64,37 @@
   --app-shadow: var(--shadow-card);
 }
 
+/* Executive portal — slightly zoomed-out density for calendar-heavy workflows */
+html[data-portal='executive'] {
+  font-size: 14px;
+}
+
+html[data-portal='executive'] {
+  --sidebar-width: 15.5rem;
+  --header-height: 3.5rem;
+  --shell-content-padding-y: 1.25rem;
+  --panel-width: 17rem;
+}
+
+.portal-executive main > div {
+  padding-top: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .portal-executive main > div {
+    padding-top: 1rem;
+    padding-bottom: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .portal-executive main > div {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
 .dark {
   color-scheme: dark;
   --app-bg: #0a1929;
@@ -328,6 +359,10 @@ body {
 
 .gcal-period-shell {
   transition: opacity 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gcal-period-scroll {
+  scrollbar-gutter: stable;
 }
 
 @keyframes gcalWeekSlideForward {

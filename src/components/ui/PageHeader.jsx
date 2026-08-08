@@ -23,21 +23,26 @@ function PageTitleIcon({ icon: Icon, iconKey, compact = false, tall = false, cla
   );
 }
 
-export function ShellPageTitle({ title, subtitle, iconKey }) {
+export function ShellPageTitle({ title, subtitle, iconKey, compact = false }) {
   if (!title && !subtitle) return null;
 
   return (
     <div className="min-w-0 flex-1">
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className={`flex min-w-0 items-center ${compact ? 'gap-2' : 'gap-2.5'}`}>
         {iconKey ? <PageTitleIcon iconKey={iconKey} compact /> : null}
         <div className="min-w-0">
           {title ? (
-            <h1 className="truncate text-xl font-bold leading-tight text-navy-900 sm:text-2xl">
+            <h1 className={`truncate font-bold leading-tight text-navy-900 ${
+              compact ? 'text-sm sm:text-base' : 'text-xl sm:text-2xl'
+            }`}
+            >
               {title}
             </h1>
           ) : null}
           {subtitle ? (
-            <p className="truncate text-sm text-navy-400 sm:text-base">{subtitle}</p>
+            <p className={`truncate text-navy-400 ${compact ? 'text-[11px] sm:text-xs' : 'text-sm sm:text-base'}`}>
+              {subtitle}
+            </p>
           ) : null}
         </div>
       </div>

@@ -264,8 +264,8 @@ const STATUS_LEGEND = [
 
 export function ExecutiveCalendarLegend({ className = '' }) {
   return (
-    <div className={`border-t border-gray-200 bg-white px-4 py-3 sm:px-5 ${className}`}>
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
+    <div className={`border-t border-gray-200 bg-white px-3 py-2 sm:px-4 ${className}`}>
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
         <div>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Visitor type</p>
           <div className="flex flex-wrap gap-x-4 gap-y-2">

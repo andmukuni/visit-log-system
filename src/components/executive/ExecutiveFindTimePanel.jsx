@@ -9,6 +9,7 @@ import {
   eventLayout,
   formatHourLabel,
   getWeekDays,
+  HOUR_HEIGHT_PX,
   HOUR_LABELS,
   initialGridScrollTop,
   isSameDay,
@@ -20,7 +21,6 @@ import {
   startOfWeek,
 } from './calendarUtils';
 
-const HOUR_HEIGHT_PX = 48;
 const GRID_BODY_HEIGHT_PX = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT_PX;
 
 function hourTop(hour) {
