@@ -85,9 +85,9 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <main
             ref={mainRef}
-            className="min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto overscroll-y-contain"
           >
-            <div className="p-4 sm:p-6 lg:px-8 pb-6 pt-4">
+            <div className="flex min-h-0 flex-1 flex-col p-4 pt-4 pb-6 sm:p-6 lg:px-8">
               <Suspense fallback={<PortalOutletLoader />}>
                 <Outlet />
               </Suspense>

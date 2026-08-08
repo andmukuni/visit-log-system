@@ -245,7 +245,7 @@ export default function ExecutiveAppointmentsPage() {
   ), [openNewAppointment, unreadCount]);
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height)-var(--shell-content-padding-y))] min-h-0 flex-col gap-2.5 overflow-hidden sm:gap-3">
+    <div className="flex h-full max-h-full min-h-0 flex-col gap-2.5 overflow-hidden sm:gap-3">
       <PageHeader
         title="Appointments"
         subtitle="View, manage and approve all appointments."

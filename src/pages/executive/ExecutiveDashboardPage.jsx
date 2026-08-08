@@ -110,7 +110,7 @@ export default function ExecutiveDashboardPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height)-var(--shell-content-padding-y))] min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
       <PageHeader
         title={dashboardTitle}
         subtitle={formatExecutiveDashboardDate()}
@@ -136,7 +136,7 @@ export default function ExecutiveDashboardPage() {
       )}
 
       <ExecutiveWeekCalendar
-        className="min-h-0 flex-1 overflow-hidden"
+        className="h-full min-h-0 flex-1 overflow-hidden"
         executive={executive}
         kpis={kpis}
         nextAppointment={dashboard?.nextAppointment}

@@ -191,9 +191,7 @@ export default function ExecutiveWeekCalendar({
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
-  const sidebarRef = useRef(null);
   const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
-  const [layoutHeight, setLayoutHeight] = useState(null);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -224,30 +222,6 @@ export default function ExecutiveWeekCalendar({
   const compactHeaders = periodDays.length > 14;
   const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
   const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
-
-  useEffect(() => {
-    const sidebarEl = sidebarRef.current;
-    if (!sidebarEl) return undefined;
-
-    const syncLayoutHeight = () => {
-      if (window.innerWidth < 1024) {
-        setLayoutHeight(null);
-        return;
-      }
-      const nextHeight = sidebarEl.offsetHeight;
-      setLayoutHeight((current) => (current === nextHeight ? current : nextHeight));
-    };
-
-    syncLayoutHeight();
-    const observer = new ResizeObserver(syncLayoutHeight);
-    observer.observe(sidebarEl);
-    window.addEventListener('resize', syncLayoutHeight);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', syncLayoutHeight);
-    };
-  }, [loading, kpis, nextAppointment, sidebarMonth, viewMode, weekStart]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -568,11 +542,8 @@ export default function ExecutiveWeekCalendar({
   }, [nextAppointment]);
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-start lg:gap-4 ${className}`.trim()}>
-      <aside
-        ref={sidebarRef}
-        className="flex w-full shrink-0 flex-col gap-2 lg:w-72 xl:w-80"
-      >
+    <div className={`flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch lg:gap-4 ${className}`.trim()}>
+      <aside className="flex min-h-0 w-full shrink-0 flex-col gap-2 overflow-y-auto lg:h-full lg:w-72 xl:w-80">
         <MiniMonth
           anchorDate={sidebarMonth}
           periodStart={weekStart}
@@ -593,10 +564,7 @@ export default function ExecutiveWeekCalendar({
         <ExecutiveQuickActions kpis={kpis} onNewAppointment={openNewAppointment} />
       </aside>
 
-      <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-        style={layoutHeight ? { height: layoutHeight, maxHeight: layoutHeight } : undefined}
-      >
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {/* Toolbar */}
         <div
