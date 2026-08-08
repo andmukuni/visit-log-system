@@ -59,6 +59,7 @@ const HOURS = Array.from(
   { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
   (_, i) => CALENDAR_START_HOUR + i,
 );
+const MIN_SIDEBAR_SCALE = 0.72;
 
 function hourLabelTop(hour, hourHeight = HOUR_HEIGHT_PX) {
   return (hour - CALENDAR_START_HOUR) * hourHeight;
@@ -106,15 +107,15 @@ function ViewModeTabs({ value, onChange }) {
 }
 
 
-function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, onMonthChange }) {
+function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, onMonthChange, compact = false }) {
   const days = useMemo(() => getMonthGrid(anchorDate), [anchorDate]);
   const monthLabel = anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-gray-800">{monthLabel}</p>
+    <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-4'}`}>
+      <div className={`flex items-center justify-between ${compact ? 'mb-2' : 'mb-3'}`}>
+        <p className={`font-semibold text-gray-800 ${compact ? 'text-xs' : 'text-sm'}`}>{monthLabel}</p>
         <div className="flex items-center gap-0.5">
           <IconButton
             icon={ChevronLeft}
@@ -152,7 +153,9 @@ function MiniMonth({ anchorDate, periodStart, viewMode, focusedDay, onPickDate, 
               key={dayKey}
               type="button"
               onClick={() => onPickDate(day)}
-              className={`mx-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs transition-colors ${
+              className={`mx-auto flex cursor-pointer items-center justify-center rounded-full transition-colors ${
+                compact ? 'h-7 w-7 text-[11px]' : 'h-8 w-8 text-xs'
+              } ${
                 selected
                   ? 'bg-navy-900 text-white hover:bg-navy-900 shadow-sm'
                   : inPeriod
@@ -191,7 +194,11 @@ export default function ExecutiveWeekCalendar({
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const sidebarContentRef = useRef(null);
   const [gridViewportHeight, setGridViewportHeight] = useState(GRID_VIEWPORT_HEIGHT_PX);
+  const [sidebarFit, setSidebarFit] = useState({ scale: 1, naturalHeight: 0, scrollable: false });
+  const [sidebarCompact, setSidebarCompact] = useState(false);
   const [sidebarMonth, setSidebarMonth] = useState(weekStart);
   const [focusedDay, setFocusedDay] = useState(() => startOfDay(new Date()));
   const [weekSlideDirection, setWeekSlideDirection] = useState(null);
@@ -222,6 +229,45 @@ export default function ExecutiveWeekCalendar({
   const compactHeaders = periodDays.length > 14;
   const nowLinePx = currentTimePositionPx(now, gridBodyHeight);
   const gutterLiveTime = useMemo(() => formatGutterLiveTime(now), [now]);
+
+  useEffect(() => {
+    const aside = sidebarRef.current;
+    const content = sidebarContentRef.current;
+    if (!aside || !content) return undefined;
+
+    const fitSidebar = () => {
+      const available = aside.clientHeight;
+      const natural = content.scrollHeight;
+      if (available <= 0 || natural <= 0) return;
+
+      const rawScale = available / natural;
+      const scale = rawScale < 1
+        ? Math.max(MIN_SIDEBAR_SCALE, rawScale)
+        : 1;
+      const scrollable = rawScale < MIN_SIDEBAR_SCALE;
+      const compact = rawScale < 0.98;
+
+      setSidebarCompact((current) => (current === compact ? current : compact));
+      setSidebarFit((current) => (
+        current.scale === scale
+          && current.naturalHeight === natural
+          && current.scrollable === scrollable
+          ? current
+          : { scale, naturalHeight: natural, scrollable }
+      ));
+    };
+
+    fitSidebar();
+    const observer = new ResizeObserver(fitSidebar);
+    observer.observe(aside);
+    observer.observe(content);
+    window.addEventListener('resize', fitSidebar);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fitSidebar);
+    };
+  }, [loading, kpis, nextAppointment, sidebarMonth, viewMode, weekStart]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -543,25 +589,50 @@ export default function ExecutiveWeekCalendar({
 
   return (
     <div className={`flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch lg:gap-4 ${className}`.trim()}>
-      <aside className="flex min-h-0 w-full shrink-0 flex-col gap-2 overflow-y-auto lg:h-full lg:w-72 xl:w-80">
-        <MiniMonth
-          anchorDate={sidebarMonth}
-          periodStart={weekStart}
-          viewMode={viewMode}
-          focusedDay={focusedDay}
-          onPickDate={handlePickDate}
-          onMonthChange={setSidebarMonth}
-        />
+      <aside
+        ref={sidebarRef}
+        className={`flex min-h-0 w-full shrink-0 flex-col lg:h-full lg:w-72 xl:w-80 ${
+          sidebarFit.scrollable ? 'overflow-y-auto' : 'overflow-hidden'
+        }`}
+      >
+        <div
+          className="w-full"
+          style={sidebarFit.scale < 1 ? { height: sidebarFit.naturalHeight * sidebarFit.scale } : undefined}
+        >
+          <div
+            ref={sidebarContentRef}
+            className="flex w-full flex-col gap-2 origin-top-left"
+            style={sidebarFit.scale < 1 ? {
+              transform: `scale(${sidebarFit.scale})`,
+              width: `${100 / sidebarFit.scale}%`,
+            } : undefined}
+          >
+            <MiniMonth
+              anchorDate={sidebarMonth}
+              periodStart={weekStart}
+              viewMode={viewMode}
+              focusedDay={focusedDay}
+              onPickDate={handlePickDate}
+              onMonthChange={setSidebarMonth}
+              compact={sidebarCompact}
+            />
 
-        <ExecutiveGlancePanel kpis={kpis} />
+            <ExecutiveGlancePanel kpis={kpis} compact={sidebarCompact} />
 
-        <ExecutiveNextAppointmentCard
-          appointment={nextAppointment}
-          onViewDetails={handleViewNextAppointment}
-          onReschedule={handleRescheduleNextAppointment}
-        />
+            <ExecutiveNextAppointmentCard
+              appointment={nextAppointment}
+              onViewDetails={handleViewNextAppointment}
+              onReschedule={handleRescheduleNextAppointment}
+              compact={sidebarCompact}
+            />
 
-        <ExecutiveQuickActions kpis={kpis} onNewAppointment={openNewAppointment} />
+            <ExecutiveQuickActions
+              kpis={kpis}
+              onNewAppointment={openNewAppointment}
+              compact={sidebarCompact}
+            />
+          </div>
+        </div>
       </aside>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

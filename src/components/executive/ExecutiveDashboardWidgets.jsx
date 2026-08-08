@@ -42,27 +42,27 @@ const GLANCE_ITEMS = [
   },
 ];
 
-export function ExecutiveGlancePanel({ kpis = {} }) {
+export function ExecutiveGlancePanel({ kpis = {}, compact = false }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-900">Today at a Glance</p>
+      <div className={`border-b border-gray-100 ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+        <p className={`font-semibold uppercase tracking-wider text-navy-900 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Today at a Glance</p>
       </div>
-      <div className="grid grid-cols-2 gap-2 p-3">
+      <div className={`grid grid-cols-2 ${compact ? 'gap-1.5 p-2' : 'gap-2 p-3'}`}>
         {GLANCE_ITEMS.map(({ key, label, icon: Icon, iconWrap, valueClass }) => (
           <div
             key={key}
-            className="flex flex-col items-center rounded-xl bg-navy-50/50 px-2 py-3.5"
+            className={`flex flex-col items-center rounded-xl bg-navy-50/50 ${compact ? 'px-1.5 py-2' : 'px-2 py-3.5'}`}
           >
-            <div className="flex items-center gap-2.5">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrap}`}>
-                <Icon size={18} strokeWidth={2.25} aria-hidden="true" />
+            <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2.5'}`}>
+              <span className={`flex shrink-0 items-center justify-center rounded-lg ${iconWrap} ${compact ? 'h-7 w-7' : 'h-9 w-9'}`}>
+                <Icon size={compact ? 15 : 18} strokeWidth={2.25} aria-hidden="true" />
               </span>
-              <p className={`text-2xl font-bold tabular-nums leading-none tracking-tight ${valueClass}`}>
+              <p className={`font-bold tabular-nums leading-none tracking-tight ${valueClass} ${compact ? 'text-lg' : 'text-2xl'}`}>
                 {Number(kpis[key] ?? 0)}
               </p>
             </div>
-            <p className="mt-2.5 text-center text-[11px] font-medium leading-snug text-gray-600">
+            <p className={`text-center font-medium leading-snug text-gray-600 ${compact ? 'mt-1 text-[10px]' : 'mt-2.5 text-[11px]'}`}>
               {label}
             </p>
           </div>
@@ -104,12 +104,12 @@ function resolveAppointmentSubtitle(appointment) {
   return null;
 }
 
-export function ExecutiveNextAppointmentCard({ appointment, onViewDetails, onReschedule }) {
+export function ExecutiveNextAppointmentCard({ appointment, onViewDetails, onReschedule, compact = false }) {
   if (!appointment) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">Next Appointment</p>
-        <p className="mt-3 text-sm text-gray-500">No upcoming appointments scheduled.</p>
+      <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-4'}`}>
+        <p className={`font-semibold uppercase tracking-wider text-navy-500 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Next Appointment</p>
+        <p className={`text-gray-500 ${compact ? 'mt-2 text-xs' : 'mt-3 text-sm'}`}>No upcoming appointments scheduled.</p>
       </div>
     );
   }
@@ -119,38 +119,38 @@ export function ExecutiveNextAppointmentCard({ appointment, onViewDetails, onRes
   const countdown = formatCountdown(appointment.scheduled_at);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">Next Appointment</p>
+    <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${compact ? 'p-3' : 'p-4'}`}>
+      <p className={`font-semibold uppercase tracking-wider text-navy-500 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Next Appointment</p>
 
-      <div className="mt-3 flex items-center gap-2 text-navy-900">
-        <Clock size={18} strokeWidth={2} className="shrink-0 text-navy-700" aria-hidden="true" />
-        <span className="text-2xl font-bold tabular-nums tracking-tight">
+      <div className={`flex items-center gap-2 text-navy-900 ${compact ? 'mt-2' : 'mt-3'}`}>
+        <Clock size={compact ? 16 : 18} strokeWidth={2} className="shrink-0 text-navy-700" aria-hidden="true" />
+        <span className={`font-bold tabular-nums tracking-tight ${compact ? 'text-xl' : 'text-2xl'}`}>
           {formatAppointmentTime(appointment.scheduled_at)}
         </span>
       </div>
 
-      <div className="mt-2 min-w-0">
-        <p className="truncate text-sm font-medium text-navy-900">{title}</p>
+      <div className="mt-1.5 min-w-0">
+        <p className={`truncate font-medium text-navy-900 ${compact ? 'text-xs' : 'text-sm'}`}>{title}</p>
         {subtitle && (
-          <p className="mt-0.5 truncate text-xs text-gray-500">{subtitle}</p>
+          <p className={`truncate text-gray-500 ${compact ? 'text-[11px]' : 'text-xs'}`}>{subtitle}</p>
         )}
         {countdown && (
-          <p className="mt-1.5 text-sm font-semibold text-emerald-600">{countdown}</p>
+          <p className={`font-semibold text-emerald-600 ${compact ? 'mt-1 text-xs' : 'mt-1.5 text-sm'}`}>{countdown}</p>
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className={`grid grid-cols-2 gap-2 ${compact ? 'mt-2.5' : 'mt-4'}`}>
         <button
           type="button"
           onClick={onViewDetails}
-          className="rounded-xl border border-navy-900 bg-white px-3 py-2 text-xs font-semibold text-navy-900 transition-colors hover:bg-navy-50"
+          className={`rounded-xl border border-navy-900 bg-white font-semibold text-navy-900 transition-colors hover:bg-navy-50 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-xs'}`}
         >
           View Details
         </button>
         <button
           type="button"
           onClick={onReschedule}
-          className="rounded-xl bg-navy-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800"
+          className={`rounded-xl bg-navy-900 font-semibold text-white transition-colors hover:bg-navy-800 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-xs'}`}
         >
           Reschedule
         </button>
@@ -181,20 +181,20 @@ const QUICK_ACTIONS = [
   },
 ];
 
-function QuickActionRowContent({ label, icon: Icon, badge = 0, showBadge = false }) {
+function QuickActionRowContent({ label, icon: Icon, badge = 0, showBadge = false, compact = false }) {
   return (
     <>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-        <Icon size={16} strokeWidth={2.25} aria-hidden="true" />
+      <span className={`flex shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700 ${compact ? 'h-7 w-7' : 'h-8 w-8'}`}>
+        <Icon size={compact ? 14 : 16} strokeWidth={2.25} aria-hidden="true" />
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy-800">{label}</span>
+      <span className={`min-w-0 flex-1 truncate font-medium text-navy-800 ${compact ? 'text-xs' : 'text-sm'}`}>{label}</span>
       {showBadge ? (
-        <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-violet-600 px-2 text-[11px] font-bold text-white">
+        <span className={`inline-flex shrink-0 items-center justify-center rounded-full bg-violet-600 font-bold text-white ${compact ? 'h-5 min-w-[1.25rem] px-1.5 text-[10px]' : 'h-6 min-w-[1.5rem] px-2 text-[11px]'}`}>
           {badge > 9 ? '9+' : badge}
         </span>
       ) : (
         <ChevronRight
-          size={16}
+          size={compact ? 14 : 16}
           className="shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-600"
           aria-hidden="true"
         />
@@ -203,16 +203,17 @@ function QuickActionRowContent({ label, icon: Icon, badge = 0, showBadge = false
   );
 }
 
-export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className = '' }) {
+export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className = '', compact = false }) {
+  const rowClass = `group flex w-full items-center text-left transition-colors hover:bg-navy-50/60 ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-3'}`;
+
   return (
     <div className={`overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`.trim()}>
-      <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-900">Quick Actions</p>
+      <div className={`border-b border-gray-100 ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+        <p className={`font-semibold uppercase tracking-wider text-navy-900 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Quick Actions</p>
       </div>
       <div className="divide-y divide-gray-100">
         {QUICK_ACTIONS.map(({ key, label, icon, to, action, badgeKey }) => {
           const badge = badgeKey ? Number(kpis[badgeKey] ?? 0) : 0;
-          const rowClass = 'group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-navy-50/60';
 
           if (action === 'new') {
             return (
@@ -222,7 +223,7 @@ export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className =
                 onClick={onNewAppointment}
                 className={rowClass}
               >
-                <QuickActionRowContent label={label} icon={icon} />
+                <QuickActionRowContent label={label} icon={icon} compact={compact} />
               </button>
             );
           }
@@ -238,6 +239,7 @@ export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className =
                 icon={icon}
                 badge={badge}
                 showBadge={Boolean(badgeKey)}
+                compact={compact}
               />
             </Link>
           );
