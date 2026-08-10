@@ -198,8 +198,9 @@ export default function GateCheckInPanel({
         ) : (
           <div className="overflow-x-auto rounded-xl border border-navy-100">
             <div className="min-w-[640px]">
-              <div className="hidden grid-cols-[minmax(0,14rem)_5.75rem_minmax(7rem,1fr)_3rem] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+              <div className="hidden grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5.75rem_7rem_3rem] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
                 <span>Visitor</span>
+                <span>Purpose of visit</span>
                 <span>Signature</span>
                 <span>Status</span>
                 <span className="text-right">Action</span>
@@ -225,7 +226,7 @@ export default function GateCheckInPanel({
                           onRowClick(row);
                         }
                       }}
-                      className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,14rem)_5.75rem_minmax(7rem,1fr)_3rem] sm:items-center sm:gap-3 ${
+                      className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5.75rem_7rem_3rem] sm:items-center sm:gap-3 ${
                         busy
                           ? 'opacity-70'
                           : rowInteractive
@@ -254,6 +255,12 @@ export default function GateCheckInPanel({
                             </span>
                           )}
                         </div>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Purpose of visit</span>
+                        <p className="truncate text-sm text-navy-700" title={row.purpose || row.appointment_title || ''}>
+                          {row.purpose || row.appointment_title || '—'}
+                        </p>
                       </div>
                       <div className="flex flex-col gap-1 sm:justify-start">
                         <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Signature</span>
