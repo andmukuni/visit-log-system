@@ -22,7 +22,6 @@ const TABS = {
 export default function ReceptionCheckInPage() {
   const toast = useToast();
   const navigate = useNavigate();
-  const [badges, setBadges] = useState([]);
   const [hosts, setHosts] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [offices, setOffices] = useState([]);
@@ -38,12 +37,10 @@ export default function ReceptionCheckInPage() {
     setLoading(true);
     try {
       const ref = await receptionApi.getReferenceData();
-      setBadges(ref.badges || []);
       setHosts(ref.hosts || []);
       setDepartments(ref.departments || []);
       setOffices(ref.offices || []);
     } catch {
-      setBadges([]);
       setHosts([]);
       setDepartments([]);
       setOffices([]);
@@ -137,7 +134,6 @@ export default function ReceptionCheckInPage() {
           {tab === TABS.ready ? (
             <>
               <GateCheckInPanel
-                badges={badges}
                 mode="walk-in"
                 showPendingHeader={false}
                 fetchPendingVisits={(mode) => receptionApi.getCheckInAppointments(mode)}

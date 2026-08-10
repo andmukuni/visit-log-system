@@ -70,7 +70,10 @@ export const visitorApi = {
   registerVisit: (body) => apiFetch('/admin/visits', { method: 'POST', body: JSON.stringify(body) }),
   approveVisit: (id, reason) => apiFetch(`/admin/visits/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason }) }),
   rejectVisit: (id, reason) => apiFetch(`/admin/visits/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  checkInVisit: (id, badgeNumber) => apiFetch(`/admin/visits/${id}/check-in`, { method: 'POST', body: JSON.stringify({ badgeNumber }) }),
+  checkInVisit: (id, badgeNumber) => apiFetch(`/admin/visits/${id}/check-in`, {
+    method: 'POST',
+    body: JSON.stringify(badgeNumber != null && badgeNumber !== '' ? { badgeNumber } : {}),
+  }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
   lookupVisit: (query, type) => apiFetch('/admin/visits/lookup', { method: 'POST', body: JSON.stringify({ query, type }) }),
   getPendingCheckIns: (type = 'walk-in') => apiFetch(`/admin/visits/pending-check-in?type=${encodeURIComponent(type)}`),

@@ -41,7 +41,6 @@ function SignaturePreview({ src, name }) {
 }
 
 export default function GateCheckInPanel({
-  badges: initialBadges = [],
   mode = 'walk-in',
   onCheckedIn,
   onRowClick,
@@ -56,16 +55,10 @@ export default function GateCheckInPanel({
   const isVehicle = mode === 'vehicle';
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [badges, setBadges] = useState(initialBadges);
   const [searching, setSearching] = useState(false);
   const [loadingPending, setLoadingPending] = useState(true);
   const [checkingIn, setCheckingIn] = useState(null);
-  const [selectedBadge, setSelectedBadge] = useState('');
   const hasSearch = Boolean(query.trim());
-
-  useEffect(() => {
-    if (initialBadges.length) setBadges(initialBadges);
-  }, [initialBadges]);
 
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
@@ -84,23 +77,12 @@ export default function GateCheckInPanel({
 
   useEffect(() => {
     setQuery('');
-    setSelectedBadge('');
     void loadPending();
   }, [loadPending]);
 
   useEffect(() => {
     onPendingCountChange?.(results.length);
   }, [results.length, onPendingCountChange]);
-
-  const ensureBadges = async () => {
-    if (badges.length) return;
-    try {
-      const ref = await visitorApi.getReferenceData();
-      setBadges(ref.badges || []);
-    } catch {
-      // ignore
-    }
-  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -110,7 +92,6 @@ export default function GateCheckInPanel({
     }
     setSearching(true);
     try {
-      await ensureBadges();
       const rows = await visitorApi.lookupVisit(query.trim(), mode);
       const eligible = (rows || []).filter((v) => isCheckInEligible(v.status));
       setResults(eligible);
@@ -127,11 +108,10 @@ export default function GateCheckInPanel({
   const handleCheckIn = async (visitId) => {
     setCheckingIn(visitId);
     try {
-      await visitorApi.checkInVisit(visitId, selectedBadge);
+      await visitorApi.checkInVisit(visitId);
       toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked in successfully.`);
       onCheckedIn?.(visitId);
       setResults((prev) => prev.filter((v) => v.id !== visitId));
-      setSelectedBadge('');
       if (!hasSearch) {
         void loadPending();
       }
@@ -194,24 +174,6 @@ export default function GateCheckInPanel({
         </form>
       </FormSection>
 
-      {badges.length > 0 && !isVehicle ? (
-        <FormSection title="Badge assignment" subtitle="Optional physical badge for this check-in">
-          <FieldLabel>Available badge</FieldLabel>
-          <select
-            value={selectedBadge}
-            onChange={(e) => setSelectedBadge(e.target.value)}
-            className={`${INPUT_MD} pl-3`}
-          >
-            <option value="">No physical badge</option>
-            {badges.map((badge) => (
-              <option key={badge.badge_number} value={badge.badge_number}>
-                {badge.badge_number}
-              </option>
-            ))}
-          </select>
-        </FormSection>
-      ) : null}
-
       <FormSection
         title={showPendingHeader ? 'Ready for check-in' : undefined}
         subtitle={showPendingHeader ? pendingListSubtitle : undefined}
@@ -236,7 +198,7 @@ export default function GateCheckInPanel({
         ) : (
           <div className="overflow-x-auto rounded-xl border border-navy-100">
             <div className="min-w-[640px]">
-              <div className="hidden grid-cols-[minmax(0,1fr)_5.75rem_7rem_9rem] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+              <div className="hidden grid-cols-[minmax(0,14rem)_5.75rem_minmax(7rem,1fr)_3rem] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
                 <span>Visitor</span>
                 <span>Signature</span>
                 <span>Status</span>
@@ -263,7 +225,7 @@ export default function GateCheckInPanel({
                           onRowClick(row);
                         }
                       }}
-                      className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,1fr)_5.75rem_7rem_9rem] sm:items-center sm:gap-3 ${
+                      className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,14rem)_5.75rem_minmax(7rem,1fr)_3rem] sm:items-center sm:gap-3 ${
                         busy
                           ? 'opacity-70'
                           : rowInteractive
@@ -315,14 +277,14 @@ export default function GateCheckInPanel({
                         <LoadingButton
                           loading={checkingIn === row.id}
                           loadingLabel="Checking in…"
+                          aria-label="Check in"
                           icon={LogIn}
+                          iconOnly
                           size="lg"
                           disabled={busy}
                           onClick={() => void handleCheckIn(row.id)}
-                          className="w-full shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600 sm:w-auto sm:min-w-[9rem]"
-                        >
-                          Check in
-                        </LoadingButton>
+                          className="shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
+                        />
                       </div>
                     </li>
                   );
