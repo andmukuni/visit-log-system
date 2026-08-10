@@ -127,7 +127,14 @@ export async function runPostgresQuery(client, sql, params = []) {
   const result = await client.query(text, params);
 
   for (const indexSql of indexes) {
-    await client.query(indexSql);
+    try {
+      await client.query(indexSql);
+    } catch (err) {
+      // Existing tables skip CREATE TABLE body; extracted indexes can reference
+      // columns that ensureColumn adds only after this call returns.
+      if (err?.code === '42703') continue;
+      throw err;
+    }
   }
 
   return [result.rows, result.fields];

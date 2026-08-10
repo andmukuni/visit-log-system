@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import pool from './db.js';
+import pool, { getDbDriver } from './db.js';
 
 function generateId(prefix) {
   return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -71,6 +71,12 @@ export async function ensureOfficeSchema(db = pool) {
   `);
   await ensureColumn(db, 'offices', 'building_id', 'ADD COLUMN building_id VARCHAR(90) NULL');
   await ensureColumn(db, 'offices', 'zone_id', 'ADD COLUMN zone_id VARCHAR(90) NULL');
+  // Postgres extracts INDEX clauses from CREATE TABLE and runs them even when the
+  // table already exists — recreate after columns are ensured.
+  if (getDbDriver() === 'postgres') {
+    await db.query('CREATE INDEX IF NOT EXISTS idx_offices_building ON offices (building_id)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_offices_zone ON offices (zone_id)');
+  }
   if (await tableExists(db, 'hosts')) {
     await ensureColumn(db, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
     await ensureColumn(db, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
