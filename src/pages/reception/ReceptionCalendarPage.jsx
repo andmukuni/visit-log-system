@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, RefreshAction, ActionToolbar, Spinner } from '../../components/ui';
-import ExecutiveWeekCalendar, { periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
+import { PageHeader, RefreshAction, ActionToolbar } from '../../components/ui';
+import ExpectedVisitorsTimeline from '../../components/reception/ExpectedVisitorsTimeline';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
+import { periodQueryRange, normalizePeriodStart, startOfDay } from '../../components/executive/calendarUtils';
 import { receptionApi } from '../../utils/visitorApi';
 
 function mapCalendarRow(row) {
   const scheduledAt = row.scheduled_at || row.expected_at;
   return {
     id: row.id || row.visit_id,
-    visit_id: row.visit_id,
+    visit_id: row.visit_id || row.id,
     title: row.title || row.purpose || 'Visit',
     scheduled_at: scheduledAt,
     status: row.appointment_status || 'scheduled',
     visit_status: row.visit_status,
     visitor_name: row.visitor_name || row.full_name,
     host_name: row.host_name,
+    host_id: row.host_id,
+    company: row.company,
+    phone: row.phone,
+    department_name: row.department_name,
     classification: row.classification || 'standard',
     category_name: row.category_name,
     purpose: row.purpose,
@@ -26,18 +31,18 @@ function mapCalendarRow(row) {
 }
 
 export default function ReceptionCalendarPage() {
-  const [weekStart, setWeekStart] = useState(() => normalizePeriodStart(new Date(), 'week'));
-  const [viewMode, setViewMode] = useState('week');
+  const [selectedDate, setSelectedDate] = useState(() => normalizePeriodStart(new Date(), 'day'));
   const [appointments, setAppointments] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const range = periodQueryRange(weekStart, viewMode);
+      const range = periodQueryRange(selectedDate, 'day');
       const [calendarRows, dash] = await Promise.all([
         receptionApi.getCalendar({ start: range.from, end: range.to }),
         receptionApi.getDashboard(),
@@ -45,42 +50,51 @@ export default function ReceptionCalendarPage() {
       setAppointments((calendarRows || []).map(mapCalendarRow));
       setDashboard(dash);
     } catch (err) {
-      setError(err.message || 'Unable to load calendar.');
+      setError(err.message || 'Unable to load expected visitors.');
       setAppointments([]);
     } finally {
       setLoading(false);
     }
-  }, [weekStart, viewMode]);
+  }, [selectedDate]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const kpis = useMemo(() => ({
-    todayAppointments: dashboard?.expectedToday || 0,
-    weekAppointments: appointments.length,
-    onSiteNow: dashboard?.checkedInAtDesk || 0,
-    pendingApprovals: dashboard?.pendingApprovals || 0,
-    vipToday: appointments.filter((row) => ['vip', 'vvip'].includes(String(row.classification || '').toLowerCase())).length,
-  }), [dashboard, appointments]);
+  const isSelectedToday = useMemo(() => {
+    const today = startOfDay(new Date());
+    const selected = startOfDay(selectedDate);
+    return (
+      today.getFullYear() === selected.getFullYear()
+      && today.getMonth() === selected.getMonth()
+      && today.getDate() === selected.getDate()
+    );
+  }, [selectedDate]);
 
-  const nextAppointment = useMemo(() => {
-    const now = Date.now();
-    return appointments
-      .filter((row) => row.scheduled_at && new Date(row.scheduled_at).getTime() >= now)
-      .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))[0] || null;
-  }, [appointments]);
+  const kpis = useMemo(() => {
+    const vipToday = appointments.filter((row) => (
+      ['vip', 'vvip'].includes(String(row.classification || '').toLowerCase())
+    )).length;
 
-  const handleViewModeChange = useCallback((nextMode) => {
-    setViewMode(nextMode);
-    setWeekStart((current) => normalizePeriodStart(current, nextMode));
+    return {
+      expectedToday: isSelectedToday
+        ? (dashboard?.expectedToday ?? appointments.length)
+        : appointments.length,
+      onSiteNow: dashboard?.checkedInAtDesk || 0,
+      pendingApprovals: dashboard?.pendingApprovals || 0,
+      vipToday,
+    };
+  }, [appointments, dashboard, isSelectedToday]);
+
+  const handleDateChange = useCallback((nextDate) => {
+    setSelectedDate(normalizePeriodStart(nextDate, 'day'));
   }, []);
 
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden overscroll-none">
       <PageHeader
         title="Expected Visitors"
-        subtitle={formatExecutiveDashboardDate()}
+        subtitle={formatExecutiveDashboardDate(selectedDate)}
         actions={(
           <ActionToolbar>
             <Link
@@ -101,24 +115,15 @@ export default function ReceptionCalendarPage() {
         </div>
       ) : null}
 
-      {loading && appointments.length === 0 ? (
-        <div className="flex flex-1 justify-center py-20"><Spinner size={32} /></div>
-      ) : (
-        <ExecutiveWeekCalendar
-          className="h-full min-h-0 flex-1 overflow-hidden"
-          executive={{ name: dashboard?.scope?.siteName || 'Reception', title: 'Reception' }}
-          kpis={kpis}
-          nextAppointment={nextAppointment}
-          appointments={appointments}
-          loading={loading}
-          weekStart={weekStart}
-          viewMode={viewMode}
-          onViewModeChange={handleViewModeChange}
-          onWeekChange={setWeekStart}
-          onRefresh={load}
-          newAppointmentTrigger={0}
-        />
-      )}
+      <ExpectedVisitorsTimeline
+        appointments={appointments}
+        selectedDate={selectedDate}
+        onDateChange={handleDateChange}
+        kpis={kpis}
+        loading={loading}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+      />
     </div>
   );
 }

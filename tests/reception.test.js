@@ -96,3 +96,28 @@ describe('host occupied lifecycle', () => {
     assert.equal(canTransition('expected', 'waiting'), false);
   });
 });
+
+describe('reception visit action labels', () => {
+  it('maps gate, reception, queue, and host stages to distinct labels', async () => {
+    const {
+      getReceptionVisitAction,
+      getReceptionCheckInActionLabel,
+      receptionActionHref,
+    } = await import('../shared/visitReceptionActions.js');
+
+    assert.equal(getReceptionVisitAction('arrived_at_gate').label, 'Receive at desk');
+    assert.equal(getReceptionVisitAction('expected').label, 'Check in');
+    assert.equal(getReceptionVisitAction('reception_check_in').label, 'Queue to host');
+    assert.equal(getReceptionVisitAction('waiting').label, 'View host queue');
+    assert.equal(getReceptionVisitAction('in_meeting').label, 'With host');
+    assert.equal(getReceptionVisitAction('completed').show, false);
+
+    assert.equal(getReceptionCheckInActionLabel('entered_premises').label, 'Receive at desk');
+    assert.equal(getReceptionCheckInActionLabel('expected').label, 'Check in');
+
+    assert.equal(
+      receptionActionHref(getReceptionVisitAction('expected'), 'vis-1'),
+      '/reception/check-in?visit=vis-1',
+    );
+  });
+});

@@ -3,6 +3,7 @@ import { Car, Footprints, LogIn, Search, User } from 'lucide-react';
 import { LoadingButton, StatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
+import { getReceptionCheckInActionLabel } from '../../../shared/visitReceptionActions.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 const INPUT_MD =
@@ -209,6 +210,7 @@ export default function GateCheckInPanel({
                 {results.map((row) => {
                   const busy = checkingIn === row.id || Boolean(checkingIn);
                   const rowInteractive = typeof onRowClick === 'function';
+                  const checkInAction = getReceptionCheckInActionLabel(row.status);
                   return (
                     <li
                       key={row.id}
@@ -283,14 +285,15 @@ export default function GateCheckInPanel({
                       <div className="flex sm:justify-end" onClick={(e) => e.stopPropagation()}>
                         <LoadingButton
                           loading={checkingIn === row.id}
-                          loadingLabel="Checking in…"
-                          aria-label="Check in"
+                          loadingLabel={checkInAction.loadingLabel}
+                          aria-label={checkInAction.label}
                           icon={LogIn}
                           iconOnly
                           size="lg"
                           disabled={busy}
                           onClick={() => void handleCheckIn(row.id)}
                           className="shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
+                          title={checkInAction.label}
                         />
                       </div>
                     </li>
