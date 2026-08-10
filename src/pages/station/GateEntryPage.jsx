@@ -176,7 +176,7 @@ function PageLogoWatermark() {
         src={LOGO_PATH}
         alt=""
         draggable={false}
-        className="absolute left-1/2 top-1/2 h-[min(78vh,620px)] w-auto max-w-[min(94vw,720px)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.09]"
+        className="absolute left-1/2 top-1/2 h-[min(96vh,980px)] w-auto max-w-[min(100vw,1100px)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.1]"
       />
     </div>
   );
