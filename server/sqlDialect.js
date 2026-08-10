@@ -39,12 +39,14 @@ function adaptOnDuplicateKeyUpdate(sql) {
     throw new Error(`PostgreSQL upsert mapping missing for table "${table}".`);
   }
 
-  // VALUES(col) → EXCLUDED.col; then qualify bare col refs so Postgres
-  // does not treat COALESCE(EXCLUDED.id_type, id_type) as ambiguous.
+  // VALUES(col) → EXCLUDED.col
   let pgUpdates = updatePart.replace(/VALUES\(([^)]+)\)/gi, 'EXCLUDED.$1');
+  // Only qualify bare cols inside COALESCE(EXCLUDED.x, x). A broader rewrite
+  // incorrectly turns `EXCLUDED.name, perm_group = ...` into a qualified
+  // SET target and crashes bootstrap (Postgres 42703).
   pgUpdates = pgUpdates.replace(
-    /\bEXCLUDED\.(\w+)\s*,\s*(?!EXCLUDED\.|[\w.]+\.)(\w+)\b/gi,
-    `EXCLUDED.$1, ${table}.$2`,
+    /COALESCE\s*\(\s*EXCLUDED\.(\w+)\s*,\s*(?!EXCLUDED\.|[\w.]+\.)(\w+)\s*\)/gi,
+    `COALESCE(EXCLUDED.$1, ${table}.$2)`,
   );
   return `${insertPart} ON CONFLICT (${conflict}) DO UPDATE SET ${pgUpdates}`;
 }
