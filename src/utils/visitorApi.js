@@ -211,6 +211,18 @@ export const visitorApi = {
   },
   createHost: (body) => apiFetch('/admin/org/hosts', { method: 'POST', body: JSON.stringify(body) }),
   updateHost: (id, body) => apiFetch(`/admin/org/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  sendHostPasswordReset: async (id) => {
+    const res = await fetch(`${API_BASE}/admin/org/hosts/${id}/send-password-reset`, {
+      method: 'POST',
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    return json;
+  },
   getReceptionists: async () => {
     const res = await fetch(`${API_BASE}/admin/org/receptionists`, {
       headers: { ...getAdminAuthHeaders() },

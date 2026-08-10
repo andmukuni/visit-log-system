@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, DoorClosed, Eye, MapPin, Network, Plus, Search, UserCheck, X, Edit3 } from 'lucide-react';
+import { Building2, DoorClosed, Eye, KeyRound, Mail, MapPin, Network, Plus, Search, UserCheck, X, Edit3 } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
@@ -9,6 +9,7 @@ import {
   Modal,
   FormField,
   LoadingButton,
+  ConfirmDialog,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
@@ -26,6 +27,7 @@ const emptyForm = () => ({
   officeId: '',
   status: 'active',
   availability: 'available',
+  password: '',
 });
 
 export default function AdminHostsPage() {
@@ -55,6 +57,8 @@ export default function AdminHostsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -197,13 +201,14 @@ export default function AdminHostsPage() {
       officeId: row.office_id || '',
       status: row.status || 'active',
       availability: row.availability === 'unavailable' ? 'unavailable' : 'available',
+      password: '',
     });
     setModalOpen(true);
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error('Employee name is required.');
+      toast.error('Host name is required.');
       return;
     }
     if (!editing && !form.organisationId) {
@@ -212,6 +217,10 @@ export default function AdminHostsPage() {
     }
     if (!form.departmentId || !form.siteId) {
       toast.error('Department and site are required.');
+      return;
+    }
+    if (form.password && !form.email.trim()) {
+      toast.error('Email is required to set a host password.');
       return;
     }
     setSaving(true);
@@ -225,23 +234,48 @@ export default function AdminHostsPage() {
         officeId: form.officeId || null,
         status: form.status,
         availability: form.availability,
+        password: form.password || undefined,
       };
       if (editing?.id) {
         await visitorApi.updateHost(editing.id, payload);
-        toast.success('Employee updated.');
+        toast.success(form.password ? 'Host updated and password changed.' : 'Host updated.');
       } else {
         await visitorApi.createHost({
           ...payload,
           organisationId: form.organisationId,
         });
-        toast.success('Employee created.');
+        toast.success('Host created.');
       }
       setModalOpen(false);
       await load();
     } catch (err) {
-      toast.error(err?.message || 'Could not save employee.');
+      toast.error(err?.message || 'Could not save host.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!resetTarget?.id) return;
+    setSendingReset(true);
+    try {
+      const result = await visitorApi.sendHostPasswordReset(resetTarget.id);
+      toast.success(result?.message || `Password reset email sent to ${resetTarget.email}.`);
+      const targetId = resetTarget.id;
+      setResetTarget(null);
+      const rows = await visitorApi.getHosts();
+      setAllRows(Array.isArray(rows) ? rows : []);
+      setKpis(rows?.stats || { total: rows?.length || 0 });
+      if (selected?.id === targetId) {
+        setSelected(rows.find((row) => row.id === targetId) || selected);
+      }
+      if (editing?.id === targetId) {
+        setEditing(rows.find((row) => row.id === targetId) || editing);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not send password reset email.');
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -406,6 +440,12 @@ export default function AdminHostsPage() {
               <div className="space-y-2 px-4 py-3 text-sm">
                 <StatusBadge status={selected.status || 'active'} />
                 <p className="text-xs text-gray-500">
+                  Portal login:{' '}
+                  <span className="font-semibold text-navy-900">
+                    {selected.user_id ? 'Enabled' : selected.email ? 'Email on file' : 'Not linked'}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-500">
                   Reception availability:{' '}
                   <span className="font-semibold text-navy-900">
                     {selected.availability === 'unavailable' ? 'Not available' : 'Available'}
@@ -416,13 +456,22 @@ export default function AdminHostsPage() {
                 <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
                 <p className="flex items-center gap-2"><DoorClosed size={14} className="text-gray-400" /><span className="font-semibold">{selected.office_number ? `#${selected.office_number}` : 'No office'}</span></p>
               </div>
-              <div className="mt-auto border-t border-gray-200 p-3">
+              <div className="mt-auto space-y-2 border-t border-gray-200 p-3">
                 <button
                   type="button"
                   onClick={() => openEdit(selected)}
                   className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2 text-sm font-semibold text-[#1a73e8]"
                 >
-                  <Edit3 size={16} /> Edit Employee
+                  <Edit3 size={16} /> Edit Host
+                </button>
+                <button
+                  type="button"
+                  disabled={!selected.email}
+                  title={!selected.email ? 'Add an email address first' : 'Email a password reset link'}
+                  onClick={() => setResetTarget(selected)}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2 text-sm font-semibold text-navy-800 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Mail size={16} /> Send password reset
                 </button>
               </div>
             </aside>
@@ -433,8 +482,8 @@ export default function AdminHostsPage() {
       <Modal
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
-        title={editing ? 'Edit Employee' : 'New Employee / Host'}
-        subtitle="Organisation → Employee → Department + Site (+ optional Office)"
+        title={editing ? 'Edit Host' : 'New Host'}
+        subtitle="Organisation → Host → Department + Site (+ optional Office)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -442,7 +491,7 @@ export default function AdminHostsPage() {
               Cancel
             </button>
             <LoadingButton loading={saving} onClick={handleSave}>
-              {editing ? 'Save changes' : 'Create employee'}
+              {editing ? 'Save changes' : 'Create host'}
             </LoadingButton>
           </div>
         )}
@@ -468,7 +517,7 @@ export default function AdminHostsPage() {
               }));
             }}
             options={orgOptions}
-            helpText={editing ? 'Organisation cannot be changed after create.' : 'Required. Employee belongs to this organisation.'}
+            helpText={editing ? 'Organisation cannot be changed after create.' : 'Required. Host belongs to this organisation.'}
           />
           <FormField
             label="Full name"
@@ -484,6 +533,7 @@ export default function AdminHostsPage() {
             value={form.email}
             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
             placeholder="jane@company.com"
+            helpText="Required for Host portal login and password reset emails."
           />
           <FormField
             label="Phone"
@@ -542,8 +592,44 @@ export default function AdminHostsPage() {
             ]}
             helpText="Shown on reception Host Queue. Only admins can change this."
           />
+          <FormField
+            label={editing ? 'Change password' : 'Temporary password'}
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder={editing ? 'Leave blank to keep current' : 'Optional'}
+            helpText={
+              editing
+                ? 'Set a new password for the host login, or leave blank. You can also email a reset link from the host details panel.'
+                : 'Optional. Creates Host portal login when email is set. Prefer “Send password reset” so the host chooses their own password.'
+            }
+          />
+          {editing?.email ? (
+            <button
+              type="button"
+              onClick={() => setResetTarget(editing)}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2 text-sm font-semibold text-navy-800 hover:bg-navy-50"
+            >
+              <KeyRound size={16} /> Send password reset email
+            </button>
+          ) : null}
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(resetTarget)}
+        onClose={() => !sendingReset && setResetTarget(null)}
+        onConfirm={handleSendPasswordReset}
+        loading={sendingReset}
+        title="Send password reset?"
+        message={
+          resetTarget
+            ? `Email a password reset link to ${resetTarget.name} (${resetTarget.email}). The link expires in 24 hours.`
+            : 'Are you sure you want to proceed?'
+        }
+        confirmLabel="Send email"
+      />
     </div>
   );
 }

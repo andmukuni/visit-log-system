@@ -11,6 +11,7 @@ import { APP_NAME_SHORT } from '../shared/branding.js';
 import { isExecutiveOnlyUser } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
@@ -285,6 +286,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <LoginPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'admin/login', element: <LoginPage /> },
+      { path: 'reset-password', element: <ResetPasswordPage /> },
 
       {
         path: 'kiosk',

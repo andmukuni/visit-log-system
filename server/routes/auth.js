@@ -7,6 +7,10 @@ import {
   userCanAccessAdmin,
 } from '../rbacService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
+import {
+  consumePasswordResetToken,
+  peekPasswordResetToken,
+} from '../hostPortalService.js';
 
 function mapAuthSessionUser(user) {
   return {
@@ -77,6 +81,65 @@ export function createAuthRouter({ authService }) {
     } catch (error) {
       console.error('[auth/login]', error.message);
       return res.status(500).json({ ok: false, message: 'Login failed. Please try again.' });
+    }
+  });
+
+  router.get('/reset-password', rateLimitAuth, async (req, res) => {
+    try {
+      const token = String(req.query?.token || '').trim();
+      if (!token) {
+        return res.status(400).json({ ok: false, message: 'Reset token is required.' });
+      }
+      const peek = await peekPasswordResetToken(pool, token);
+      if (!peek.valid) {
+        return res.status(400).json({
+          ok: false,
+          message: peek.reason === 'used'
+            ? 'This password reset link has already been used.'
+            : peek.reason === 'expired'
+              ? 'This password reset link has expired.'
+              : 'Invalid password reset link.',
+        });
+      }
+      return res.json({
+        ok: true,
+        data: {
+          email: peek.email,
+          name: peek.name,
+          expiresAt: peek.expiresAt,
+        },
+      });
+    } catch (error) {
+      console.error('[auth/reset-password:get]', error.message);
+      return res.status(500).json({ ok: false, message: 'Could not validate reset link.' });
+    }
+  });
+
+  router.post('/reset-password', rateLimitAuth, async (req, res) => {
+    try {
+      const token = String(req.body?.token || '').trim();
+      const newPassword = String(req.body?.new_password || req.body?.password || '').trim();
+      if (!token || !newPassword) {
+        return res.status(400).json({ ok: false, message: 'Reset token and new password are required.' });
+      }
+
+      const security = await getSecuritySettings();
+      const minLength = Number(security.min_password_length || 8);
+      if (newPassword.length < minLength) {
+        return res.status(400).json({
+          ok: false,
+          message: `New password must be at least ${minLength} characters.`,
+        });
+      }
+
+      await consumePasswordResetToken(pool, token, newPassword);
+      return res.json({ ok: true, message: 'Password updated. You can sign in with your new password.' });
+    } catch (error) {
+      console.error('[auth/reset-password]', error.message);
+      return res.status(error.status || 500).json({
+        ok: false,
+        message: error.message || 'Could not reset password.',
+      });
     }
   });
 

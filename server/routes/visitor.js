@@ -32,6 +32,8 @@ import {
   refreshHostAvailabilityAfterVisit,
 } from '../hostAvailability.js';
 import { loadReceptionistRow, syncReceptionistPortalUser } from '../receptionistService.js';
+import { sendHostPasswordResetEmail, syncHostPortalUser } from '../hostPortalService.js';
+import { getSecuritySettings } from '../services/adminSettingsService.js';
 
 function todayStart() {
   const d = new Date();
@@ -2873,7 +2875,7 @@ export function createOrgAdminRouter() {
     }
   });
 
-  // Employee → Organisation + Department + Site (+ optional Office)
+  // Host → Organisation + Department + Site (+ optional Office) + portal login
   router.post('/hosts', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2884,23 +2886,37 @@ export function createOrgAdminRouter() {
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
       const officeId = String(req.body?.officeId || req.body?.office_id || '').trim() || null;
       const name = String(req.body?.name || '').trim();
-      const email = String(req.body?.email || '').trim() || null;
+      const email = String(req.body?.email || '').trim().toLowerCase() || null;
       const phone = String(req.body?.phone || '').trim() || null;
       const status = String(req.body?.status || 'active').trim() || 'active';
       const availability = normalizeHostAvailability(req.body?.availability);
+      const password = String(req.body?.password || '').trim() || null;
 
-      if (!name) return res.status(400).json({ ok: false, message: 'Employee name is required.' });
+      if (!name) return res.status(400).json({ ok: false, message: 'Host name is required.' });
       if (!orgId) {
-        return res.status(400).json({ ok: false, message: 'Organisation is required for an employee.' });
+        return res.status(400).json({ ok: false, message: 'Organisation is required for a host.' });
       }
       if (scope?.organisation_id && orgId !== scope.organisation_id) {
         return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
       }
       if (!departmentId) {
-        return res.status(400).json({ ok: false, message: 'Department is required for an employee.' });
+        return res.status(400).json({ ok: false, message: 'Department is required for a host.' });
       }
       if (!siteId) {
-        return res.status(400).json({ ok: false, message: 'Site / branch is required for an employee.' });
+        return res.status(400).json({ ok: false, message: 'Site / branch is required for a host.' });
+      }
+      if (password && !email) {
+        return res.status(400).json({ ok: false, message: 'Email is required to set a host password.' });
+      }
+      if (password) {
+        const security = await getSecuritySettings();
+        const minLength = Number(security.min_password_length || 8);
+        if (password.length < minLength) {
+          return res.status(400).json({
+            ok: false,
+            message: `Password must be at least ${minLength} characters.`,
+          });
+        }
       }
 
       const placement = await assertEmployeePlacement(pool, {
@@ -2913,11 +2929,26 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      let linkedUserId = null;
+      if (email) {
+        linkedUserId = await syncHostPortalUser(pool, {
+          name,
+          email,
+          phone,
+          organisationId: orgId,
+          siteId,
+          departmentId,
+          officeId: placement.officeId,
+          password,
+          active: status !== 'inactive',
+        });
+      }
+
       const id = generateId('host');
       await pool.query(
-        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, name, email, phone, status, availability)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, departmentId, siteId, placement.officeId, name, email, phone, status, availability],
+        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, name, email, phone, status, availability)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, departmentId, siteId, placement.officeId, linkedUserId, name, email, phone, status, availability],
       );
 
       const [[row]] = await pool.query(
@@ -2949,9 +2980,9 @@ export function createOrgAdminRouter() {
       const hostId = req.params.id;
 
       const [[existing]] = await pool.query('SELECT * FROM hosts WHERE id = ? LIMIT 1', [hostId]);
-      if (!existing) return res.status(404).json({ ok: false, message: 'Employee not found.' });
+      if (!existing) return res.status(404).json({ ok: false, message: 'Host not found.' });
       if (orgId && existing.organisation_id !== orgId) {
-        return res.status(403).json({ ok: false, message: 'Access denied for this employee.' });
+        return res.status(403).json({ ok: false, message: 'Access denied for this host.' });
       }
 
       const departmentId = req.body?.departmentId != null || req.body?.department_id != null
@@ -2965,7 +2996,7 @@ export function createOrgAdminRouter() {
         : existing.office_id;
       const officeId = officeRaw || null;
       const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
-      const email = req.body?.email != null ? String(req.body.email).trim() || null : existing.email;
+      const email = req.body?.email != null ? String(req.body.email).trim().toLowerCase() || null : existing.email;
       const phone = req.body?.phone != null ? String(req.body.phone).trim() || null : existing.phone;
       const status = req.body?.status != null
         ? String(req.body.status).trim() || existing.status
@@ -2973,8 +3004,22 @@ export function createOrgAdminRouter() {
       const availability = req.body?.availability != null
         ? normalizeHostAvailability(req.body.availability)
         : normalizeHostAvailability(existing.availability);
+      const password = String(req.body?.password || '').trim() || null;
 
-      if (!name) return res.status(400).json({ ok: false, message: 'Employee name is required.' });
+      if (!name) return res.status(400).json({ ok: false, message: 'Host name is required.' });
+      if (password && !email) {
+        return res.status(400).json({ ok: false, message: 'Email is required to set a host password.' });
+      }
+      if (password) {
+        const security = await getSecuritySettings();
+        const minLength = Number(security.min_password_length || 8);
+        if (password.length < minLength) {
+          return res.status(400).json({
+            ok: false,
+            message: `Password must be at least ${minLength} characters.`,
+          });
+        }
+      }
 
       const placement = await assertEmployeePlacement(pool, {
         organisationId: existing.organisation_id,
@@ -2986,11 +3031,27 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      let linkedUserId = existing.user_id || null;
+      if (email) {
+        linkedUserId = await syncHostPortalUser(pool, {
+          userId: existing.user_id || null,
+          name,
+          email,
+          phone,
+          organisationId: existing.organisation_id,
+          siteId,
+          departmentId,
+          officeId: placement.officeId,
+          password,
+          active: status !== 'inactive',
+        });
+      }
+
       await pool.query(
         `UPDATE hosts
-         SET department_id = ?, site_id = ?, office_id = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
+         SET department_id = ?, site_id = ?, office_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
          WHERE id = ?`,
-        [departmentId, siteId, placement.officeId, name, email, phone, status, availability, hostId],
+        [departmentId, siteId, placement.officeId, linkedUserId, name, email, phone, status, availability, hostId],
       );
 
       const [[row]] = await pool.query(
@@ -3011,6 +3072,41 @@ export function createOrgAdminRouter() {
       res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/hosts/:id/send-password-reset', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const hostId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM hosts WHERE id = ? LIMIT 1', [hostId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Host not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this host.' });
+      }
+      if (!existing.email) {
+        return res.status(400).json({ ok: false, message: 'Add an email address before sending a password reset.' });
+      }
+
+      const result = await sendHostPasswordResetEmail(pool, {
+        host: existing,
+        createdBy: userId || null,
+      });
+
+      res.json({
+        ok: true,
+        message: `Password reset email sent to ${result.email}.`,
+        data: {
+          email: result.email,
+          expiresAt: result.expiresAt,
+          provider: result.delivery?.provider || null,
+        },
+      });
+    } catch (error) {
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 

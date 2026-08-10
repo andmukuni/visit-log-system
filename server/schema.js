@@ -3,6 +3,7 @@ import pool from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureRbacTables, seedRbac } from './rbacService.js';
 import { ensureVisitorSchema, seedVisitorData, seedOfficeHierarchy } from './visitorSchema.js';
+import { ensurePasswordResetSchema } from './hostPortalService.js';
 import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
@@ -59,6 +60,7 @@ export async function seedDefaultAdmin() {
 export async function bootstrapDatabase() {
   await ensureSchema();
   await ensureVisitorSchema();
+  await ensurePasswordResetSchema(pool);
   await ensureSecuritySchema();
   await ensureComplianceSchema();
   await ensurePlatformSchema();
