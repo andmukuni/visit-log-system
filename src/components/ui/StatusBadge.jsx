@@ -32,10 +32,12 @@ const colorMap = {
   free: { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-600/20', icon: CheckCircle2 },
   waived: { bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/20', icon: CheckCircle2 },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20', icon: CheckCircle2 },
-  expected: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20', icon: CheckCircle2 },
+  inactive: { bg: 'bg-gray-50', text: 'text-gray-600', ring: 'ring-gray-500/20', icon: CircleDot },
+  expected: { bg: 'bg-sky-50', text: 'text-sky-700', ring: 'ring-sky-600/20', icon: Clock },
   arrived_at_gate: { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-600/20', icon: ShieldCheck },
   entered_premises: { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-600/20', icon: ShieldCheck },
-  pre_registered: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
+  pre_registered: { bg: 'bg-indigo-50', text: 'text-indigo-700', ring: 'ring-indigo-600/20', icon: Clock },
   pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/20', icon: Clock },
   reception_check_in: { bg: 'bg-teal-50', text: 'text-teal-700', ring: 'ring-teal-600/20', icon: UserCheck },
   checked_in: { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/20', icon: LogIn },
@@ -70,7 +72,10 @@ const labelMap = {
   past: 'Past',
   closed: 'Closed',
   free: 'Free',
+  active: 'Active',
+  inactive: 'Inactive',
   expected: 'Expected',
+  pre_registered: 'Pre-registered',
   arrived_at_gate: 'At gate',
   entered_premises: 'Entered premises',
   approved: 'Approved',
@@ -90,16 +95,23 @@ const labelMap = {
   departed: 'Departed',
 };
 
+function normalizeStatusKey(status) {
+  return String(status || 'default')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
 function formatStatusLabel(status, normalized) {
   if (labelMap[normalized]) return labelMap[normalized];
   if (!status) return '—';
   return String(status)
-    .replace(/_/g, ' ')
+    .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export default function StatusBadge({ status, size = 'sm' }) {
-  const normalized = status?.toLowerCase() || 'default';
+  const normalized = normalizeStatusKey(status);
   const colors = colorMap[normalized] || colorMap.default;
   const Icon = colors.icon || CircleDot;
   const displayLabel = formatStatusLabel(status, normalized);
@@ -111,10 +123,10 @@ export default function StatusBadge({ status, size = 'sm' }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full font-medium ring-1 ring-inset ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
+      className={`inline-flex max-w-full items-center rounded-full font-medium ring-1 ring-inset whitespace-nowrap ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
     >
-      <Icon size={size === 'sm' ? 12 : 14} aria-hidden="true" />
-      {displayLabel}
+      <Icon size={size === 'sm' ? 12 : 14} className="shrink-0" aria-hidden="true" />
+      <span className="truncate">{displayLabel}</span>
     </span>
   );
 }

@@ -356,7 +356,7 @@ export default function DataTable({
                   {columns.map((col, colIdx) => (
                     <td
                       key={col.key || colIdx}
-                      className={`px-3 ${tableSize.td} align-middle ${col.align === 'right' ? 'text-right' : ''}`}
+                      className={`px-3 ${tableSize.td} align-middle ${col.align === 'right' ? 'text-right' : ''} ${col.className || ''}`}
                       onClick={col.key === 'actions' ? (e) => e.stopPropagation() : undefined}
                     >
                       {getCellValue(row, col)}

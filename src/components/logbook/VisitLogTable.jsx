@@ -44,6 +44,7 @@ export default function VisitLogTable({
     {
       key: 'status',
       label: 'Status',
+      className: 'whitespace-nowrap',
       render: (_, row) => <StatusBadge status={row.status} />,
     },
     {
