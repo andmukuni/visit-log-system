@@ -88,7 +88,6 @@ export const PORTAL_NAVIGATION = {
     { key: 'hosts', name: 'Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'organisation', badgeKey: 'hosts' },
     { key: 'receptionists', name: 'Receptionists', to: '/admin/receptionists', permission: 'admin.receptionists', section: 'organisation', badgeKey: 'receptionists' },
     { key: 'security-guards', name: 'Security Guards', to: '/admin/security-guards', permission: 'admin.security_guards', section: 'organisation', badgeKey: 'security_guards' },
-    { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'organisation', badgeKey: 'users' },
     { key: 'categories', name: 'Visitor Categories', to: '/admin/categories', permission: 'admin.categories', section: 'organisation' },
     { key: 'notifications', name: 'Notifications', to: '/admin/notifications', permission: 'admin.notifications', section: 'system' },
     { key: 'reports', name: 'Reports', to: '/admin/reports', permission: 'admin.reports', section: 'system' },
@@ -96,6 +95,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'integrations', name: 'Integrations', to: '/admin/integrations', permission: 'admin.integrations', section: 'system' },
     { key: 'audit', name: 'Audit Logs', to: '/admin/audit', permission: 'admin.audit', section: 'system' },
     { key: 'roles', name: 'Roles & Permissions', to: '/admin/access-control', permission: 'admin.rbac', section: 'settings' },
+    { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'settings', badgeKey: 'users' },
     { key: 'settings', name: 'Settings', to: '/admin/settings', permission: 'admin.settings', section: 'settings' },
   ],
   security: [
