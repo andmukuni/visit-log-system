@@ -189,7 +189,7 @@ export default function AdminOfficesPage() {
 
   const handleSave = async () => {
     if (!form.officeNumber.trim()) {
-      toast.error('Office number is required.');
+      toast.error('Office label is required.');
       return;
     }
     if (!form.departmentId || !form.buildingId || !form.zoneId) {
@@ -198,9 +198,10 @@ export default function AdminOfficesPage() {
     }
     setSaving(true);
     try {
+      const label = form.officeNumber.trim();
       const payload = {
-        officeNumber: form.officeNumber,
-        name: form.name,
+        officeNumber: label,
+        name: label,
         departmentId: form.departmentId,
         buildingId: form.buildingId,
         zoneId: form.zoneId,
@@ -225,12 +226,9 @@ export default function AdminOfficesPage() {
   const columns = useMemo(() => [
     {
       key: 'office_number',
-      label: 'Office',
+      label: 'Office Label',
       render: (_, row) => (
-        <div>
-          <p className="font-medium text-gray-900">#{row.office_number}</p>
-          <p className="text-xs text-gray-500">{row.name || '—'}</p>
-        </div>
+        <p className="font-medium text-gray-900">{row.office_number || row.name || '—'}</p>
       ),
     },
     { key: 'department_name', label: 'Department' },
@@ -312,7 +310,7 @@ export default function AdminOfficesPage() {
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search office #, department, zone, building..."
+                  placeholder="Search office label, department, zone, building..."
                   className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
                 />
               </label>
@@ -330,7 +328,7 @@ export default function AdminOfficesPage() {
                     ? 'Create a Building under a Site first.'
                     : !zones.length
                       ? 'Create a Zone under a Building first, then add offices.'
-                      : 'Add an office number in a zone for a department.'
+                      : 'Add an office label in a zone for a department.'
               }
               onRowClick={setSelected}
               activeRowId={selected?.id}
@@ -349,8 +347,7 @@ export default function AdminOfficesPage() {
             <aside className="hidden w-full shrink-0 border-t border-gray-200 bg-white lg:flex lg:w-[300px] lg:flex-col lg:border-l lg:border-t-0">
               <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">Office #{selected.office_number}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{selected.name || 'No label'}</p>
+                  <p className="truncate text-sm font-bold text-navy-900">{selected.office_number || selected.name || 'Office'}</p>
                 </div>
                 <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
                   <X size={16} />
@@ -461,18 +458,11 @@ export default function AdminOfficesPage() {
             helpText="Required. Office belongs to this zone inside the building."
           />
           <FormField
-            label="Office number"
+            label="Office Label"
             name="officeNumber"
             required
             value={form.officeNumber}
             onChange={(e) => setForm((prev) => ({ ...prev, officeNumber: e.target.value }))}
-            placeholder="6"
-          />
-          <FormField
-            label="Label"
-            name="name"
-            value={form.name}
-            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="IT Dep Group office 6"
           />
           <FormField
