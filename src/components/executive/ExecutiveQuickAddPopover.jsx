@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Clock,
@@ -8,7 +9,6 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import ExecutiveAppointmentModal from './ExecutiveAppointmentModal';
 import ExecutiveQuickAddSchedule from './ExecutiveQuickAddSchedule';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import { LoadingButton } from '../ui';
@@ -53,19 +53,42 @@ export default function ExecutiveQuickAddPopover({
 }) {
   const [form, setForm] = useState(initialForm);
   const [visible, setVisible] = useState(false);
-  const [showFullEditor, setShowFullEditor] = useState(false);
   const [activeTimePicker, setActiveTimePicker] = useState(null);
   const [viewportPosition, setViewportPosition] = useState(null);
   const popoverRef = useRef(null);
   const openedSessionIdRef = useRef(null);
   const previousScheduleRef = useRef(null);
   const toast = useToast();
+  const navigate = useNavigate();
+
+  const openFullEditorPage = () => {
+    const startAt = draft?.startAt instanceof Date
+      ? draft.startAt.toISOString()
+      : (draft?.startAt || null);
+    navigate('/host/appointments/new', {
+      state: {
+        from: '/host',
+        startAt,
+        prefill: {
+          title: form.title || draft?.title || '',
+          visitorName: form.visitorName || '',
+          company: form.company || '',
+          phone: form.phone || '',
+          email: form.email || '',
+          purpose: form.purpose || '',
+          siteId: form.siteId || '',
+          categoryId: form.categoryId || '',
+          allDay: Boolean(form.allDay),
+        },
+      },
+    });
+    onClose?.();
+  };
 
   useEffect(() => {
     if (!draft) {
       setForm(initialForm());
       setVisible(false);
-      setShowFullEditor(false);
       setActiveTimePicker(null);
       setViewportPosition(null);
       openedSessionIdRef.current = null;
@@ -80,7 +103,17 @@ export default function ExecutiveQuickAddPopover({
       });
       openedSessionIdRef.current = draft.sessionId;
       if (draft.openFullEditor) {
-        setShowFullEditor(true);
+        const startAt = draft.startAt instanceof Date
+          ? draft.startAt.toISOString()
+          : (draft.startAt || null);
+        navigate('/host/appointments/new', {
+          state: {
+            from: '/host',
+            startAt,
+            prefill: { title: draft.title || '' },
+          },
+        });
+        onClose?.();
         return undefined;
       }
       const frame = requestAnimationFrame(() => setVisible(true));
@@ -88,7 +121,7 @@ export default function ExecutiveQuickAddPopover({
     }
 
     return undefined;
-  }, [draft, draft?.sessionId, referenceData?.defaultSiteId, referenceData?.sites]);
+  }, [draft, draft?.sessionId, navigate, onClose, referenceData?.defaultSiteId, referenceData?.sites]);
 
   useEffect(() => {
     if (!draft) return undefined;
@@ -103,15 +136,11 @@ export default function ExecutiveQuickAddPopover({
     if (!draft) return undefined;
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
-      if (showFullEditor) {
-        setShowFullEditor(false);
-        return;
-      }
       onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [draft, onClose, showFullEditor]);
+  }, [draft, onClose]);
 
   const position = useMemo(
     () => computeQuickAddPopoverPosition(draft?.slotRect),
@@ -218,27 +247,6 @@ export default function ExecutiveQuickAddPopover({
       allDay: form.allDay,
     });
   };
-
-  if (showFullEditor) {
-    return (
-      <ExecutiveAppointmentModal
-        open
-        form={form}
-        setForm={setForm}
-        draft={draft}
-        executive={executive}
-        referenceData={referenceData}
-        appointments={appointments}
-        saving={saving}
-        onClose={() => {
-          setShowFullEditor(false);
-          if (draft?.openFullEditor) onClose();
-        }}
-        onSave={onSave}
-        onDraftChange={onDraftChange}
-      />
-    );
-  }
 
   const renderedLeft = viewportPosition?.left ?? position.left;
   const renderedTop = viewportPosition?.top ?? position.top;
@@ -386,7 +394,7 @@ export default function ExecutiveQuickAddPopover({
           <div className="flex shrink-0 items-center justify-between border-t border-gray-100 px-5 py-3">
             <button
               type="button"
-              onClick={() => setShowFullEditor(true)}
+              onClick={openFullEditorPage}
               className="text-sm font-medium text-navy-700 hover:underline"
             >
               More options

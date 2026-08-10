@@ -138,10 +138,12 @@ export default function ExecutiveAppointmentModal({
   onClose,
   onSave,
   onDraftChange,
+  variant = 'modal',
 }) {
   const [activeTab, setActiveTab] = useState('details');
   const previousScheduleRef = useRef(null);
   const toast = useToast();
+  const isPage = variant === 'page';
 
   useEffect(() => {
     if (!open) {
@@ -151,7 +153,7 @@ export default function ExecutiveAppointmentModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || isPage) return undefined;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -165,7 +167,7 @@ export default function ExecutiveAppointmentModal({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, isPage]);
 
   if (!open || !draft) return null;
 
@@ -254,11 +256,14 @@ export default function ExecutiveAppointmentModal({
     });
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-navy-950/45 px-3 py-6 backdrop-blur-[2px] sm:px-6 sm:py-10 animate-in fade-in duration-200">
+  const formClassName = isPage
+    ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm'
+    : 'mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-navy-100 bg-white shadow-xl shadow-navy-950/20';
+
+  const editor = (
       <form
         onSubmit={handleSubmit}
-        className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-navy-100 bg-white shadow-xl shadow-navy-950/20"
+        className={formClassName}
       >
         <div className="shrink-0 border-b border-navy-100 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
           <div className="flex items-start gap-3 sm:gap-4">
@@ -266,7 +271,7 @@ export default function ExecutiveAppointmentModal({
               type="button"
               onClick={onClose}
               className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-navy-200 bg-navy-50 text-navy-600 transition-colors hover:bg-navy-100 hover:text-navy-900"
-              aria-label="Close appointment editor"
+              aria-label={isPage ? 'Back to appointments' : 'Close appointment editor'}
             >
               <X size={18} />
             </button>
@@ -606,6 +611,19 @@ export default function ExecutiveAppointmentModal({
           </div>
         </div>
       </form>
+  );
+
+  if (isPage) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        {editor}
+      </div>
+    );
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-navy-950/45 px-3 py-6 backdrop-blur-[2px] sm:px-6 sm:py-10 animate-in fade-in duration-200">
+      {editor}
     </div>,
     document.body,
   );

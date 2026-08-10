@@ -86,6 +86,7 @@ const ManagementExportHistoryPage = lazy(() => import('./pages/management/Manage
 
 const ExecutiveDashboardPage = lazy(() => import('./pages/executive/ExecutiveDashboardPage'));
 const ExecutiveAppointmentsPage = lazy(() => import('./pages/executive/ExecutiveAppointmentsPage'));
+const ExecutiveNewAppointmentPage = lazy(() => import('./pages/executive/ExecutiveNewAppointmentPage'));
 const ExecutiveVisitorsPage = lazy(() => import('./pages/executive/ExecutiveVisitorsPage'));
 const ExecutiveContactsPage = lazy(() => import('./pages/executive/ExecutiveContactsPage'));
 const ExecutiveVisitDetailPage = lazy(() => import('./pages/executive/ExecutiveVisitDetailPage'));
@@ -458,6 +459,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <ExecutiveDashboardPage /> },
           { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
+          { path: 'appointments/new', element: <ExecutiveNewAppointmentPage /> },
           { path: 'invite', element: <HostInvitePage /> },
           { path: 'visitors', element: <Navigate to="/host/contacts" replace /> },
           { path: 'visitors/:id', element: <HostVisitDetailPage /> },
@@ -475,6 +477,7 @@ export const router = createBrowserRouter([
       // Former executive portal — keep bookmarks working via Host portal.
       { path: 'executive', element: <Navigate to="/host" replace /> },
       { path: 'executive/appointments', element: <Navigate to="/host/appointments" replace /> },
+      { path: 'executive/appointments/new', element: <Navigate to="/host/appointments/new" replace /> },
       { path: 'executive/visitors', element: <Navigate to="/host/register" replace /> },
       { path: 'executive/visitors/:id', element: <RedirectToHostRegisterVisit /> },
       { path: 'executive/contacts', element: <Navigate to="/host/contacts" replace /> },

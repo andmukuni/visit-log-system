@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/ui';
 import ExecutiveDashboardHeaderActions from '../../components/executive/ExecutiveDashboardHeaderActions';
-import ExecutiveAppointmentModal from '../../components/executive/ExecutiveAppointmentModal';
 import ExecutiveAppointmentsKpiRow from '../../components/executive/ExecutiveAppointmentsKpiRow';
 import ExecutiveVisitorsTableSection, {
   ExecutiveVisitorsTableFooter,
@@ -11,63 +10,10 @@ import ExecutiveVisitorsDetailSidebar, {
   ExecutiveVisitorsDetailActions,
 } from '../../components/executive/ExecutiveVisitorsDetailSidebar';
 import ExecutiveVisitDetailPanel from '../../components/executive/ExecutiveVisitDetailPanel';
-import {
-  addMinutes,
-  CALENDAR_END_HOUR,
-  CALENDAR_START_HOUR,
-  DEFAULT_EVENT_MINUTES,
-  startOfDay,
-} from '../../components/executive/calendarUtils';
-import { useToast } from '../../context/ToastContext';
 import { executiveApi } from '../../utils/visitorApi';
 
-const initialForm = () => ({
-  title: '',
-  visitorName: '',
-  company: '',
-  phone: '',
-  email: '',
-  purpose: '',
-  siteId: '',
-  categoryId: '',
-  allDay: false,
-  repeat: 'none',
-  notifyMinutes: 30,
-});
-
-function buildDefaultDraft(startAt = null) {
-  const nowDate = new Date();
-  let start = startAt ? new Date(startAt) : new Date(nowDate);
-  if (!startAt) {
-    start.setMinutes(0, 0, 0);
-    start.setHours(start.getHours() + 1);
-    if (start.getHours() < CALENDAR_START_HOUR) {
-      start.setHours(CALENDAR_START_HOUR, 0, 0, 0);
-    }
-    if (start.getHours() >= CALENDAR_END_HOUR) {
-      start = startOfDay(nowDate);
-      start.setDate(start.getDate() + 1);
-      start.setHours(CALENDAR_START_HOUR, 0, 0, 0);
-    }
-  }
-
-  const end = addMinutes(start, DEFAULT_EVENT_MINUTES);
-  const day = startOfDay(start);
-
-  return {
-    day,
-    dayKey: day.toISOString(),
-    startAt: start,
-    endAt: end,
-    title: '',
-    slotRect: null,
-    sessionId: `visitors-${Date.now()}`,
-    openFullEditor: true,
-  };
-}
-
 export default function ExecutiveVisitorsPage() {
-  const toast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tab = searchParams.get('tab') || 'all';
@@ -86,11 +32,6 @@ export default function ExecutiveVisitorsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-
-  const [draft, setDraft] = useState(null);
-  const [form, setForm] = useState(initialForm);
-  const [referenceData, setReferenceData] = useState(null);
-  const [saving, setSaving] = useState(false);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -161,43 +102,9 @@ export default function ExecutiveVisitorsPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput, search, updateParams]);
 
-  useEffect(() => {
-    let cancelled = false;
-    executiveApi.getReferenceData()
-      .then((data) => {
-        if (!cancelled) setReferenceData(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const openNewAppointment = useCallback(() => {
-    setForm({
-      ...initialForm(),
-      siteId: referenceData?.defaultSiteId || referenceData?.sites?.[0]?.id || '',
-    });
-    setDraft(buildDefaultDraft());
-  }, [referenceData?.defaultSiteId, referenceData?.sites]);
-
-  const handleSaveAppointment = async (payload) => {
-    if (!payload.visitorName?.trim()) {
-      toast.error('Visitor name is required.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await executiveApi.createAppointment(payload);
-      toast.success('Appointment saved.');
-      setDraft(null);
-      await load();
-    } catch (err) {
-      toast.error(err?.message || 'Could not save appointment.');
-    } finally {
-      setSaving(false);
-    }
-  };
+    navigate('/host/appointments/new', { state: { from: '/host/register' } });
+  }, [navigate]);
 
   const handleSelect = useCallback((row) => {
     setSelected(row);
@@ -205,8 +112,6 @@ export default function ExecutiveVisitorsPage() {
       setMobileDetailOpen(true);
     }
   }, []);
-
-  const modalOpen = Boolean(draft?.openFullEditor);
 
   const pageActions = useMemo(() => (
     <ExecutiveDashboardHeaderActions onNewAppointment={openNewAppointment} />
@@ -289,22 +194,6 @@ export default function ExecutiveVisitorsPage() {
         open={mobileDetailOpen && Boolean(selected)}
         onClose={() => setMobileDetailOpen(false)}
       />
-
-      {modalOpen && draft && (
-        <ExecutiveAppointmentModal
-          open
-          form={form}
-          setForm={setForm}
-          draft={draft}
-          executive={referenceData?.host || {}}
-          referenceData={referenceData}
-          appointments={[]}
-          saving={saving}
-          onClose={() => setDraft(null)}
-          onSave={handleSaveAppointment}
-          onDraftChange={setDraft}
-        />
-      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, CalendarDays, Filter } from 'lucide-react';
 import { Spinner, IconButton } from '../ui';
 import ExecutiveQuickAddPopover from './ExecutiveQuickAddPopover';
@@ -221,6 +222,7 @@ export default function ExecutiveWeekCalendar({
   newAppointmentTrigger = 0,
 }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { isLoading, hasPermission } = useAuth();
   const canCreateAppointments = hasPermission('executive.appointments');
   const toolbarRef = useRef(null);
@@ -417,33 +419,8 @@ export default function ExecutiveWeekCalendar({
       toast.error('You do not have permission to create executive appointments.');
       return;
     }
-
-    const nowDate = new Date();
-    let startAt = new Date(nowDate);
-    startAt.setMinutes(0, 0, 0);
-    startAt.setHours(startAt.getHours() + 1);
-
-    if (startAt.getHours() < CALENDAR_START_HOUR) {
-      startAt.setHours(CALENDAR_START_HOUR, 0, 0, 0);
-    }
-    if (startAt.getHours() >= CALENDAR_END_HOUR) {
-      startAt = addDays(startOfDay(nowDate), 1);
-      startAt.setHours(CALENDAR_START_HOUR, 0, 0, 0);
-    }
-
-    const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
-    const day = startOfDay(startAt);
-    setDraft({
-      day,
-      dayKey: day.toISOString(),
-      startAt,
-      endAt,
-      title: '',
-      slotRect: null,
-      sessionId: `header-${Date.now()}`,
-      openFullEditor: true,
-    });
-  }, [canCreateAppointments, toast]);
+    navigate('/host/appointments/new', { state: { from: '/host' } });
+  }, [canCreateAppointments, navigate, toast]);
 
   useEffect(() => {
     if (!newAppointmentTrigger || !canCreateAppointments) return;
@@ -581,21 +558,20 @@ export default function ExecutiveWeekCalendar({
       return;
     }
     if (!nextAppointment?.scheduled_at) return;
-    const startAt = new Date(nextAppointment.scheduled_at);
-    if (Number.isNaN(startAt.getTime())) return;
-    const endAt = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
-    const day = startOfDay(startAt);
-    setDraft({
-      day,
-      dayKey: day.toISOString(),
-      startAt,
-      endAt,
-      title: nextAppointment.title || nextAppointment.visitor_name || '',
-      slotRect: null,
-      sessionId: `reschedule-${Date.now()}`,
-      openFullEditor: true,
+    navigate('/host/appointments/new', {
+      state: {
+        from: '/host',
+        startAt: nextAppointment.scheduled_at,
+        prefill: {
+          title: nextAppointment.title || '',
+          visitorName: nextAppointment.visitor_name || '',
+          company: nextAppointment.company || '',
+          phone: nextAppointment.phone || '',
+          purpose: nextAppointment.purpose || '',
+        },
+      },
     });
-  }, [canCreateAppointments, nextAppointment, toast]);
+  }, [canCreateAppointments, navigate, nextAppointment, toast]);
 
   return (
     <div className={`flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden lg:flex-row lg:items-stretch lg:gap-3 ${className}`.trim()}>
