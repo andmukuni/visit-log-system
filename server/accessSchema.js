@@ -262,9 +262,9 @@ export async function upsertVisitorContactDetails(poolConn, visitorId, {
     `INSERT INTO visitor_contact_details (visitor_id, id_type, id_number, confidential_notes)
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
-       id_type = COALESCE(VALUES(id_type), id_type),
-       id_number = COALESCE(VALUES(id_number), id_number),
-       confidential_notes = COALESCE(VALUES(confidential_notes), confidential_notes),
+       id_type = COALESCE(VALUES(id_type), visitor_contact_details.id_type),
+       id_number = COALESCE(VALUES(id_number), visitor_contact_details.id_number),
+       confidential_notes = COALESCE(VALUES(confidential_notes), visitor_contact_details.confidential_notes),
        updated_at = NOW()`,
     [visitorId, idType || null, idNumber || null, confidentialNotes || null],
   );
