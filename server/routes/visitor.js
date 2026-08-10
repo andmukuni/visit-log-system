@@ -2900,6 +2900,7 @@ export function createOrgAdminRouter() {
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
       const officeId = String(req.body?.officeId || req.body?.office_id || '').trim() || null;
+      const title = String(req.body?.title || req.body?.salutation || '').trim() || null;
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase() || null;
       const phone = String(req.body?.phone || '').trim() || null;
@@ -2961,9 +2962,9 @@ export function createOrgAdminRouter() {
 
       const id = generateId('host');
       await pool.query(
-        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, name, email, phone, status, availability)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, departmentId, siteId, placement.officeId, linkedUserId, name, email, phone, status, availability],
+        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, title, name, email, phone, status, availability)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, departmentId, siteId, placement.officeId, linkedUserId, title, name, email, phone, status, availability],
       );
 
       const [[row]] = await pool.query(
@@ -3010,6 +3011,9 @@ export function createOrgAdminRouter() {
         ? String(req.body.officeId || req.body.office_id || '').trim()
         : existing.office_id;
       const officeId = officeRaw || null;
+      const title = req.body?.title != null || req.body?.salutation != null
+        ? String(req.body.title || req.body.salutation || '').trim() || null
+        : existing.title || null;
       const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
       const email = req.body?.email != null ? String(req.body.email).trim().toLowerCase() || null : existing.email;
       const phone = req.body?.phone != null ? String(req.body.phone).trim() || null : existing.phone;
@@ -3064,9 +3068,9 @@ export function createOrgAdminRouter() {
 
       await pool.query(
         `UPDATE hosts
-         SET department_id = ?, site_id = ?, office_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
+         SET department_id = ?, site_id = ?, office_id = ?, user_id = ?, title = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
          WHERE id = ?`,
-        [departmentId, siteId, placement.officeId, linkedUserId, name, email, phone, status, availability, hostId],
+        [departmentId, siteId, placement.officeId, linkedUserId, title, name, email, phone, status, availability, hostId],
       );
 
       const [[row]] = await pool.query(

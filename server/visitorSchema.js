@@ -169,6 +169,7 @@ export async function ensureVisitorSchema() {
       site_id VARCHAR(90),
       office_id VARCHAR(90),
       user_id VARCHAR(90),
+      title VARCHAR(40),
       name VARCHAR(255) NOT NULL,
       email VARCHAR(255),
       phone VARCHAR(60),
@@ -182,6 +183,8 @@ export async function ensureVisitorSchema() {
   `);
   await ensureColumn(pool, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
   await ensureColumn(pool, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
+  // Additive only — existing host rows stay intact (NULL title until set).
+  await ensureColumn(pool, 'hosts', 'title', 'ADD COLUMN title VARCHAR(40) NULL');
   await ensureColumn(
     pool,
     'hosts',

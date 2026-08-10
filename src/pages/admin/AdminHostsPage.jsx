@@ -17,8 +17,22 @@ import { useOrganisationPrerequisite } from '../../hooks/useOrganisationPrerequi
 import OrganisationRequiredBanner from '../../components/admin/OrganisationRequiredBanner';
 import StructureRelationHint from '../../components/admin/StructureRelationHint';
 
+const TITLE_OPTIONS = [
+  { value: '', label: 'No title' },
+  { value: 'Mr', label: 'Mr' },
+  { value: 'Mrs', label: 'Mrs' },
+  { value: 'Ms', label: 'Ms' },
+  { value: 'Miss', label: 'Miss' },
+  { value: 'Dr', label: 'Dr' },
+  { value: 'Prof', label: 'Prof' },
+  { value: 'Eng', label: 'Eng' },
+  { value: 'Hon', label: 'Hon' },
+  { value: 'Rev', label: 'Rev' },
+];
+
 const emptyForm = () => ({
   organisationId: '',
+  title: '',
   name: '',
   email: '',
   phone: '',
@@ -29,6 +43,13 @@ const emptyForm = () => ({
   availability: 'available',
   password: '',
 });
+
+function formatHostDisplayName(row) {
+  const title = String(row?.title || '').trim();
+  const name = String(row?.name || '').trim();
+  if (title && name) return `${title} ${name}`;
+  return name || '—';
+}
 
 export default function AdminHostsPage() {
   const toast = useToast();
@@ -106,7 +127,7 @@ export default function AdminHostsPage() {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter((row) =>
-      [row.name, row.email, row.organisation_name, row.department_name, row.site_name, row.office_number]
+      [row.title, row.name, row.email, row.organisation_name, row.department_name, row.site_name, row.office_number]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
@@ -193,6 +214,7 @@ export default function AdminHostsPage() {
     setEditing(row);
     setForm({
       organisationId: row.organisation_id || '',
+      title: row.title || '',
       name: row.name || '',
       email: row.email || '',
       phone: row.phone || '',
@@ -226,6 +248,7 @@ export default function AdminHostsPage() {
     setSaving(true);
     try {
       const payload = {
+        title: form.title || null,
         name: form.name,
         email: form.email,
         phone: form.phone,
@@ -282,10 +305,10 @@ export default function AdminHostsPage() {
   const columns = useMemo(() => [
     {
       key: 'name',
-      label: 'Employee',
+      label: 'Host',
       render: (_, row) => (
         <div>
-          <p className="font-medium text-gray-900">{row.name}</p>
+          <p className="font-medium text-gray-900">{formatHostDisplayName(row)}</p>
           <p className="text-xs text-gray-500">{row.email || '—'}</p>
         </div>
       ),
@@ -430,7 +453,7 @@ export default function AdminHostsPage() {
             <aside className="hidden w-full shrink-0 border-t border-gray-200 bg-white lg:flex lg:w-[300px] lg:flex-col lg:border-l lg:border-t-0">
               <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">{selected.name}</p>
+                  <p className="truncate text-sm font-bold text-navy-900">{formatHostDisplayName(selected)}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{selected.email || 'No email'}</p>
                 </div>
                 <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
@@ -518,6 +541,15 @@ export default function AdminHostsPage() {
             }}
             options={orgOptions}
             helpText={editing ? 'Organisation cannot be changed after create.' : 'Required. Host belongs to this organisation.'}
+          />
+          <FormField
+            label="Title"
+            name="title"
+            type="select"
+            value={form.title}
+            onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+            options={TITLE_OPTIONS}
+            helpText="Optional salutation (Mr, Mrs, Dr, etc.)."
           />
           <FormField
             label="Full name"
