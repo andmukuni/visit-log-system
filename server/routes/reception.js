@@ -13,12 +13,7 @@ import {
   fetchSecurityEventsTodayYesterday,
   fetchWeeklySecurityEvents,
 } from '../dashboardStats.js';
-import {
-  HOST_AVAILABILITY,
-  markHostUnavailableForVisit,
-  normalizeHostAvailability,
-  setHostAvailability,
-} from '../hostAvailability.js';
+import { markHostUnavailableForVisit } from '../hostAvailability.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
 
@@ -344,47 +339,6 @@ export function createReceptionRouter() {
       );
 
       res.json({ ok: true, data: rows });
-    } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
-    }
-  });
-
-  router.patch('/hosts/:id/availability', async (req, res) => {
-    try {
-      const userId = req.adminClaims?.sub;
-      const hostId = req.params.id;
-      const next = normalizeHostAvailability(req.body?.availability);
-      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
-      if (!scopeResult.ok) {
-        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
-      }
-
-      const scope = scopeResult.scope;
-      const params = [hostId, scope.organisation_id];
-      let siteFilter = '';
-      if (scope.site_id) {
-        siteFilter = ' AND (site_id = ? OR site_id IS NULL)';
-        params.push(scope.site_id);
-      }
-
-      const [[host]] = await pool.query(
-        `SELECT id, name, availability FROM hosts
-         WHERE id = ? AND organisation_id = ? AND status = 'active'${siteFilter}
-         LIMIT 1`,
-        params,
-      );
-      if (!host) {
-        return res.status(404).json({ ok: false, message: 'Host not found.' });
-      }
-
-      await setHostAvailability(pool, host.id, next);
-      res.json({
-        ok: true,
-        message: next === HOST_AVAILABILITY.available
-          ? `${host.name} marked available.`
-          : `${host.name} marked not available.`,
-        data: { id: host.id, availability: next },
-      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

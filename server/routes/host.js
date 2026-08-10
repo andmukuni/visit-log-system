@@ -17,11 +17,7 @@ import {
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
-import {
-  HOST_AVAILABILITY,
-  normalizeHostAvailability,
-  setHostAvailability,
-} from '../hostAvailability.js';
+import { normalizeHostAvailability } from '../hostAvailability.js';
 
 function visitSelectSql(extraWhere = '', orderBy = 'vis.created_at DESC') {
   return `
@@ -94,28 +90,6 @@ export function createHostRouter() {
             : null,
           recentActivity,
         },
-      });
-    } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
-    }
-  });
-
-  router.patch('/availability', async (req, res) => {
-    try {
-      const ctx = await getHostContext(req);
-      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
-      if (!ctx.host?.id) {
-        return res.status(400).json({ ok: false, message: 'No host profile linked to this account.' });
-      }
-
-      const next = normalizeHostAvailability(req.body?.availability);
-      await setHostAvailability(pool, ctx.host.id, next);
-      res.json({
-        ok: true,
-        message: next === HOST_AVAILABILITY.available
-          ? 'You are marked available.'
-          : 'You are marked not available.',
-        data: { id: ctx.host.id, availability: next },
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });

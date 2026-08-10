@@ -29,6 +29,7 @@ const AdminDepartmentsPage = lazy(() => import('./pages/admin/AdminDepartmentsPa
 const AdminStationsPage = lazy(() => import('./pages/admin/AdminStationsPage.jsx'));
 const AdminOfficesPage = lazy(() => import('./pages/admin/AdminOfficesPage.jsx'));
 const AdminHostsPage = lazy(() => import('./pages/admin/AdminHostsPage.jsx'));
+const AdminReceptionistsPage = lazy(() => import('./pages/admin/AdminReceptionistsPage.jsx'));
 
 const StationDashboardPage = lazy(() => import('./pages/station/StationDashboardPage'));
 const GateEntryPage = lazy(() => import('./pages/station/GateEntryPage'));
@@ -393,6 +394,14 @@ export const router = createBrowserRouter([
             element: (
               <Suspense fallback={<RouteLoader />}>
                 <AdminHostsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'receptionists',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminReceptionistsPage />
               </Suspense>
             ),
           },

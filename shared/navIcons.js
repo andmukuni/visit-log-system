@@ -17,6 +17,7 @@ export const NAV_ICONS = {
   stations: 'DoorOpen',
   departments: 'Network',
   hosts: 'UserCheck',
+  receptionists: 'ConciergeBell',
   users: 'Users',
   roles: 'Shield',
   categories: 'Tags',

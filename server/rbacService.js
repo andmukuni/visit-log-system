@@ -178,15 +178,13 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/reception/reference-data')) return 'reception.dashboard';
   if (path.includes('/reception/check-in-appointments')) return 'reception.visitors.checkin';
   if (path.includes('/reception/calendar')) return 'reception.calendar';
-  if (path.includes('/reception/host-availability') || path.includes('/reception/hosts/')) {
-    return 'reception.hosts.availability';
-  }
+  if (path.includes('/reception/host-availability')) return 'reception.hosts.availability';
   if (path.includes('/reception/host-queue')) return 'reception.host.queue';
   if (path.includes('/reception/queue-host') || path.includes('/reception/in-meeting')) return 'reception.host.queue';
   if (path.includes('/reception/request-approval')) return 'reception.approvals.track';
   if (path.includes('/reception/occupancy')) return 'reception.occupancy';
 
-  if (path.includes('/host/dashboard') || path.includes('/host/availability')) return 'host.dashboard';
+  if (path.includes('/host/dashboard')) return 'host.dashboard';
   if (path.includes('/host/reference-data') || path.includes('/host/invite')) return 'host.invite';
   if (path.includes('/host/approvals')) return 'host.approvals';
   if (path.includes('/host/on-site')) return 'host.onsite';
@@ -270,6 +268,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/org/departments')) return 'admin.departments';
   if (path.includes('/org/offices')) return 'admin.offices';
   if (path.includes('/org/hosts')) return 'admin.hosts';
+  if (path.includes('/org/receptionists')) return 'admin.receptionists';
   if (path.includes('/org/categories')) return 'admin.categories';
   if (path.includes('/org/badges')) return 'admin.badges';
   if (path.includes('/org/visitors')) return 'admin.visitors';

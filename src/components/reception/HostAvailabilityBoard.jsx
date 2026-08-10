@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { User, UserCheck } from 'lucide-react';
-import { FilterPills, LoadingButton, Spinner } from '../ui';
+import { FilterPills, Spinner } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
 
 function hostInitials(name = '') {
@@ -53,11 +53,8 @@ export default function HostAvailabilityBoard({
   departments = [],
   departmentId = '',
   onDepartmentChange,
-  onMarkAvailability,
   loading = false,
 }) {
-  const [savingId, setSavingId] = useState(null);
-
   const deptOptions = useMemo(() => [
     { value: '', label: 'All departments' },
     ...departments.map((d) => ({ value: d.id, label: d.name })),
@@ -65,16 +62,6 @@ export default function HostAvailabilityBoard({
 
   const availableCount = hosts.filter((h) => isAvailable(h.availability)).length;
   const unavailableCount = hosts.length - availableCount;
-
-  const mark = async (host, availability) => {
-    if (!onMarkAvailability) return;
-    setSavingId(host.id);
-    try {
-      await onMarkAvailability(host, availability);
-    } finally {
-      setSavingId(null);
-    }
-  };
 
   if (loading) {
     return (
@@ -106,7 +93,7 @@ export default function HostAvailabilityBoard({
         <div className="mb-4 border-b border-navy-100 pb-3">
           <h3 className="text-sm font-semibold text-navy-900">Hosts</h3>
           <p className="mt-0.5 text-xs text-navy-500">
-            Mark each host Available or Not available — updates Host Queue immediately
+            Read-only — Available / Not available is managed by Admin
           </p>
         </div>
 
@@ -114,22 +101,20 @@ export default function HostAvailabilityBoard({
           <p className="py-8 text-center text-sm text-navy-500">No hosts found for this site.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-navy-100">
-            <div className="min-w-[720px]">
-              <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,12rem)_8.5rem_minmax(0,12rem)_auto] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+            <div className="min-w-[640px]">
+              <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,12rem)_8.5rem_minmax(0,14rem)] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
                 <span>Host</span>
                 <span>Department / office</span>
                 <span>Status</span>
                 <span>Details</span>
-                <span className="text-right">Mark</span>
               </div>
               <ul className="divide-y divide-navy-100">
                 {hosts.map((host) => {
                   const available = isAvailable(host.availability);
-                  const busy = savingId === host.id;
                   return (
                     <li
                       key={host.id}
-                      className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_8.5rem_minmax(0,12rem)_auto] sm:items-center sm:gap-3"
+                      className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_8.5rem_minmax(0,14rem)] sm:items-center sm:gap-3"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
@@ -191,28 +176,6 @@ export default function HostAvailabilityBoard({
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <LoadingButton
-                          size="sm"
-                          variant={available ? 'primary' : 'secondary'}
-                          loading={busy && available}
-                          disabled={busy || available}
-                          onClick={() => void mark(host, 'available')}
-                          className={available ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-600' : ''}
-                        >
-                          Available
-                        </LoadingButton>
-                        <LoadingButton
-                          size="sm"
-                          variant={!available ? 'primary' : 'secondary'}
-                          loading={busy && !available}
-                          disabled={busy || !available}
-                          onClick={() => void mark(host, 'unavailable')}
-                          className={!available ? 'bg-rose-600 hover:bg-rose-500 border-rose-600' : ''}
-                        >
-                          Not available
-                        </LoadingButton>
-                      </div>
                     </li>
                   );
                 })}

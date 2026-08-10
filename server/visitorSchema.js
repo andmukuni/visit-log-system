@@ -181,6 +181,26 @@ export async function ensureVisitorSchema() {
   );
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS receptionists (
+      id VARCHAR(90) PRIMARY KEY,
+      organisation_id VARCHAR(90) NOT NULL,
+      site_id VARCHAR(90),
+      station_id VARCHAR(90),
+      department_id VARCHAR(90),
+      user_id VARCHAR(90),
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255),
+      phone VARCHAR(60),
+      status VARCHAR(30) DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_receptionists_org (organisation_id),
+      INDEX idx_receptionists_site (site_id),
+      INDEX idx_receptionists_station (station_id),
+      INDEX idx_receptionists_user (user_id)
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_categories (
       id VARCHAR(90) PRIMARY KEY,
       organisation_id VARCHAR(90) NOT NULL,

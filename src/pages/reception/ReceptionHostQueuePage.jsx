@@ -110,7 +110,7 @@ export default function ReceptionHostQueuePage() {
     <div>
       <PageHeader
         title="Host Queue"
-        subtitle="Read-only queue — host Available / Not available is marked on Host Availability"
+        subtitle="Read-only queue — host Available / Not available is managed by Admin"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Host queue' }]}
         actions={(
           <ActionToolbar>

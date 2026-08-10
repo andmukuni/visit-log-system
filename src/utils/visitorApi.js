@@ -211,16 +211,28 @@ export const visitorApi = {
   },
   createHost: (body) => apiFetch('/admin/org/hosts', { method: 'POST', body: JSON.stringify(body) }),
   updateHost: (id, body) => apiFetch(`/admin/org/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getReceptionists: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/receptionists`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createReceptionist: (body) => apiFetch('/admin/org/receptionists', { method: 'POST', body: JSON.stringify(body) }),
+  updateReceptionist: (id, body) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteReceptionist: (id) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'DELETE' }),
   getCategories: () => apiFetch('/admin/org/categories'),
   getBadges: () => apiFetch('/admin/org/badges'),
 };
 
 export const hostApi = {
   getDashboard: () => apiFetch('/admin/host/dashboard'),
-  setAvailability: (availability) => apiFetch('/admin/host/availability', {
-    method: 'PATCH',
-    body: JSON.stringify({ availability }),
-  }),
   getReferenceData: () => apiFetch('/admin/host/reference-data'),
   getVisitors: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -424,10 +436,6 @@ export const receptionApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/reception/host-availability${qs ? `?${qs}` : ''}`);
   },
-  setHostAvailability: (hostId, availability) => apiFetch(`/admin/reception/hosts/${hostId}/availability`, {
-    method: 'PATCH',
-    body: JSON.stringify({ availability }),
-  }),
   getHostQueue: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/reception/host-queue${qs ? `?${qs}` : ''}`);
