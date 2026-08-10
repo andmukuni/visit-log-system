@@ -117,7 +117,6 @@ export const PORTAL_NAVIGATION = {
     { key: 'dashboard', name: 'Dashboard', to: '/reception', permission: 'reception.dashboard', end: true, section: 'primary' },
     { key: 'calendar', name: 'Calendar', to: '/reception/calendar', permission: 'reception.calendar', section: 'primary', isPrimaryRoute: true },
     { key: 'check-in', name: 'Check-in Desk', to: '/reception/check-in', permission: 'reception.visitors.checkin', section: 'primary' },
-    { key: 'register', name: 'Register Visitor', to: '/reception/register', permission: 'reception.visitors.register', section: 'primary' },
     { key: 'approvals', name: 'Pending Approvals', to: '/reception/approvals', permission: 'reception.approvals.track', section: 'primary' },
     { key: 'host-queue', name: 'Host Queue', to: '/reception/host-queue', permission: 'reception.host.queue', section: 'primary' },
     { key: 'hosts', name: 'Host Availability', to: '/reception/hosts', permission: 'reception.hosts.availability', section: 'primary' },

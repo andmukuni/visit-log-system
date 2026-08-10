@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Eye } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -8,11 +9,9 @@ import {
   Spinner,
   ActionToolbar,
   RefreshAction,
-  LoadingButton,
+  IconButton,
 } from '../../components/ui';
-import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { formatDateTime } from '../../utils/helpers';
-import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
 
 function waitDuration(row) {
@@ -23,28 +22,38 @@ function waitDuration(row) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+function HostAvailabilityBadge({ availability }) {
+  if (!availability) {
+    return <span className="text-xs text-navy-400">No host assigned</span>;
+  }
+
+  const available = availability === 'available';
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${
+        available
+          ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+          : 'bg-rose-50 text-rose-700 ring-rose-600/20'
+      }`}
+    >
+      <span
+        className={`h-2 w-2 shrink-0 rounded-full ${available ? 'bg-emerald-500' : 'bg-rose-500'}`}
+        aria-hidden="true"
+      />
+      {available ? 'Available' : 'Not available'}
+    </span>
+  );
+}
+
 export default function ReceptionHostQueuePage() {
-  const toast = useToast();
   const [visits, setVisits] = useState([]);
-  const [hosts, setHosts] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [offices, setOffices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [acting, setActing] = useState(null);
-  const [queueVisit, setQueueVisit] = useState(null);
-  const [queuing, setQueuing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, ref] = await Promise.all([
-        receptionApi.getHostQueue({ includeReady: '1' }),
-        receptionApi.getReferenceData(),
-      ]);
+      const rows = await receptionApi.getHostQueue({ includeReady: '1' });
       setVisits(rows || []);
-      setHosts(ref.hosts || []);
-      setDepartments(ref.departments || []);
-      setOffices(ref.offices || []);
     } catch {
       setVisits([]);
     } finally {
@@ -58,40 +67,21 @@ export default function ReceptionHostQueuePage() {
     return () => window.clearInterval(id);
   }, [load]);
 
-  const handleQueueConfirm = async (payload) => {
-    if (!queueVisit?.id) return;
-    setQueuing(true);
-    try {
-      await receptionApi.queueToHost(queueVisit.id, payload);
-      toast.success('Host notified — visitor is waiting.');
-      setQueueVisit(null);
-      load();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setQueuing(false);
-    }
-  };
-
-  const runMeeting = async (id) => {
-    setActing(`meeting-${id}`);
-    try {
-      await receptionApi.markInMeeting(id);
-      toast.success('Visitor marked as with host.');
-      load();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setActing(null);
-    }
-  };
-
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
-    { key: 'host_name', label: 'Host' },
+    {
+      key: 'host_name',
+      label: 'Host',
+      render: (value) => value || '—',
+    },
+    {
+      key: 'host_availability',
+      label: 'Host status',
+      render: (_, row) => <HostAvailabilityBadge availability={row.host_availability} />,
+    },
     {
       key: 'status',
-      label: 'Status',
+      label: 'Visit status',
       render: (_, row) => <StatusBadge status={row.status} />,
     },
     {
@@ -109,37 +99,9 @@ export default function ReceptionHostQueuePage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link to={`/reception/visitors/${row.id}`} className="text-xs font-medium text-cyan-700 hover:underline">
-            View
-          </Link>
-          {row.status !== 'waiting' ? (
-            <LoadingButton
-              size="sm"
-              onClick={() => setQueueVisit(row)}
-            >
-              Queue to host
-            </LoadingButton>
-          ) : (
-            <LoadingButton
-              size="sm"
-              variant="secondary"
-              onClick={() => setQueueVisit(row)}
-            >
-              Notify again
-            </LoadingButton>
-          )}
-          {['waiting', 'reception_check_in', 'checked_in'].includes(row.status) ? (
-            <LoadingButton
-              size="sm"
-              variant="secondary"
-              loading={acting === `meeting-${row.id}`}
-              onClick={() => runMeeting(row.id)}
-            >
-              With host
-            </LoadingButton>
-          ) : null}
-        </div>
+        <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>
+          <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
+        </Link>
       ),
     },
   ];
@@ -148,7 +110,7 @@ export default function ReceptionHostQueuePage() {
     <div>
       <PageHeader
         title="Host Queue"
-        subtitle="Visitors checked in at reception — queue to host or mark as in meeting"
+        subtitle="Read-only queue — host Available / Not available is marked on Host Availability"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Host queue' }]}
         actions={(
           <ActionToolbar>
@@ -165,21 +127,10 @@ export default function ReceptionHostQueuePage() {
             columns={columns}
             data={visits}
             emptyTitle="Queue is empty"
-            emptyDescription="Checked-in visitors ready to see their host will appear here."
+            emptyDescription="Checked-in visitors waiting for their host will appear here."
           />
         </Card>
       )}
-
-      <QueueToHostModal
-        isOpen={Boolean(queueVisit)}
-        onClose={() => !queuing && setQueueVisit(null)}
-        visit={queueVisit}
-        hosts={hosts}
-        departments={departments}
-        offices={offices}
-        submitting={queuing}
-        onConfirm={handleQueueConfirm}
-      />
     </div>
   );
 }

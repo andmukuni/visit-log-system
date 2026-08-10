@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserPlus, ClipboardList, UserCheck, Users, Clock } from 'lucide-react';
-import { RefreshAction, ActionToolbar } from '../../components/ui';
+import { RefreshAction, ActionToolbar, LoadingButton } from '../../components/ui';
 import {
   PortalDashboardLayout,
   ActivityFeedPanel,
@@ -12,11 +12,14 @@ import {
   buildWeeklySeries,
   metricTarget,
 } from '../../components/dashboard';
+import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
 
 export default function HostDashboardPage() {
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [savingAvailability, setSavingAvailability] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -39,6 +42,27 @@ export default function HostDashboardPage() {
     () => buildWeeklySeries(data?.recentActivity, data?.onSite),
     [data],
   );
+
+  const available = data?.host?.availability !== 'unavailable';
+
+  const markAvailability = async (availability) => {
+    setSavingAvailability(true);
+    try {
+      await hostApi.setAvailability(availability);
+      setData((prev) => (prev?.host
+        ? { ...prev, host: { ...prev.host, availability } }
+        : prev));
+      toast.success(
+        availability === 'available'
+          ? 'You are marked available for reception.'
+          : 'You are marked not available for reception.',
+      );
+    } catch (err) {
+      toast.error(err.message || 'Unable to update availability.');
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
 
   return (
     <PortalDashboardLayout
@@ -67,8 +91,36 @@ export default function HostDashboardPage() {
             <HighlightBalanceCard
               title="Visitors on-site"
               value={data.onSite}
-              subtitle={`${data.completed} completed · ${data.pendingApprovals} awaiting approval${data.onSite > 0 ? ' · You are occupied' : ''}`}
+              subtitle={`${data.completed} completed · ${data.pendingApprovals} awaiting approval${available ? '' : ' · Not available'}`}
             />
+            {data.host ? (
+              <DashboardInfoCard title="Your availability" variant={available ? 'blue' : 'amber'}>
+                <p className="mb-3 text-sm">
+                  Reception sees you as{' '}
+                  <span className="font-semibold">{available ? 'Available' : 'Not available'}</span>.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <LoadingButton
+                    size="sm"
+                    loading={savingAvailability && available}
+                    disabled={savingAvailability || available}
+                    onClick={() => void markAvailability('available')}
+                    className="bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
+                  >
+                    Mark available
+                  </LoadingButton>
+                  <LoadingButton
+                    size="sm"
+                    variant="secondary"
+                    loading={savingAvailability && !available}
+                    disabled={savingAvailability || !available}
+                    onClick={() => void markAvailability('unavailable')}
+                  >
+                    Mark not available
+                  </LoadingButton>
+                </div>
+              </DashboardInfoCard>
+            ) : null}
             <QuickActionList
               items={[
                 { label: 'Invite visitor', icon: UserPlus, to: '/host/invite' },

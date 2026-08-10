@@ -173,6 +173,12 @@ export async function ensureVisitorSchema() {
   `);
   await ensureColumn(pool, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
   await ensureColumn(pool, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
+  await ensureColumn(
+    pool,
+    'hosts',
+    'availability',
+    "ADD COLUMN availability VARCHAR(30) NOT NULL DEFAULT 'available'",
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_categories (

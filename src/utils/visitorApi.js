@@ -217,6 +217,10 @@ export const visitorApi = {
 
 export const hostApi = {
   getDashboard: () => apiFetch('/admin/host/dashboard'),
+  setAvailability: (availability) => apiFetch('/admin/host/availability', {
+    method: 'PATCH',
+    body: JSON.stringify({ availability }),
+  }),
   getReferenceData: () => apiFetch('/admin/host/reference-data'),
   getVisitors: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -420,6 +424,10 @@ export const receptionApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/reception/host-availability${qs ? `?${qs}` : ''}`);
   },
+  setHostAvailability: (hostId, availability) => apiFetch(`/admin/reception/hosts/${hostId}/availability`, {
+    method: 'PATCH',
+    body: JSON.stringify({ availability }),
+  }),
   getHostQueue: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/reception/host-queue${qs ? `?${qs}` : ''}`);

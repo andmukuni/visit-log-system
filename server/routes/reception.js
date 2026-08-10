@@ -13,6 +13,12 @@ import {
   fetchSecurityEventsTodayYesterday,
   fetchWeeklySecurityEvents,
 } from '../dashboardStats.js';
+import {
+  HOST_AVAILABILITY,
+  markHostUnavailableForVisit,
+  normalizeHostAvailability,
+  setHostAvailability,
+} from '../hostAvailability.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
 
@@ -297,12 +303,10 @@ export function createReceptionRouter() {
         `SELECT h.id, h.name, h.email, h.department_id, h.office_id, h.site_id,
                 d.name AS department_name,
                 o.name AS office_name,
-                CASE WHEN EXISTS (
-                  SELECT 1 FROM visits vis
-                  WHERE vis.host_id = h.id
-                    AND vis.organisation_id = h.organisation_id
-                    AND vis.status IN (${occupiedPlaceholders})
-                ) THEN 'occupied' ELSE 'available' END AS availability,
+                CASE
+                  WHEN COALESCE(h.availability, 'available') = 'unavailable' THEN 'unavailable'
+                  ELSE 'available'
+                END AS availability,
                 (
                   SELECT v.full_name
                   FROM visits vis
@@ -336,10 +340,51 @@ export function createReceptionRouter() {
          LEFT JOIN offices o ON o.id = h.office_id
          WHERE h.organisation_id = ?${hostFilter}
          ORDER BY h.name ASC`,
-        [...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...params],
+        [...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...params],
       );
 
       res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/hosts/:id/availability', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const hostId = req.params.id;
+      const next = normalizeHostAvailability(req.body?.availability);
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const scope = scopeResult.scope;
+      const params = [hostId, scope.organisation_id];
+      let siteFilter = '';
+      if (scope.site_id) {
+        siteFilter = ' AND (site_id = ? OR site_id IS NULL)';
+        params.push(scope.site_id);
+      }
+
+      const [[host]] = await pool.query(
+        `SELECT id, name, availability FROM hosts
+         WHERE id = ? AND organisation_id = ? AND status = 'active'${siteFilter}
+         LIMIT 1`,
+        params,
+      );
+      if (!host) {
+        return res.status(404).json({ ok: false, message: 'Host not found.' });
+      }
+
+      await setHostAvailability(pool, host.id, next);
+      res.json({
+        ok: true,
+        message: next === HOST_AVAILABILITY.available
+          ? `${host.name} marked available.`
+          : `${host.name} marked not available.`,
+        data: { id: host.id, availability: next },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -365,7 +410,12 @@ export function createReceptionRouter() {
         `SELECT ${VISIT_SELECT_FIELDS},
                 a.title AS appointment_title,
                 a.scheduled_at AS appointment_scheduled_at,
-                ve.created_at AS queued_at
+                ve.created_at AS queued_at,
+                CASE
+                  WHEN vis.host_id IS NULL THEN NULL
+                  WHEN COALESCE(h.availability, 'available') = 'unavailable' THEN 'unavailable'
+                  ELSE 'available'
+                END AS host_availability
          FROM visits vis ${VISIT_JOINS}
          LEFT JOIN appointments a ON a.visit_id = vis.id
          LEFT JOIN visit_events ve ON ve.visit_id = vis.id AND ve.event_type = 'waiting'
@@ -494,6 +544,9 @@ export function createReceptionRouter() {
       actorUserId: userId,
       stationId: scopeResult.scope?.station_id,
     });
+    if (toStatus === 'in_meeting') {
+      await markHostUnavailableForVisit(pool, visit);
+    }
     await notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId });
 
     res.json({ ok: true, message: `Visit updated to ${toStatus}.` });

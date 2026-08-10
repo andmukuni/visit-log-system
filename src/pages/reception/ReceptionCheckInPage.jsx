@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, Users } from 'lucide-react';
+import { Eye, LogIn, UserPlus, Users } from 'lucide-react';
 import {
   PageHeader,
-  Card,
   Spinner,
   LoadingButton,
+  IconButton,
   StatusBadge,
   UnderlineTabs,
 } from '../../components/ui';
@@ -18,6 +18,20 @@ const TABS = {
   ready: 'ready',
   atReception: 'at-reception',
 };
+
+function FormSection({ title, subtitle, children }) {
+  return (
+    <section className="rounded-2xl border border-navy-100 bg-white p-4 sm:p-5">
+      {(title || subtitle) && (
+        <div className="mb-4 border-b border-navy-100 pb-3">
+          {title ? <h3 className="text-sm font-semibold text-navy-900">{title}</h3> : null}
+          {subtitle ? <p className="mt-0.5 text-xs text-navy-500">{subtitle}</p> : null}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
 
 export default function ReceptionCheckInPage() {
   const toast = useToast();
@@ -158,21 +172,30 @@ export default function ReceptionCheckInPage() {
               />
 
               {lastCheckedInId ? (
-                <Card title="Next step">
-                  <p className="mb-4 text-sm text-navy-600">
-                    Visitor checked in successfully. Queue them to the host so they can be notified.
-                  </p>
+                <FormSection
+                  title="Next step"
+                  subtitle="Visitor checked in successfully. Queue them to the host so they can be notified."
+                >
                   <LoadingButton
+                    size="lg"
+                    icon={UserPlus}
                     onClick={() => openQueueModal(lastCheckedInId)}
-                    className="rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-cyan-500"
+                    className="bg-cyan-600 hover:bg-cyan-500 border-cyan-600"
                   >
                     Queue to host
                   </LoadingButton>
-                </Card>
+                </FormSection>
               ) : null}
             </>
           ) : (
-            <Card>
+            <FormSection
+              title="Ready to queue"
+              subtitle={
+                readyToQueue.length > 0
+                  ? `${readyToQueue.length} visitor${readyToQueue.length === 1 ? '' : 's'} at reception`
+                  : 'Checked-in visitors waiting to be queued to a host'
+              }
+            >
               {readyToQueue.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-navy-100 bg-navy-50 text-navy-400">
@@ -191,44 +214,105 @@ export default function ReceptionCheckInPage() {
                   </button>
                 </div>
               ) : (
-                <ul className="divide-y divide-navy-100 rounded-xl border border-navy-100">
-                  {readyToQueue.map((row) => (
-                    <li
-                      key={row.id}
-                      className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-navy-900">
-                          {row.full_name || 'Visitor'}
-                        </p>
-                        <p className="mt-0.5 truncate text-sm text-navy-500">
-                          Host: {row.host_name || '—'}
-                          {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
-                        </p>
-                        <div className="mt-2">
-                          <StatusBadge status={row.status} />
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 sm:justify-end">
-                        <Link
-                          to={`/reception/visitors/${row.id}`}
-                          className="inline-flex items-center rounded-xl border border-navy-200 px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50"
-                        >
-                          View
-                        </Link>
-                        <LoadingButton
-                          size="lg"
-                          onClick={() => openQueueModal(row)}
-                          className="bg-cyan-600 hover:bg-cyan-500 border-cyan-600"
-                        >
-                          Queue to host
-                        </LoadingButton>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto rounded-xl border border-navy-100">
+                  <div className="min-w-[560px]">
+                    <div className="hidden grid-cols-[minmax(0,14rem)_minmax(0,1fr)_7rem_auto] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+                      <span>Visitor</span>
+                      <span>Purpose of visit</span>
+                      <span>Status</span>
+                      <span className="text-right">Action</span>
+                    </div>
+                    <ul className="divide-y divide-navy-100">
+                      {readyToQueue.map((row) => {
+                        const busy = queuing && queueVisit?.id === row.id;
+                        return (
+                          <li
+                            key={row.id}
+                            role="button"
+                            tabIndex={busy ? -1 : 0}
+                            aria-label={`View ${row.full_name || 'visitor'}`}
+                            onClick={() => {
+                              if (busy) return;
+                              navigate(`/reception/visitors/${row.id}`);
+                            }}
+                            onKeyDown={(e) => {
+                              if (busy) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                navigate(`/reception/visitors/${row.id}`);
+                              }
+                            }}
+                            className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_7rem_auto] sm:items-center sm:gap-3 ${
+                              busy
+                                ? 'opacity-70'
+                                : 'cursor-pointer hover:bg-navy-50/70 focus-visible:bg-navy-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-navy-900">
+                                {row.full_name || 'Visitor'}
+                              </p>
+                              <p className="mt-0.5 truncate text-sm text-navy-500">
+                                Host: {row.host_name || '—'}
+                                {row.department_name ? ` · ${row.department_name}` : ''}
+                                {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
+                              </p>
+                              <div className="mt-2 sm:hidden">
+                                <StatusBadge status={row.status} />
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">
+                                Purpose of visit
+                              </span>
+                              <p
+                                className="truncate text-sm text-navy-700"
+                                title={row.purpose || row.appointment_title || ''}
+                              >
+                                {row.purpose || row.appointment_title || '—'}
+                              </p>
+                            </div>
+                            <div className="hidden sm:block">
+                              <StatusBadge status={row.status} />
+                            </div>
+                            <div
+                              className="flex items-center justify-end gap-1.5"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <Link
+                                to={`/reception/visitors/${row.id}`}
+                                aria-label={`View ${row.full_name || 'visitor'}`}
+                              >
+                                <IconButton
+                                  icon={Eye}
+                                  label="View"
+                                  tooltip="View"
+                                  size="sm"
+                                  variant="ghost"
+                                />
+                              </Link>
+                              <LoadingButton
+                                size="sm"
+                                icon={UserPlus}
+                                iconSize={14}
+                                loading={busy}
+                                loadingLabel="Queuing…"
+                                disabled={queuing}
+                                onClick={() => openQueueModal(row)}
+                                className="bg-cyan-600 hover:bg-cyan-500 border-cyan-600"
+                              >
+                                Queue to host
+                              </LoadingButton>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
               )}
-            </Card>
+            </FormSection>
           )}
         </div>
       )}

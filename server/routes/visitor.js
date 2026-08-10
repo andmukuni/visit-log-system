@@ -26,6 +26,10 @@ import {
   assertOfficePlacement,
   assertEmployeePlacement,
 } from '../orgStructureService.js';
+import {
+  markHostUnavailableForVisit,
+  refreshHostAvailabilityAfterVisit,
+} from '../hostAvailability.js';
 
 function todayStart() {
   const d = new Date();
@@ -1214,6 +1218,7 @@ export function createVisitsRouter() {
       });
 
       await notifyVisitEvent(pool, { visitId, eventType: 'checked_out', actorUserId: userId });
+      await refreshHostAvailabilityAfterVisit(pool, visit);
 
       res.json({ ok: true, message: 'Visitor checked out.' });
     } catch (error) {
@@ -1315,6 +1320,9 @@ export function createVisitsRouter() {
         });
       }
 
+      if (toStatus === 'in_meeting') {
+        await markHostUnavailableForVisit(pool, visit);
+      }
       await notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId });
 
       res.json({ ok: true, message: `Visit updated to ${toStatus}.` });

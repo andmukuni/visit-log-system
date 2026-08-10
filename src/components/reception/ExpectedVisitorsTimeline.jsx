@@ -38,6 +38,65 @@ const EXPECTED_STATUSES = new Set([
   'pending_approval',
 ]);
 
+/** Light row tint + border, aligned with StatusBadge hues. */
+const STATUS_CARD_TONES = {
+  expected: 'border-blue-100 bg-blue-50/80 hover:border-blue-200 hover:bg-blue-50',
+  approved: 'border-emerald-100 bg-emerald-50/80 hover:border-emerald-200 hover:bg-emerald-50',
+  pre_registered: 'border-blue-100 bg-blue-50/80 hover:border-blue-200 hover:bg-blue-50',
+  pending_approval: 'border-amber-100 bg-amber-50/80 hover:border-amber-200 hover:bg-amber-50',
+  arrived_at_gate: 'border-cyan-100 bg-cyan-50/80 hover:border-cyan-200 hover:bg-cyan-50',
+  entered_premises: 'border-cyan-100 bg-cyan-50/80 hover:border-cyan-200 hover:bg-cyan-50',
+  reception_check_in: 'border-teal-100 bg-teal-50/80 hover:border-teal-200 hover:bg-teal-50',
+  checked_in: 'border-green-100 bg-green-50/80 hover:border-green-200 hover:bg-green-50',
+  waiting: 'border-sky-100 bg-sky-50/80 hover:border-sky-200 hover:bg-sky-50',
+  in_meeting: 'border-violet-100 bg-violet-50/70 hover:border-violet-200 hover:bg-violet-50',
+  on_site: 'border-green-100 bg-green-50/80 hover:border-green-200 hover:bg-green-50',
+  checked_out: 'border-slate-200 bg-slate-50/90 hover:border-slate-300 hover:bg-slate-100',
+  left_premises: 'border-slate-200 bg-slate-50/90 hover:border-slate-300 hover:bg-slate-100',
+  completed: 'border-slate-200 bg-slate-50/90 hover:border-slate-300 hover:bg-slate-100',
+  departed: 'border-slate-200 bg-slate-50/90 hover:border-slate-300 hover:bg-slate-100',
+  overdue: 'border-orange-100 bg-orange-50/80 hover:border-orange-200 hover:bg-orange-50',
+  rejected: 'border-red-100 bg-red-50/80 hover:border-red-200 hover:bg-red-50',
+  cancelled: 'border-red-100 bg-red-50/70 hover:border-red-200 hover:bg-red-50',
+  denied: 'border-red-100 bg-red-50/80 hover:border-red-200 hover:bg-red-50',
+  expired: 'border-rose-100 bg-rose-50/70 hover:border-rose-200 hover:bg-rose-50',
+  default: 'border-navy-100 bg-white hover:border-navy-200 hover:bg-navy-50/40',
+};
+
+const STATUS_TIME_CHIP_TONES = {
+  expected: 'bg-blue-100/70 text-blue-900',
+  approved: 'bg-emerald-100/70 text-emerald-900',
+  pre_registered: 'bg-blue-100/70 text-blue-900',
+  pending_approval: 'bg-amber-100/70 text-amber-900',
+  arrived_at_gate: 'bg-cyan-100/70 text-cyan-900',
+  entered_premises: 'bg-cyan-100/70 text-cyan-900',
+  reception_check_in: 'bg-teal-100/70 text-teal-900',
+  checked_in: 'bg-green-100/70 text-green-900',
+  waiting: 'bg-sky-100/70 text-sky-900',
+  in_meeting: 'bg-violet-100/70 text-violet-900',
+  on_site: 'bg-green-100/70 text-green-900',
+  checked_out: 'bg-slate-200/80 text-slate-700',
+  left_premises: 'bg-slate-200/80 text-slate-700',
+  completed: 'bg-slate-200/80 text-slate-700',
+  departed: 'bg-slate-200/80 text-slate-700',
+  overdue: 'bg-orange-100/70 text-orange-900',
+  rejected: 'bg-red-100/70 text-red-900',
+  cancelled: 'bg-red-100/70 text-red-800',
+  denied: 'bg-red-100/70 text-red-900',
+  expired: 'bg-rose-100/70 text-rose-800',
+  default: 'bg-navy-50 text-navy-900',
+};
+
+function statusCardTone(status) {
+  const key = String(status || '').toLowerCase();
+  return STATUS_CARD_TONES[key] || STATUS_CARD_TONES.default;
+}
+
+function statusTimeChipTone(status) {
+  const key = String(status || '').toLowerCase();
+  return STATUS_TIME_CHIP_TONES[key] || STATUS_TIME_CHIP_TONES.default;
+}
+
 function isSameDay(a, b) {
   return (
     a.getFullYear() === b.getFullYear()
@@ -130,6 +189,8 @@ function ArrivalCard({ row }) {
   const visitStatus = row.visit_status || row.status;
   const action = getReceptionVisitAction(visitStatus);
   const actionHref = receptionActionHref(action, visitId);
+  const cardTone = statusCardTone(visitStatus);
+  const timeChipTone = statusTimeChipTone(visitStatus);
 
   return (
     <article
@@ -143,11 +204,11 @@ function ArrivalCard({ row }) {
           navigate(detailPath);
         }
       }}
-      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-navy-100 bg-white p-3.5 transition-colors hover:border-navy-200 hover:bg-navy-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4"
+      className={`flex cursor-pointer flex-col gap-3 rounded-xl border p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4 ${cardTone}`}
     >
       <div className="flex min-w-0 items-start gap-3">
-        <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-lg bg-navy-50 px-1.5 py-2 text-center">
-          <span className="text-sm font-semibold tabular-nums text-navy-900">
+        <div className={`flex w-14 shrink-0 flex-col items-center justify-center rounded-lg px-1.5 py-2 text-center ${timeChipTone}`}>
+          <span className="text-sm font-semibold tabular-nums">
             {row.scheduled_at ? formatTime(row.scheduled_at) : '—'}
           </span>
         </div>
