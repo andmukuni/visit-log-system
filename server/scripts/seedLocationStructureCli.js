@@ -61,7 +61,7 @@ async function resolvePool() {
 async function main() {
   const pool = await resolvePool();
   try {
-    const result = await resetAndSeedLocationStructure(pool);
+    const result = await resetAndSeedLocationStructure(pool, { force: true });
     if (result.skipped) {
       console.log('[seed:location] Skipped:', result.reason || 'unknown');
       process.exitCode = 1;

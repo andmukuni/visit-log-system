@@ -429,9 +429,9 @@ export async function seedVisitorData() {
 
   const officeItId = generateId('off');
   await pool.query(
-    `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
-    [officeItId, orgId, deptOpsId, buildingId, siteId, '6', 'IT Dep Group office 6'],
+    `INSERT INTO offices (id, organisation_id, department_id, building_id, zone_id, site_id, office_number, name, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+    [officeItId, orgId, deptOpsId, buildingId, zoneId, siteId, '6', 'IT Dep Group office 6'],
   );
 
   const categories = [
@@ -488,8 +488,15 @@ export async function seedVisitorData() {
  * Wipe sites / buildings / stations / offices (and dependent zones),
  * then seed the canonical HQ location structure.
  * Does NOT modify roles, employees/hosts rows (except location FKs), or departments.
+ * Destructive — only for explicit CLI reset, never for normal app boot.
  */
-export async function resetAndSeedLocationStructure(db = pool) {
+export async function resetAndSeedLocationStructure(db = pool, { force = false } = {}) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && !force && process.env.ALLOW_LOCATION_RESET !== '1') {
+    console.warn('[visitor] Refusing location structure reset in production (set ALLOW_LOCATION_RESET=1 to override).');
+    return { skipped: true, reason: 'production_guard' };
+  }
+
   await ensureOfficeSchema(db);
 
   // Prefer the demo/portal org so seeded locations match logged-in user scopes.
@@ -590,23 +597,23 @@ export async function resetAndSeedLocationStructure(db = pool) {
     /* ignore */
   }
 
-  // Clear previous seeded location rows, then insert the single office.
+  // Clear previous seeded location rows, then insert zone + office.
   await db.query('DELETE FROM offices');
   await db.query('DELETE FROM zones');
   await db.query('DELETE FROM stations WHERE id <> ?', [stationId]);
   await db.query('DELETE FROM buildings WHERE id <> ?', [buildingId]);
   await db.query('DELETE FROM sites WHERE id <> ?', [siteId]);
 
-  await db.query(
-    `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
-     VALUES (?, ?, ?, ?, ?, '6', 'IT Dep Group office 6', 'active')`,
-    [officeId, org.id, dept.id, buildingId, siteId],
-  );
   const zoneId = generateId('zone');
   await db.query(
     `INSERT INTO zones (id, building_id, name, access_level)
      VALUES (?, ?, 'Reception Area', 'public')`,
     [zoneId, buildingId],
+  );
+  await db.query(
+    `INSERT INTO offices (id, organisation_id, department_id, building_id, zone_id, site_id, office_number, name, status)
+     VALUES (?, ?, ?, ?, ?, ?, '6', 'IT Dep Group office 6', 'active')`,
+    [officeId, org.id, dept.id, buildingId, zoneId, siteId],
   );
   await db.query(
     `UPDATE user_scopes SET office_id = ? WHERE organisation_id = ?`,
@@ -647,23 +654,21 @@ export async function resetAndSeedLocationStructure(db = pool) {
   };
 }
 
-/** Keep location seed stable; do not recreate old multi-site/office demo data. */
+/**
+ * Bootstrap helper: ensure office schema only.
+ * Never wipes location data — that wiped user-added sites/zones/offices on deploy
+ * whenever the exact demo HQ building name was missing.
+ */
 export async function seedOfficeHierarchy(db = pool) {
   await ensureOfficeSchema(db);
 
-  const [[hq]] = await db.query(
-    `SELECT s.id
-     FROM sites s
-     INNER JOIN buildings b ON b.site_id = s.id
-     WHERE s.code = 'HQ' AND b.name = 'Wonderful Group Greatest'
-     LIMIT 1`,
-  );
-  if (hq?.id) {
-    return { skipped: true, reason: 'canonical_location_exists' };
+  const [[existing]] = await db.query('SELECT id FROM sites LIMIT 1');
+  if (existing?.id) {
+    return { skipped: true, reason: 'location_data_exists' };
   }
 
-  // Fresh/partial DBs: establish the canonical location once.
-  return resetAndSeedLocationStructure(db);
+  // Empty database only: insert canonical demo location once.
+  return resetAndSeedLocationStructure(db, { force: true });
 }
 
 export { generateId };
