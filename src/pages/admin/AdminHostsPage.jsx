@@ -308,9 +308,9 @@ export default function AdminHostsPage() {
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">
       <PageHeader
-        title="Employees & Hosts"
+        title="Hosts"
         subtitle="Organisation → Department + Site → Employee. Manage Available / Not available for reception."
-        breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Employees' }]}
+        breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Hosts' }]}
         actions={(
           <button
             type="button"
@@ -326,7 +326,7 @@ export default function AdminHostsPage() {
       />
 
       {!orgLoading && !canManageStructure && (
-        <OrganisationRequiredBanner entityLabel="Employees & Hosts" />
+        <OrganisationRequiredBanner entityLabel="Hosts" />
       )}
       <StructureRelationHint highlight="Employee" />
 

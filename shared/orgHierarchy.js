@@ -85,6 +85,6 @@ export function describeOrgHierarchy() {
     'Site → Stations & Gates',
     'Organisation → Departments',
     'Building + Department → Offices',
-    'Department + Site (+ Office) → Employees & Hosts',
+    'Department + Site (+ Office) → Hosts',
   ];
 }

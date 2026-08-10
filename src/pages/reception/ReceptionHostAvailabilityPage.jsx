@@ -40,7 +40,7 @@ export default function ReceptionHostAvailabilityPage() {
     <div>
       <PageHeader
         title="Host Availability"
-        subtitle="Read-only view — hosts are managed in Admin → Employees & Hosts"
+        subtitle="Read-only view — hosts are managed in Admin → Hosts"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Hosts' }]}
         actions={(
           <ActionToolbar>

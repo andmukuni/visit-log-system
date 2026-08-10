@@ -115,7 +115,7 @@ const PAGE_CONFIG = {
     ],
   },
   hosts: {
-    title: 'Employees & Hosts',
+    title: 'Hosts',
     subtitle: 'Employees linked to department and site/branch.',
     fetchFn: () => visitorApi.getHosts(),
     breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Hosts' }],

@@ -3,7 +3,7 @@ import { visitorApi } from '../utils/visitorApi';
 
 /**
  * Organisation is required before any structure can exist:
- * Sites, Buildings & Zones, Offices, Stations & Gates, Departments, Employees & Hosts.
+ * Sites, Buildings & Zones, Offices, Stations & Gates, Departments, Hosts.
  */
 export function useOrganisationPrerequisite() {
   const [loading, setLoading] = useState(true);
