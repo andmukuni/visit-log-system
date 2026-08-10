@@ -54,6 +54,7 @@ export async function ensureOfficeSchema(db = pool) {
       organisation_id VARCHAR(90) NOT NULL,
       department_id VARCHAR(90) NOT NULL,
       building_id VARCHAR(90),
+      zone_id VARCHAR(90),
       site_id VARCHAR(90),
       office_number VARCHAR(40) NOT NULL,
       name VARCHAR(255),
@@ -64,10 +65,12 @@ export async function ensureOfficeSchema(db = pool) {
       INDEX idx_offices_org (organisation_id),
       INDEX idx_offices_dept (department_id),
       INDEX idx_offices_building (building_id),
+      INDEX idx_offices_zone (zone_id),
       INDEX idx_offices_site (site_id)
     )
   `);
   await ensureColumn(db, 'offices', 'building_id', 'ADD COLUMN building_id VARCHAR(90) NULL');
+  await ensureColumn(db, 'offices', 'zone_id', 'ADD COLUMN zone_id VARCHAR(90) NULL');
   if (await tableExists(db, 'hosts')) {
     await ensureColumn(db, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
     await ensureColumn(db, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');

@@ -5,8 +5,8 @@
  * ├── Department                  — org chart unit (no site required)
  * ├── Site / Branch               — physical place
  * │   ├── Building
- * │   │   ├── Zone               — access level inside a building
- * │   │   └── Office             — room (needs building + department)
+ * │   │   └── Zone               — access level inside a building
+ * │   │       └── Office         — room (needs zone + department)
  * │   └── Station / Gate         — reception or entry point on a site
  * └── Employee / Host             — department + site (+ optional office)
  */
@@ -57,10 +57,10 @@ export const ORG_STRUCTURE_RULES = {
   },
   office: {
     label: 'Office',
-    parents: ['organisation', 'department', 'building'],
-    required: ['organisation_id', 'department_id', 'building_id'],
+    parents: ['organisation', 'department', 'building', 'zone'],
+    required: ['organisation_id', 'department_id', 'building_id', 'zone_id'],
     derives: ['site_id'],
-    note: 'Room number in a building, assigned to a department. Site is inherited from the building.',
+    note: 'Room number in a zone, assigned to a department. Building and site are inherited from the zone.',
   },
   employee: {
     label: 'Employee / Host',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, DoorClosed, Eye, Network, Plus, Search, X, Edit3 } from 'lucide-react';
+import { Building2, DoorClosed, Eye, Map, Network, Plus, Search, X, Edit3 } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
@@ -22,6 +22,7 @@ const emptyForm = () => ({
   departmentId: '',
   siteId: '',
   buildingId: '',
+  zoneId: '',
   status: 'active',
 });
 
@@ -40,6 +41,7 @@ export default function AdminOfficesPage() {
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
   const [buildings, setBuildings] = useState([]);
+  const [zones, setZones] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -62,16 +64,18 @@ export default function AdminOfficesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, deptRows, siteRows, buildingRows] = await Promise.all([
+      const [rows, deptRows, siteRows, buildingRows, zoneRows] = await Promise.all([
         visitorApi.getOffices(),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
         visitorApi.getBuildings(),
+        visitorApi.getZones(),
       ]);
       setAllRows(Array.isArray(rows) ? rows : []);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
       setBuildings(Array.isArray(buildingRows) ? buildingRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
       setKpis(rows?.stats || { total: rows?.length || 0 });
     } catch (err) {
       setAllRows([]);
@@ -94,7 +98,7 @@ export default function AdminOfficesPage() {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter((row) =>
-      [row.office_number, row.name, row.department_name, row.building_name, row.site_name]
+      [row.office_number, row.name, row.department_name, row.building_name, row.zone_name, row.site_name]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
@@ -125,7 +129,19 @@ export default function AdminOfficesPage() {
     }));
   }, [buildings, form.siteId]);
 
-  const prerequisitesReady = departmentOptions.length > 0 && buildingOptions.length > 0;
+  const zoneOptions = useMemo(() => {
+    const list = form.buildingId
+      ? zones.filter((z) => z.building_id === form.buildingId)
+      : form.siteId
+        ? zones.filter((z) => z.site_id === form.siteId || buildings.some((b) => b.id === z.building_id && b.site_id === form.siteId))
+        : zones;
+    return list.map((z) => ({
+      value: z.id,
+      label: z.access_level ? `${z.name} · ${z.access_level}` : z.name,
+    }));
+  }, [zones, buildings, form.buildingId, form.siteId]);
+
+  const prerequisitesReady = departmentOptions.length > 0 && buildingOptions.length > 0 && zones.length > 0;
 
   const openCreate = () => {
     if (!canManageStructure) {
@@ -133,20 +149,26 @@ export default function AdminOfficesPage() {
       return;
     }
     if (!departmentOptions.length) {
-      toast.error('Create a department first. Offices belong to a department and a building.');
+      toast.error('Create a department first. Offices belong to a department and a zone.');
       return;
     }
     if (!buildings.length) {
-      toast.error('Create a building first. Offices live inside a building.');
+      toast.error('Create a building first.');
+      return;
+    }
+    if (!zones.length) {
+      toast.error('Create a zone first. Offices fall under a zone inside a building.');
       return;
     }
     const firstBuilding = buildings[0];
+    const firstZone = zones.find((z) => z.building_id === firstBuilding?.id) || zones[0];
     setEditing(null);
     setForm({
       ...emptyForm(),
       departmentId: departmentOptions[0].value,
-      siteId: firstBuilding?.site_id || siteOptions[0]?.value || '',
-      buildingId: firstBuilding?.id || '',
+      siteId: firstBuilding?.site_id || firstZone?.site_id || siteOptions[0]?.value || '',
+      buildingId: firstZone?.building_id || firstBuilding?.id || '',
+      zoneId: firstZone?.id || '',
     });
     setModalOpen(true);
   };
@@ -159,6 +181,7 @@ export default function AdminOfficesPage() {
       departmentId: row.department_id || '',
       siteId: row.site_id || '',
       buildingId: row.building_id || '',
+      zoneId: row.zone_id || '',
       status: row.status || 'active',
     });
     setModalOpen(true);
@@ -169,8 +192,8 @@ export default function AdminOfficesPage() {
       toast.error('Office number is required.');
       return;
     }
-    if (!form.departmentId || !form.buildingId) {
-      toast.error('Department and building are required.');
+    if (!form.departmentId || !form.buildingId || !form.zoneId) {
+      toast.error('Department, building, and zone are required.');
       return;
     }
     setSaving(true);
@@ -180,6 +203,7 @@ export default function AdminOfficesPage() {
         name: form.name,
         departmentId: form.departmentId,
         buildingId: form.buildingId,
+        zoneId: form.zoneId,
         status: form.status,
       };
       if (editing?.id) {
@@ -210,6 +234,7 @@ export default function AdminOfficesPage() {
       ),
     },
     { key: 'department_name', label: 'Department' },
+    { key: 'zone_name', label: 'Zone' },
     { key: 'building_name', label: 'Building' },
     { key: 'site_name', label: 'Site' },
     {
@@ -238,7 +263,7 @@ export default function AdminOfficesPage() {
     <div className="flex flex-col gap-2.5 sm:gap-3">
       <PageHeader
         title="Offices"
-        subtitle="Building + Department → Office. Site is inherited from the building."
+        subtitle="Building → Zone + Department → Office. Site is inherited from the building."
         breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Offices' }]}
         actions={(
           <button
@@ -262,8 +287,8 @@ export default function AdminOfficesPage() {
         {[
           { key: 'total', label: 'Offices', icon: DoorClosed },
           { key: 'active', label: 'Active', icon: DoorClosed },
+          { key: 'zones', label: 'Zones', icon: Map },
           { key: 'buildings', label: 'Buildings', icon: Building2 },
-          { key: 'departments', label: 'Departments', icon: Network },
         ].map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-500">
@@ -287,7 +312,7 @@ export default function AdminOfficesPage() {
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search office #, department, building..."
+                  placeholder="Search office #, department, zone, building..."
                   className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
                 />
               </label>
@@ -300,10 +325,12 @@ export default function AdminOfficesPage() {
               emptyTitle={!prerequisitesReady ? 'Prerequisites missing' : 'No offices found.'}
               emptyDescription={
                 !departmentOptions.length
-                  ? 'Create a Department first, then a Building, then an Office.'
+                  ? 'Create a Department first, then a Zone, then an Office.'
                   : !buildings.length
-                    ? 'Create a Building under a Site first, then add offices.'
-                    : 'Add an office number in a building for a department.'
+                    ? 'Create a Building under a Site first.'
+                    : !zones.length
+                      ? 'Create a Zone under a Building first, then add offices.'
+                      : 'Add an office number in a zone for a department.'
               }
               onRowClick={setSelected}
               activeRowId={selected?.id}
@@ -332,6 +359,7 @@ export default function AdminOfficesPage() {
               <div className="space-y-2 px-4 py-3 text-sm">
                 <StatusBadge status={selected.status || 'active'} />
                 <p><span className="text-gray-500">Department:</span> <span className="font-semibold">{selected.department_name || '—'}</span></p>
+                <p><span className="text-gray-500">Zone:</span> <span className="font-semibold">{selected.zone_name || '—'}</span></p>
                 <p><span className="text-gray-500">Building:</span> <span className="font-semibold">{selected.building_name || '—'}</span></p>
                 <p><span className="text-gray-500">Site:</span> <span className="font-semibold">{selected.site_name || '—'}</span></p>
               </div>
@@ -353,7 +381,7 @@ export default function AdminOfficesPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title={editing ? 'Edit Office' : 'New Office'}
-        subtitle="Office → Building + Department → Organisation (site from building)"
+        subtitle="Office → Zone + Building + Department (site from building)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -385,14 +413,16 @@ export default function AdminOfficesPage() {
             onChange={(e) => {
               const siteId = e.target.value;
               const nextBuilding = buildings.find((b) => b.site_id === siteId);
+              const nextZone = zones.find((z) => z.building_id === nextBuilding?.id);
               setForm((prev) => ({
                 ...prev,
                 siteId,
                 buildingId: nextBuilding?.id || '',
+                zoneId: nextZone?.id || '',
               }));
             }}
             options={siteOptions}
-            helpText="Used to filter buildings. Site is saved from the selected building."
+            helpText="Used to filter buildings and zones."
           />
           <FormField
             label="Building"
@@ -400,8 +430,35 @@ export default function AdminOfficesPage() {
             type="select"
             required
             value={form.buildingId}
-            onChange={(e) => setForm((prev) => ({ ...prev, buildingId: e.target.value }))}
+            onChange={(e) => {
+              const buildingId = e.target.value;
+              const nextZone = zones.find((z) => z.building_id === buildingId);
+              setForm((prev) => ({
+                ...prev,
+                buildingId,
+                zoneId: nextZone?.id || '',
+              }));
+            }}
             options={buildingOptions}
+          />
+          <FormField
+            label="Zone"
+            name="zoneId"
+            type="select"
+            required
+            value={form.zoneId}
+            onChange={(e) => {
+              const zoneId = e.target.value;
+              const zone = zones.find((z) => z.id === zoneId);
+              setForm((prev) => ({
+                ...prev,
+                zoneId,
+                buildingId: zone?.building_id || prev.buildingId,
+                siteId: zone?.site_id || prev.siteId,
+              }));
+            }}
+            options={zoneOptions}
+            helpText="Required. Office belongs to this zone inside the building."
           />
           <FormField
             label="Office number"

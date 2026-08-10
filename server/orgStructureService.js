@@ -55,8 +55,28 @@ export async function loadOfficeInOrg(pool, officeId, orgId) {
   return row || null;
 }
 
-/** Office = organisation + department + building; site inherited from building. */
-export async function assertOfficePlacement(pool, { organisationId, departmentId, buildingId }) {
+export async function loadZoneInOrg(pool, zoneId, orgId) {
+  if (!zoneId || !orgId) return null;
+  const [[row]] = await pool.query(
+    `SELECT z.id, z.building_id, z.name, z.access_level,
+            b.site_id, b.name AS building_name, s.organisation_id, s.name AS site_name
+     FROM zones z
+     INNER JOIN buildings b ON b.id = z.building_id
+     INNER JOIN sites s ON s.id = b.site_id
+     WHERE z.id = ? AND s.organisation_id = ?
+     LIMIT 1`,
+    [zoneId, orgId],
+  );
+  return row || null;
+}
+
+/** Office = organisation + department + zone (+ building); site inherited from building/zone. */
+export async function assertOfficePlacement(pool, {
+  organisationId,
+  departmentId,
+  buildingId = null,
+  zoneId = null,
+}) {
   const org = await loadOrganisation(pool, organisationId);
   if (!org) {
     return { ok: false, status: 403, message: 'Organisation is required before an office can exist.' };
@@ -70,7 +90,21 @@ export async function assertOfficePlacement(pool, { organisationId, departmentId
     return { ok: false, status: 400, message: 'Department must belong to the same organisation.' };
   }
 
-  const building = await loadBuildingInOrg(pool, buildingId, organisationId);
+  if (!zoneId) {
+    return { ok: false, status: 400, message: 'Zone is required for an office.' };
+  }
+
+  const zone = await loadZoneInOrg(pool, zoneId, organisationId);
+  if (!zone) {
+    return { ok: false, status: 400, message: 'Zone must belong to a building in the same organisation.' };
+  }
+
+  const resolvedBuildingId = buildingId || zone.building_id;
+  if (buildingId && zone.building_id !== buildingId) {
+    return { ok: false, status: 400, message: 'Zone must belong to the selected building.' };
+  }
+
+  const building = await loadBuildingInOrg(pool, resolvedBuildingId, organisationId);
   if (!building) {
     return { ok: false, status: 400, message: 'Building must belong to a site in the same organisation.' };
   }
@@ -79,10 +113,12 @@ export async function assertOfficePlacement(pool, { organisationId, departmentId
     ok: true,
     organisationId,
     departmentId,
-    buildingId,
+    buildingId: resolvedBuildingId,
+    zoneId: zone.id,
     siteId: building.site_id,
     department,
     building,
+    zone,
   };
 }
 

@@ -2649,12 +2649,15 @@ export function createOrgAdminRouter() {
                d.code AS department_code,
                o.name AS organisation_name,
                b.name AS building_name,
+               z.name AS zone_name,
+               z.access_level AS zone_access_level,
                s.name AS site_name,
                (SELECT COUNT(*) FROM hosts h WHERE h.office_id = ofc.id) AS employee_count
         FROM offices ofc
         LEFT JOIN departments d ON d.id = ofc.department_id
         LEFT JOIN organisations o ON o.id = ofc.organisation_id
         LEFT JOIN buildings b ON b.id = ofc.building_id
+        LEFT JOIN zones z ON z.id = ofc.zone_id
         LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
       `;
       const [rows] = orgId
@@ -2665,6 +2668,7 @@ export function createOrgAdminRouter() {
         total: rows.length,
         active: rows.filter((row) => row.status === 'active').length,
         buildings: new Set(rows.map((row) => row.building_id).filter(Boolean)).size,
+        zones: new Set(rows.map((row) => row.zone_id).filter(Boolean)).size,
         departments: new Set(rows.map((row) => row.department_id).filter(Boolean)).size,
         employees: rows.reduce((sum, row) => sum + Number(row.employee_count || 0), 0),
       };
@@ -2675,7 +2679,7 @@ export function createOrgAdminRouter() {
     }
   });
 
-  // Office → Building + Department (+ Organisation); site inherited from building
+  // Office → Zone + Building + Department (+ Organisation); site inherited from building/zone
   router.post('/offices', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2684,7 +2688,8 @@ export function createOrgAdminRouter() {
         || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
         || null;
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
-      const buildingId = String(req.body?.buildingId || req.body?.building_id || '').trim();
+      const buildingId = String(req.body?.buildingId || req.body?.building_id || '').trim() || null;
+      const zoneId = String(req.body?.zoneId || req.body?.zone_id || '').trim();
       const officeNumber = String(req.body?.officeNumber || req.body?.office_number || '').trim();
       const name = String(req.body?.name || '').trim() || null;
       const status = String(req.body?.status || 'active').trim() || 'active';
@@ -2695,14 +2700,15 @@ export function createOrgAdminRouter() {
       if (!departmentId) {
         return res.status(400).json({ ok: false, message: 'Department is required for an office.' });
       }
-      if (!buildingId) {
-        return res.status(400).json({ ok: false, message: 'Building is required for an office.' });
+      if (!zoneId) {
+        return res.status(400).json({ ok: false, message: 'Zone is required for an office.' });
       }
 
       const placement = await assertOfficePlacement(pool, {
         organisationId: orgId,
         departmentId,
         buildingId,
+        zoneId,
       });
       if (!placement.ok) {
         return res.status(placement.status).json({ ok: false, message: placement.message });
@@ -2711,9 +2717,9 @@ export function createOrgAdminRouter() {
       const id = generateId('ofc');
       try {
         await pool.query(
-          `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, orgId, departmentId, buildingId, placement.siteId, officeNumber, name, status],
+          `INSERT INTO offices (id, organisation_id, department_id, building_id, zone_id, site_id, office_number, name, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, orgId, departmentId, placement.buildingId, placement.zoneId, placement.siteId, officeNumber, name, status],
         );
       } catch (error) {
         if (String(error?.code) === 'ER_DUP_ENTRY') {
@@ -2728,12 +2734,15 @@ export function createOrgAdminRouter() {
                 d.code AS department_code,
                 o.name AS organisation_name,
                 b.name AS building_name,
+                z.name AS zone_name,
+                z.access_level AS zone_access_level,
                 s.name AS site_name,
                 0 AS employee_count
          FROM offices ofc
          LEFT JOIN departments d ON d.id = ofc.department_id
          LEFT JOIN organisations o ON o.id = ofc.organisation_id
          LEFT JOIN buildings b ON b.id = ofc.building_id
+         LEFT JOIN zones z ON z.id = ofc.zone_id
          LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
          WHERE ofc.id = ?`,
         [id],
@@ -2761,8 +2770,11 @@ export function createOrgAdminRouter() {
         ? String(req.body.departmentId || req.body.department_id || '').trim()
         : existing.department_id;
       const buildingId = req.body?.buildingId != null || req.body?.building_id != null
-        ? String(req.body.buildingId || req.body.building_id || '').trim()
+        ? String(req.body.buildingId || req.body.building_id || '').trim() || null
         : existing.building_id;
+      const zoneId = req.body?.zoneId != null || req.body?.zone_id != null
+        ? String(req.body.zoneId || req.body.zone_id || '').trim()
+        : existing.zone_id;
       const officeNumber = req.body?.officeNumber != null || req.body?.office_number != null
         ? String(req.body.officeNumber || req.body.office_number || '').trim()
         : existing.office_number;
@@ -2779,6 +2791,7 @@ export function createOrgAdminRouter() {
         organisationId: existing.organisation_id,
         departmentId,
         buildingId,
+        zoneId,
       });
       if (!placement.ok) {
         return res.status(placement.status).json({ ok: false, message: placement.message });
@@ -2787,9 +2800,9 @@ export function createOrgAdminRouter() {
       try {
         await pool.query(
           `UPDATE offices
-           SET department_id = ?, building_id = ?, site_id = ?, office_number = ?, name = ?, status = ?
+           SET department_id = ?, building_id = ?, zone_id = ?, site_id = ?, office_number = ?, name = ?, status = ?
            WHERE id = ?`,
-          [departmentId, buildingId, placement.siteId, officeNumber, name, status, officeId],
+          [departmentId, placement.buildingId, placement.zoneId, placement.siteId, officeNumber, name, status, officeId],
         );
       } catch (error) {
         if (String(error?.code) === 'ER_DUP_ENTRY') {
@@ -2804,12 +2817,15 @@ export function createOrgAdminRouter() {
                 d.code AS department_code,
                 o.name AS organisation_name,
                 b.name AS building_name,
+                z.name AS zone_name,
+                z.access_level AS zone_access_level,
                 s.name AS site_name,
                 (SELECT COUNT(*) FROM hosts h WHERE h.office_id = ofc.id) AS employee_count
          FROM offices ofc
          LEFT JOIN departments d ON d.id = ofc.department_id
          LEFT JOIN organisations o ON o.id = ofc.organisation_id
          LEFT JOIN buildings b ON b.id = ofc.building_id
+         LEFT JOIN zones z ON z.id = ofc.zone_id
          LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
          WHERE ofc.id = ?`,
         [officeId],
