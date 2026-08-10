@@ -12,8 +12,10 @@ import StatusFilterBar from '../../components/logbook/StatusFilterBar';
 import { VEHICLE_STATUS_OPTIONS } from '../../components/logbook/filterOptions';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminVehiclesPage() {
+  const { queryParams, organisationId } = useAdminOrganisation();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
@@ -21,7 +23,7 @@ export default function AdminVehiclesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { ...queryParams };
       if (status) params.status = status;
       setRows(await visitorApi.getOrgVehicles(params));
     } catch {
@@ -29,13 +31,13 @@ export default function AdminVehiclesPage() {
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [queryParams, status]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const showOrganisation = rows.some((row) => row.organisation_name);
+  const showOrganisation = !organisationId && rows.some((row) => row.organisation_name);
 
   const columns = [
     { key: 'plate_number', label: 'Plate' },

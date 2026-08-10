@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MapPin, Users, ClipboardList, Clock3, Building2 } from 'lucide-react';
 import {
   PageHeader,
@@ -12,30 +12,45 @@ import {
 import { DashboardOverviewLayout } from '../../components/dashboard';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminDashboardPage() {
+  const {
+    queryParams,
+    label: orgFilterLabel,
+    canSelect,
+    organisationId,
+    filterReady,
+    loading: orgFilterLoading,
+  } = useAdminOrganisation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
+    if (!filterReady) return;
     setLoading(true);
     setError('');
     try {
-      setData(await visitorApi.getOrgDashboard());
+      setData(await visitorApi.getOrgDashboard(queryParams));
     } catch (err) {
       setError(err?.message || 'Unable to load dashboard.');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryParams, filterReady]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const orgName = data?.scope?.organisation_name;
+  const orgName = data?.scope?.organisation_name || orgFilterLabel;
+  const subtitle = canSelect
+    ? `${orgName} — organisation overview and operational metrics`
+    : (orgName
+      ? `${orgName} — organisation overview and operational metrics`
+      : 'Organisation overview and operational metrics');
 
   const kpis = [
     {
@@ -68,6 +83,31 @@ export default function AdminDashboardPage() {
     trendLabel: 'vs yesterday',
   };
 
+  const donutChart = useMemo(() => {
+    if (organisationId) {
+      return {
+        title: 'Site stats',
+        subtitle: 'Visits by site for the selected organisation',
+        centerTitle: 'Site share',
+        centerIcon: MapPin,
+        data: data?.visitsBySite || [],
+        nameKey: 'site_name',
+        valueKey: 'total',
+        emptyLabel: 'No site visit data for this organisation yet.',
+      };
+    }
+    return {
+      title: 'Organisation stats',
+      subtitle: 'Visits by organisation',
+      centerTitle: 'Organisation share',
+      centerIcon: Building2,
+      data: data?.visitsByOrganisation || [],
+      nameKey: 'organisation_name',
+      valueKey: 'total',
+      emptyLabel: 'No organisation visit data yet.',
+    };
+  }, [organisationId, data?.visitsBySite, data?.visitsByOrganisation]);
+
   const columns = [
     {
       key: 'created_at',
@@ -76,12 +116,15 @@ export default function AdminDashboardPage() {
     },
     { key: 'visitor_name', label: 'Visitor' },
     { key: 'host_name', label: 'Host' },
+    ...(canSelect && !organisationId
+      ? [{ key: 'organisation_name', label: 'Organisation' }]
+      : []),
     { key: 'site_name', label: 'Site' },
     { key: 'category_name', label: 'Category' },
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <StatusBadge status={row.status} iconOnly />,
     },
   ];
 
@@ -89,24 +132,28 @@ export default function AdminDashboardPage() {
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
         title="Admin Dashboard"
-        subtitle={orgName ? `${orgName} — organisation overview and operational metrics` : 'Organisation overview and operational metrics'}
+        subtitle={subtitle}
         breadcrumbs={[{ label: 'Administration', to: '/admin' }, { label: 'Dashboard' }]}
-        actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
+        actions={(
+          <ActionToolbar>
+            <RefreshAction onClick={load} loading={loading} />
+          </ActionToolbar>
+        )}
       />
 
-      {loading && (
+      {(loading || orgFilterLoading) && (
         <div className="flex justify-center py-16">
           <Spinner size={32} />
         </div>
       )}
 
-      {!loading && error && (
+      {!loading && !orgFilterLoading && error && (
         <Card title="Dashboard error" className="mb-6">
           <p className="text-sm text-red-600">{error}</p>
         </Card>
       )}
 
-      {!loading && data && (
+      {!loading && !orgFilterLoading && data && (
         <>
           <DashboardOverviewLayout
             kpis={kpis}
@@ -117,16 +164,7 @@ export default function AdminDashboardPage() {
               trend: data?.visitTrend,
               emptyLabel: 'No visit data for this week yet.',
             }}
-            donutChart={{
-              title: 'Organisation stats',
-              subtitle: 'Visits by organisation',
-              centerTitle: 'Organisation share',
-              centerIcon: Building2,
-              data: data.visitsByOrganisation || [],
-              nameKey: 'organisation_name',
-              valueKey: 'total',
-              emptyLabel: 'No organisation visit data yet.',
-            }}
+            donutChart={donutChart}
           />
 
           <Card title="Recent visits" subtitle="Latest visitor registrations and check-ins">
@@ -134,7 +172,7 @@ export default function AdminDashboardPage() {
               embedded
               toolbar={{
                 placeholder: 'Search visitors, hosts, sites…',
-                searchKeys: ['visitor_name', 'host_name', 'site_name', 'category_name', 'status'],
+                searchKeys: ['visitor_name', 'host_name', 'organisation_name', 'site_name', 'category_name', 'status'],
               }}
               columns={columns}
               data={data.recentVisits || []}

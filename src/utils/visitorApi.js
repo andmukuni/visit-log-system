@@ -88,8 +88,14 @@ export const visitorApi = {
   },
   registerVehicle: (body) => apiFetch('/admin/vehicles', { method: 'POST', body: JSON.stringify(body) }),
   checkOutVehicle: (id) => apiFetch(`/admin/vehicles/${id}/check-out`, { method: 'POST' }),
-  getOrgDashboard: () => apiFetch('/admin/org/dashboard'),
-  getOrgNavCounts: () => apiFetch('/admin/org/nav-counts'),
+  getOrgDashboard: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/dashboard${qs ? `?${qs}` : ''}`);
+  },
+  getOrgNavCounts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/nav-counts${qs ? `?${qs}` : ''}`);
+  },
   getOrgVisitors: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visitors${qs ? `?${qs}` : ''}`);
@@ -102,7 +108,10 @@ export const visitorApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visits${qs ? `?${qs}` : ''}`);
   },
-  getOrgVisit: (id) => apiFetch(`/admin/org/visits/${id}`),
+  getOrgVisit: (id, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/org/visits/${id}${qs ? `?${qs}` : ''}`);
+  },
   getOrganisations: async () => {
     const res = await fetch(`${API_BASE}/admin/org/organisations`, {
       headers: { ...getAdminAuthHeaders() },

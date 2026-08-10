@@ -49,6 +49,70 @@ function hasPlatformWideAccess(claims = {}) {
   return isSuperAdmin(claims) || perms.some((p) => String(p).startsWith('platform.'));
 }
 
+/**
+ * Resolve organisation filter for org-admin read APIs.
+ * Platform-wide admins may pass organisation_id / "all"; scoped admins stay locked to their org.
+ */
+async function resolveAdminOrganisationFilter(poolConn, req, scope = null) {
+  const claims = req.adminClaims || {};
+  const platformWide = hasPlatformWideAccess(claims);
+  const requested = String(req.query?.organisation_id || req.query?.organisationId || '').trim();
+
+  if (!platformWide) {
+    return {
+      ok: true,
+      organisationId: scope?.organisation_id || null,
+      organisationName: scope?.organisation_name || null,
+      platformWide: false,
+      viewAll: !scope?.organisation_id,
+    };
+  }
+
+  if (!requested || requested === 'all') {
+    return {
+      ok: true,
+      organisationId: null,
+      organisationName: null,
+      platformWide: true,
+      viewAll: true,
+    };
+  }
+
+  const [[org]] = await poolConn.query(
+    'SELECT id, name FROM organisations WHERE id = ? LIMIT 1',
+    [requested],
+  );
+  if (!org) {
+    return { ok: false, status: 400, message: 'Organisation not found.' };
+  }
+
+  return {
+    ok: true,
+    organisationId: org.id,
+    organisationName: org.name,
+    platformWide: true,
+    viewAll: false,
+  };
+}
+
+function adminOrganisationScopeView(scope, filter) {
+  if (filter.organisationId) {
+    return {
+      ...(scope || {}),
+      organisation_id: filter.organisationId,
+      organisation_name: filter.organisationName || scope?.organisation_name || null,
+    };
+  }
+  if (filter.platformWide || filter.viewAll) {
+    return {
+      ...(scope || {}),
+      organisation_id: null,
+      organisation_name: 'All organisations',
+    };
+  }
+  return scope;
+}
+
 export function createStationRouter() {
   const router = express.Router();
 
@@ -1989,7 +2053,8 @@ export function createOrgAdminRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const orgId = scope?.organisation_id;
+      // Platform-wide admins always list every organisation (needed for the org switcher).
+      const orgId = hasPlatformWideAccess(req.adminClaims) ? null : scope?.organisation_id;
       const [rows] = orgId
         ? await pool.query(`${ORGANISATION_SELECT} WHERE o.id = ? ORDER BY o.name`, [orgId])
         : await pool.query(`${ORGANISATION_SELECT} ORDER BY o.name`);
@@ -3648,49 +3713,50 @@ export function createOrgAdminRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const orgId = scope?.organisation_id;
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
+      const orgParams = orgId ? [orgId] : [];
+      const visOrgClause = orgId ? ' WHERE vis.organisation_id = ?' : '';
+      const plainOrgClause = orgId ? ' WHERE organisation_id = ?' : '';
+      const andOrgClause = orgId ? ' AND organisation_id = ?' : '';
 
-      const [[orgCount]] = await pool.query(`SELECT COUNT(*) AS count FROM organisations`);
-      const [[siteCount]] = orgId
-        ? await pool.query(`SELECT COUNT(*) AS count FROM sites WHERE organisation_id = ?`, [orgId])
-        : await pool.query(`SELECT COUNT(*) AS count FROM sites`);
-      const [[userCount]] = await pool.query(`SELECT COUNT(*) AS count FROM users`);
-      const [[visitCount]] = orgId
-        ? await pool.query(`SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?`, [orgId])
-        : await pool.query(`SELECT COUNT(*) AS count FROM visits`);
-
-      const emptyOrgMetrics = {
-        visitsToday: 0,
-        visitsYesterday: 0,
-        visitTrend: 0,
-        currentlyInside: 0,
-        pendingApprovals: 0,
-        overdueVisits: 0,
-        stations: 0,
-        hosts: 0,
-        departments: 0,
-        openIncidents: 0,
-        auditToday: 0,
-        recentActivity: [],
-        recentAudit: [],
-        weeklyVisits: [0, 0, 0, 0, 0, 0, 0],
-        weeklyTrend: [],
-        statusBreakdown: [],
-        visitsBySite: [],
-        visitsByOrganisation: [],
-        recentVisits: [],
-      };
+      const [[orgCount]] = await pool.query(
+        orgId
+          ? `SELECT COUNT(*) AS count FROM organisations WHERE id = ?`
+          : `SELECT COUNT(*) AS count FROM organisations`,
+        orgParams,
+      );
+      const [[siteCount]] = await pool.query(
+        `SELECT COUNT(*) AS count FROM sites${plainOrgClause}`,
+        orgParams,
+      );
+      const [[userCount]] = orgId
+        ? await pool.query(
+          `SELECT COUNT(DISTINCT us.user_id) AS count
+           FROM user_scopes us
+           WHERE us.organisation_id = ?`,
+          orgParams,
+        )
+        : await pool.query(`SELECT COUNT(*) AS count FROM users`);
+      const [[visitCount]] = await pool.query(
+        `SELECT COUNT(*) AS count FROM visits${plainOrgClause}`,
+        orgParams,
+      );
 
       const loadVisitsByOrganisation = async () => {
-        // Comparative org visit share for admin dashboards (ranked by volume).
         const [rows] = await pool.query(
           `SELECT o.name AS organisation_name, COUNT(vis.id) AS total
            FROM organisations o
            LEFT JOIN visits vis ON vis.organisation_id = o.id
+           ${orgId ? 'WHERE o.id = ?' : ''}
            GROUP BY o.id, o.name
            HAVING COUNT(vis.id) > 0
            ORDER BY total DESC
            LIMIT 6`,
+          orgParams,
         );
         return rows.map((row) => ({
           organisation_name: row.organisation_name,
@@ -3698,58 +3764,48 @@ export function createOrgAdminRouter() {
         }));
       };
 
-      if (!orgId) {
-        const visitsByOrganisation = await loadVisitsByOrganisation();
-        return res.json({
-          ok: true,
-          data: {
-            organisations: Number(orgCount?.count || 0),
-            sites: Number(siteCount?.count || 0),
-            users: Number(userCount?.count || 0),
-            totalVisits: Number(visitCount?.count || 0),
-            scope,
-            ...emptyOrgMetrics,
-            visitsByOrganisation,
-          },
-        });
-      }
-
       const { visitsToday, visitsYesterday, visitTrend } = await fetchVisitsTodayYesterday(pool, orgId);
       const weeklyVisits = await fetchWeeklyVisits(pool, orgId);
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId);
       const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId);
 
       const [[currentlyInside]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ? AND status = 'checked_in'`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM visits WHERE status = 'checked_in'${andOrgClause}`,
+        orgParams,
       );
       const [[pendingApprovals]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ? AND status IN ('pending_approval', 'pre_registered')`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM visits
+         WHERE status IN ('pending_approval', 'pre_registered')${andOrgClause}`,
+        orgParams,
       );
       const [[overdueVisits]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ? AND status = 'overdue'`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM visits WHERE status = 'overdue'${andOrgClause}`,
+        orgParams,
       );
       const [[stations]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM stations st INNER JOIN sites s ON s.id = st.site_id WHERE s.organisation_id = ?`,
-        [orgId],
+        `SELECT COUNT(*) AS count
+         FROM stations st
+         INNER JOIN sites s ON s.id = st.site_id
+         ${orgId ? 'WHERE s.organisation_id = ?' : ''}`,
+        orgParams,
       );
       const [[hosts]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM hosts WHERE organisation_id = ?`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM hosts${plainOrgClause}`,
+        orgParams,
       );
       const [[departments]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM departments WHERE organisation_id = ?`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM departments${plainOrgClause}`,
+        orgParams,
       );
       const [[openIncidents]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM incidents WHERE organisation_id = ? AND status IN ('open', 'investigating')`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM incidents
+         WHERE status IN ('open', 'investigating')${andOrgClause}`,
+        orgParams,
       );
       const [[auditToday]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM audit_logs WHERE organisation_id = ? AND created_at >= CURDATE()`,
-        [orgId],
+        `SELECT COUNT(*) AS count FROM audit_logs
+         WHERE created_at >= CURDATE()${andOrgClause}`,
+        orgParams,
       );
 
       const [recentActivity] = await pool.query(
@@ -3757,25 +3813,26 @@ export function createOrgAdminRouter() {
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
-         WHERE vis.organisation_id = ?
+         ${visOrgClause}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
-        [orgId],
+        orgParams,
       );
 
       const [recentAudit] = await pool.query(
         `SELECT al.id, al.action, al.created_at, al.result, u.name AS actor_name
          FROM audit_logs al
          LEFT JOIN users u ON u.id = al.actor_user_id
-         WHERE al.organisation_id = ?
+         ${plainOrgClause.replace('organisation_id', 'al.organisation_id')}
          ORDER BY al.created_at DESC
          LIMIT 8`,
-        [orgId],
+        orgParams,
       );
 
       const [statusRows] = await pool.query(
-        `SELECT status, COUNT(*) AS count FROM visits WHERE organisation_id = ? GROUP BY status ORDER BY count DESC`,
-        [orgId],
+        `SELECT status, COUNT(*) AS count FROM visits${plainOrgClause}
+         GROUP BY status ORDER BY count DESC`,
+        orgParams,
       );
       const statusBreakdown = statusRows.map((row) => ({
         status: row.status,
@@ -3786,11 +3843,11 @@ export function createOrgAdminRouter() {
         `SELECT s.name AS site_name, COUNT(*) AS total
          FROM visits vis
          INNER JOIN sites s ON s.id = vis.site_id
-         WHERE vis.organisation_id = ?
+         ${visOrgClause}
          GROUP BY s.id, s.name
          ORDER BY total DESC
          LIMIT 6`,
-        [orgId],
+        orgParams,
       );
 
       const visitsByOrganisation = await loadVisitsByOrganisation();
@@ -3798,16 +3855,18 @@ export function createOrgAdminRouter() {
       const [recentVisits] = await pool.query(
         `SELECT vis.id, vis.created_at, vis.status, vis.badge_number,
                 v.full_name AS visitor_name, h.name AS host_name,
-                s.name AS site_name, vc.name AS category_name
+                s.name AS site_name, vc.name AS category_name,
+                o.name AS organisation_name
          FROM visits vis
          INNER JOIN visitors v ON v.id = vis.visitor_id
+         INNER JOIN organisations o ON o.id = vis.organisation_id
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN sites s ON s.id = vis.site_id
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
-         WHERE vis.organisation_id = ?
+         ${visOrgClause}
          ORDER BY vis.created_at DESC
          LIMIT 15`,
-        [orgId],
+        orgParams,
       );
 
       const weeklyTrend = buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn);
@@ -3819,7 +3878,8 @@ export function createOrgAdminRouter() {
           sites: Number(siteCount?.count || 0),
           users: Number(userCount?.count || 0),
           totalVisits: Number(visitCount?.count || 0),
-          scope,
+          scope: adminOrganisationScopeView(scope, filter),
+          canSelectOrganisation: filter.platformWide,
           visitsToday,
           visitsYesterday,
           visitTrend,
@@ -3853,8 +3913,11 @@ export function createOrgAdminRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const viewAll = hasPlatformWideAccess(req.adminClaims);
-      const orgId = viewAll ? null : scope?.organisation_id;
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
       const limit = Math.min(200, Number(req.query.limit) || 100);
       const search = String(req.query.search || req.query.q || '').trim();
 
@@ -3899,8 +3962,11 @@ export function createOrgAdminRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const viewAll = hasPlatformWideAccess(req.adminClaims);
-      const orgId = viewAll ? null : scope?.organisation_id;
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
       const limit = Math.min(200, Number(req.query.limit) || 100);
       const search = String(req.query.search || req.query.q || '').trim();
       const status = String(req.query.status || '').trim();
@@ -3948,8 +4014,11 @@ export function createOrgAdminRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const viewAll = hasPlatformWideAccess(req.adminClaims);
-      const orgId = viewAll ? null : scope?.organisation_id;
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
       const limit = Math.min(200, Number(req.query.limit) || 100);
       const search = String(req.query.search || req.query.q || '').trim();
       const status = String(req.query.status || '').trim();
@@ -4016,8 +4085,11 @@ export function createOrgAdminRouter() {
       const userId = req.adminClaims?.sub || null;
       const visitId = req.params.id;
       const scope = await getUserScope(pool, userId);
-      const viewAll = hasPlatformWideAccess(req.adminClaims);
-      const orgId = viewAll ? null : scope?.organisation_id;
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
 
       let sql = `
         SELECT ${VISIT_SELECT_FIELDS},

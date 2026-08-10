@@ -9,10 +9,12 @@ import LogBookFilterBar from '../../components/logbook/LogBookFilterBar';
 import VisitLogTable from '../../components/logbook/VisitLogTable';
 import { ADMIN_VISIT_TABS, filterVisitTabs } from '../../components/logbook/visitLogTabs';
 import { useAuth } from '../../context/AuthContext';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function AdminLogBookPage() {
   const { hasPermission } = useAuth();
+  const { queryParams, organisationId } = useAdminOrganisation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState('');
@@ -40,10 +42,10 @@ export default function AdminLogBookPage() {
   };
 
   const loadRows = useCallback(async ({ visitType, status: nextStatus }) => {
-    const params = { type: visitType };
+    const params = { type: visitType, ...queryParams };
     if (nextStatus) params.status = nextStatus;
     return visitorApi.getOrgVisits(params);
-  }, []);
+  }, [queryParams]);
 
   const handleRowClick = useCallback((row) => {
     if (!row?.id) return;
@@ -78,14 +80,14 @@ export default function AdminLogBookPage() {
 
       {currentTab && (
         <VisitLogTable
-          key={`${currentTab.value}-${status}-${refreshToken}`}
+          key={`${currentTab.value}-${status}-${refreshToken}-${organisationId || 'all'}`}
           visitType={currentTab.visitType}
           status={status}
           emptyTitle={currentTab.emptyTitle}
           emptyDescription={currentTab.emptyDescription}
           searchPlaceholder={currentTab.searchPlaceholder}
           loadRows={loadRows}
-          showOrganisationColumn
+          showOrganisationColumn={!organisationId}
           onRowClick={handleRowClick}
         />
       )}

@@ -8,9 +8,11 @@ import PortalSwitcherMenu from './PortalSwitcherMenu';
 import NavbarNotificationsBell from './NavbarNotificationsBell';
 import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
+import { AdminOrganisationProvider } from '../../context/AdminOrganisationContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
+import AdminOrganisationSelect from '../admin/AdminOrganisationSelect';
 import { canAccessPortal, isExecutiveOnlyUser, resolveDefaultHomeRoute } from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
@@ -129,6 +131,9 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             )}
           </div>
           <div className={`flex shrink-0 items-center ${compactChrome ? 'gap-2' : 'gap-3'}`}>
+            {portalId === 'admin' ? (
+              <AdminOrganisationSelect compact={compactChrome} />
+            ) : null}
             {portalId === 'host' && hasPermission('host.notifications') ? (
               <NavbarNotificationsBell compact={compactChrome} />
             ) : null}
@@ -220,13 +225,25 @@ function ShellBody({ portalId, title }) {
 
         <AnalyticsPanelProvider>
           <PageHeaderProvider>
-            <ShellMain
-              portalId={portalId}
-              sidebarOpen={sidebarOpen}
-              onOpenSidebar={openSidebar}
-              onCloseSidebar={closeSidebar}
-              isKiosk={isKiosk}
-            />
+            {portalId === 'admin' ? (
+              <AdminOrganisationProvider>
+                <ShellMain
+                  portalId={portalId}
+                  sidebarOpen={sidebarOpen}
+                  onOpenSidebar={openSidebar}
+                  onCloseSidebar={closeSidebar}
+                  isKiosk={isKiosk}
+                />
+              </AdminOrganisationProvider>
+            ) : (
+              <ShellMain
+                portalId={portalId}
+                sidebarOpen={sidebarOpen}
+                onOpenSidebar={openSidebar}
+                onCloseSidebar={closeSidebar}
+                isKiosk={isKiosk}
+              />
+            )}
           </PageHeaderProvider>
         </AnalyticsPanelProvider>
       </div>

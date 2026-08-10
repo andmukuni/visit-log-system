@@ -9,27 +9,29 @@ import {
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminVisitorsPage() {
+  const { queryParams, organisationId } = useAdminOrganisation();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await visitorApi.getOrgVisitors());
+      setRows(await visitorApi.getOrgVisitors(queryParams));
     } catch {
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const showOrganisation = rows.some((row) => row.organisation_name);
+  const showOrganisation = !organisationId && rows.some((row) => row.organisation_name);
 
   const columns = [
     { key: 'full_name', label: 'Visitor' },

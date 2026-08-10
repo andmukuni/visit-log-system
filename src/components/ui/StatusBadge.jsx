@@ -11,6 +11,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 const colorMap = {
   upcoming: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
@@ -110,23 +111,37 @@ function formatStatusLabel(status, normalized) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export default function StatusBadge({ status, size = 'sm' }) {
+export default function StatusBadge({ status, size = 'sm', iconOnly = false }) {
   const normalized = normalizeStatusKey(status);
   const colors = colorMap[normalized] || colorMap.default;
   const Icon = colors.icon || CircleDot;
   const displayLabel = formatStatusLabel(status, normalized);
+  const iconSize = size === 'sm' ? 12 : 14;
 
-  const sizeClasses = {
-    sm: 'text-xs px-2 py-0.5 gap-1',
-    md: 'text-sm px-2.5 py-1 gap-1.5',
-  };
+  const sizeClasses = iconOnly
+    ? {
+      sm: 'h-7 w-7 justify-center',
+      md: 'h-8 w-8 justify-center',
+    }
+    : {
+      sm: 'text-xs px-2 py-0.5 gap-1',
+      md: 'text-sm px-2.5 py-1 gap-1.5',
+    };
 
-  return (
+  const badge = (
     <span
       className={`inline-flex max-w-full items-center rounded-full font-medium ring-1 ring-inset whitespace-nowrap ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
+      title={iconOnly ? displayLabel : undefined}
+      aria-label={displayLabel}
     >
-      <Icon size={size === 'sm' ? 12 : 14} className="shrink-0" aria-hidden="true" />
-      <span className="truncate">{displayLabel}</span>
+      <Icon size={iconOnly ? (size === 'sm' ? 14 : 16) : iconSize} className="shrink-0" aria-hidden="true" />
+      {!iconOnly ? <span className="truncate">{displayLabel}</span> : null}
     </span>
   );
+
+  if (iconOnly) {
+    return <Tooltip content={displayLabel} side="top">{badge}</Tooltip>;
+  }
+
+  return badge;
 }

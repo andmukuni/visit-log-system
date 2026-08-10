@@ -8,15 +8,17 @@ import {
 } from '../../components/ui';
 import VisitActivityPanel from '../../components/logbook/VisitActivityPanel';
 import { visitorApi } from '../../utils/visitorApi';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminLogBookVisitPage() {
   const { visitId } = useParams();
+  const { queryParams } = useAdminOrganisation();
   const [searchParams] = useSearchParams();
   const [refreshToken, setRefreshToken] = useState(0);
   const tab = searchParams.get('tab') || 'walking';
   const backTo = `/admin/log-book?tab=${tab}`;
 
-  const fetchVisit = useCallback((id) => visitorApi.getOrgVisit(id), []);
+  const fetchVisit = useCallback((id) => visitorApi.getOrgVisit(id, queryParams), [queryParams]);
 
   return (
     <div className="mx-auto w-full max-w-7xl">
