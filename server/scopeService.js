@@ -75,12 +75,26 @@ export function isSuperAdmin(claims = {}) {
  */
 export async function requireUserScope(pool, userId, claims = {}) {
   if (isSuperAdmin(claims)) {
-    const [[org]] = await pool.query('SELECT id FROM organisations LIMIT 1');
-    if (org) {
-      const scope = await getUserScope(pool, userId);
-      if (scope?.organisation_id) return { ok: true, scope, elevated: true };
-    }
-    return { ok: true, scope: null, elevated: true };
+    const scope = await getUserScope(pool, userId);
+    if (scope?.organisation_id) return { ok: true, scope, elevated: true };
+
+    const [[org]] = await pool.query('SELECT id FROM organisations ORDER BY created_at ASC LIMIT 1');
+    if (!org?.id) return { ok: true, scope: null, elevated: true };
+
+    // Elevated admins may have no user_scopes row — synthesize a minimal org scope
+    // so station/gate routes do not crash on scope.organisation_id.
+    return {
+      ok: true,
+      scope: {
+        user_id: userId,
+        organisation_id: org.id,
+        site_id: null,
+        station_id: null,
+        department_id: null,
+        office_id: null,
+      },
+      elevated: true,
+    };
   }
 
   const scope = await getUserScope(pool, userId);
@@ -88,6 +102,68 @@ export async function requireUserScope(pool, userId, claims = {}) {
     return { ok: false, status: 403, message: 'No organisation scope assigned to this account.' };
   }
   return { ok: true, scope, elevated: false };
+}
+
+/**
+ * Resolve a concrete site (and optional station) for gate/station writes.
+ * Visits.site_id is NOT NULL — missing scope.site_id previously caused 500s.
+ */
+export async function resolveGateEntryPlacement(pool, scope = {}) {
+  const organisationId = scope?.organisation_id || null;
+  if (!organisationId) {
+    return { ok: false, status: 400, message: 'No organisation scope assigned for gate entry.' };
+  }
+
+  let siteId = scope?.site_id || null;
+  let stationId = scope?.station_id || null;
+
+  if (!siteId && stationId) {
+    const [[station]] = await pool.query(
+      'SELECT site_id FROM stations WHERE id = ? LIMIT 1',
+      [stationId],
+    );
+    siteId = station?.site_id || null;
+  }
+
+  if (!siteId) {
+    const [[activeSite]] = await pool.query(
+      `SELECT id FROM sites
+       WHERE organisation_id = ? AND (status = 'active' OR status IS NULL OR status = '')
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [organisationId],
+    );
+    siteId = activeSite?.id || null;
+  }
+
+  if (!siteId) {
+    const [[anySite]] = await pool.query(
+      'SELECT id FROM sites WHERE organisation_id = ? ORDER BY created_at ASC LIMIT 1',
+      [organisationId],
+    );
+    siteId = anySite?.id || null;
+  }
+
+  if (!siteId) {
+    return {
+      ok: false,
+      status: 400,
+      message: 'No site is available for gate entry. Assign a site to this account or create a site.',
+    };
+  }
+
+  if (!stationId) {
+    const [[gateStation]] = await pool.query(
+      `SELECT id FROM stations
+       WHERE site_id = ? AND (type = 'gate' OR type = 'security' OR type IS NULL OR type = '')
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [siteId],
+    );
+    stationId = gateStation?.id || null;
+  }
+
+  return { ok: true, organisationId, siteId, stationId };
 }
 
 export function visitMatchesScope(visit, scope, { elevated = false } = {}) {

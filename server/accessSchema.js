@@ -243,7 +243,12 @@ export async function createAppointmentForVisit(poolConn, {
       createdBy || null,
     ],
   );
-  await poolConn.query('UPDATE visits SET appointment_id = ? WHERE id = ?', [id, visitId]);
+  try {
+    await poolConn.query('UPDATE visits SET appointment_id = ? WHERE id = ?', [id, visitId]);
+  } catch (error) {
+    // Older DBs may not have visits.appointment_id yet; appointment row is still useful.
+    console.warn('[access] Could not set visits.appointment_id:', error.message);
+  }
   return id;
 }
 

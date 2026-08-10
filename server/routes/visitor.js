@@ -4,6 +4,7 @@ import { generateId } from '../visitorSchema.js';
 import { getUserScope, writeAuditLog, writeVisitEvent, generatePassCode } from '../auditService.js';
 import {
   requireUserScope,
+  resolveGateEntryPlacement,
   loadVisitScoped,
   canTransition,
   isSuperAdmin,
@@ -247,7 +248,7 @@ export function createStationRouter() {
       }
 
       const lookup = await lookupNrc(nrc, {
-        customerReference: `gate-${scopeResult.scope.station_id || scopeResult.scope.site_id || 'entry'}`,
+        customerReference: `gate-${scopeResult.scope?.station_id || scopeResult.scope?.site_id || 'entry'}`,
       });
 
       res.json({
@@ -276,7 +277,11 @@ export function createStationRouter() {
       if (!scopeResult.ok) {
         return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
       }
-      const { scope } = scopeResult;
+      const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+      const { organisationId, siteId, stationId } = placement;
       const {
         fullName,
         phone,
@@ -299,7 +304,7 @@ export function createStationRouter() {
         if (dojah.enabled && !usingDojahOverride) {
           try {
             const lookup = await lookupNrc(idNumber.trim(), {
-              customerReference: `walkin-${scope.station_id || scope.site_id || 'entry'}`,
+              customerReference: `walkin-${stationId || siteId || 'entry'}`,
             });
             if (!resolvedFullName && lookup.taxpayer_name) {
               resolvedFullName = lookup.taxpayer_name;
@@ -332,14 +337,14 @@ export function createStationRouter() {
         return res.status(400).json({ ok: false, message: 'Signature image is too large.' });
       }
 
-      const watchlistMatches = await findWatchlistMatches(pool, scope.organisation_id, {
+      const watchlistMatches = await findWatchlistMatches(pool, organisationId, {
         fullName: resolvedFullName,
         phone: phone?.trim(),
         email: email?.trim(),
       });
       if (watchlistMatches.length) {
         await writeAuditLog(pool, {
-          organisationId: scope.organisation_id,
+          organisationId,
           actorUserId: userId,
           action: 'watchlist.matched',
           targetType: 'visit',
@@ -358,7 +363,7 @@ export function createStationRouter() {
       if (phone?.trim()) {
         const [[existing]] = await pool.query(
           `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-          [scope.organisation_id, phone.trim()],
+          [organisationId, phone.trim()],
         );
         visitorId = existing?.id;
       }
@@ -370,7 +375,7 @@ export function createStationRouter() {
            VALUES (?, ?, ?, ?, ?, ?)`,
           [
             visitorId,
-            scope.organisation_id,
+            organisationId,
             resolvedFullName,
             phone?.trim() || null,
             email?.trim() || null,
@@ -395,9 +400,9 @@ export function createStationRouter() {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'arrived_at_gate', ?, ?, ?)`,
         [
           visitId,
-          scope.organisation_id,
-          scope.site_id,
-          scope.station_id,
+          organisationId,
+          siteId,
+          stationId,
           visitorId,
           hostId || null,
           categoryId || null,
@@ -412,21 +417,25 @@ export function createStationRouter() {
         visitId,
         eventType: 'arrived_at_gate',
         actorUserId: userId,
-        stationId: scope.station_id,
+        stationId,
         reason: purpose?.trim() || null,
       });
 
-      await createAppointmentForVisit(pool, {
-        organisationId: scope.organisation_id,
-        visitId,
-        hostId: hostId || null,
-        scheduledAt: null,
-        title: `Gate entry: ${resolvedFullName}`,
-        createdBy: userId,
-      });
+      try {
+        await createAppointmentForVisit(pool, {
+          organisationId,
+          visitId,
+          hostId: hostId || null,
+          scheduledAt: null,
+          title: `Gate entry: ${resolvedFullName}`,
+          createdBy: userId,
+        });
+      } catch (error) {
+        console.warn('[gate-entry/walk-in] appointment create failed:', error.message);
+      }
 
       await writeAuditLog(pool, {
-        organisationId: scope.organisation_id,
+        organisationId,
         actorUserId: userId,
         action: 'gate_entry.walk_in',
         targetType: 'visit',
@@ -436,7 +445,7 @@ export function createStationRouter() {
 
       if (usingDojahOverride) {
         await writeAuditLog(pool, {
-          organisationId: scope.organisation_id,
+          organisationId,
           actorUserId: userId,
           action: 'gate_entry.dojah_override',
           targetType: 'visit',
@@ -450,7 +459,11 @@ export function createStationRouter() {
         });
       }
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
+      try {
+        await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
+      } catch (error) {
+        console.warn('[gate-entry/walk-in] notify failed:', error.message);
+      }
 
       const [[visit]] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS} FROM visits vis ${VISIT_JOINS} WHERE vis.id = ?`,
@@ -462,7 +475,8 @@ export function createStationRouter() {
         data: await formatVisitResponse(pool, visit, perms, { actorUserId: userId }),
       });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      console.error('[gate-entry/walk-in]', error);
+      res.status(500).json({ ok: false, message: error.message || 'Gate entry failed.' });
     }
   });
 
@@ -473,7 +487,17 @@ export function createStationRouter() {
       if (!scopeResult.ok) {
         return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
       }
-      const { scope } = scopeResult;
+      const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+      const { organisationId, siteId, stationId } = placement;
+      const scope = {
+        ...(scopeResult.scope || {}),
+        organisation_id: organisationId,
+        site_id: siteId,
+        station_id: stationId,
+      };
       const {
         plateNumber,
         vehicleType,
@@ -502,7 +526,7 @@ export function createStationRouter() {
       let visitId = null;
 
       if (driverName?.trim() || hostId || purpose?.trim()) {
-        const watchlistMatches = await findWatchlistMatches(pool, scope.organisation_id, {
+        const watchlistMatches = await findWatchlistMatches(pool, organisationId, {
           fullName: driverName?.trim(),
           phone: phone?.trim(),
         });
@@ -518,7 +542,7 @@ export function createStationRouter() {
         if (phone?.trim()) {
           const [[existing]] = await pool.query(
             `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-            [scope.organisation_id, phone.trim()],
+            [organisationId, phone.trim()],
           );
           visitorId = existing?.id;
         }
@@ -529,7 +553,7 @@ export function createStationRouter() {
              VALUES (?, ?, ?, ?, ?)`,
             [
               visitorId,
-              scope.organisation_id,
+              organisationId,
               driverName?.trim() || 'Vehicle driver',
               phone?.trim() || null,
               company?.trim() || null,
@@ -544,9 +568,9 @@ export function createStationRouter() {
            VALUES (?, ?, ?, ?, ?, ?, ?, 'expected', ?, ?, ?)`,
           [
             visitId,
-            scope.organisation_id,
-            scope.site_id,
-            scope.station_id,
+            organisationId,
+            siteId,
+            stationId,
             visitorId,
             hostId || null,
             purpose?.trim() || null,
@@ -639,7 +663,7 @@ export function createStationRouter() {
       }
 
       await writeAuditLog(pool, {
-        organisationId: scope.organisation_id,
+        organisationId,
         actorUserId: userId,
         action: 'gate_entry.vehicle',
         targetType: 'vehicle',
@@ -652,7 +676,8 @@ export function createStationRouter() {
         data: { vehicle, visitId, entryId, matchedExpected: Boolean(expected?.id) },
       });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      console.error('[gate-entry/vehicle]', error);
+      res.status(500).json({ ok: false, message: error.message || 'Vehicle gate entry failed.' });
     }
   });
 
