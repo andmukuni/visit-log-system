@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { BellRing, Eye } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -9,6 +10,7 @@ import {
   ActionToolbar,
   RefreshAction,
   LoadingButton,
+  IconButton,
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
@@ -67,18 +69,21 @@ export default function ReceptionApprovalsPage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-2">
-          <Link
-            to={`/reception/visitors/${row.id}`}
-            className="text-xs font-medium text-cyan-700 hover:underline"
-          >
-            View
+        <div className="flex items-center justify-end gap-1.5">
+          <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>
+            <IconButton icon={Eye} label="View" tooltip="View visit" size="sm" variant="ghost" />
           </Link>
           <LoadingButton
             size="sm"
             variant="secondary"
+            icon={BellRing}
+            iconSize={14}
+            spinnerSize={14}
             loading={acting === row.id}
+            loadingLabel="Sending…"
+            aria-label="Remind host"
             onClick={() => requestApproval(row.id)}
+            className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:border-cyan-300"
           >
             Remind host
           </LoadingButton>
