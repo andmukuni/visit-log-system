@@ -43,6 +43,7 @@ const ADMIN_PORTAL_PERMISSIONS = [
   { key: 'admin.offices', name: 'Manage offices', group: 'Administration' },
   { key: 'admin.hosts', name: 'Manage employees & hosts', group: 'Administration' },
   { key: 'admin.receptionists', name: 'Manage receptionists', group: 'Administration' },
+  { key: 'admin.security_guards', name: 'Manage security guards', group: 'Administration' },
   { key: 'admin.users', name: 'Manage users', group: 'Administration' },
   { key: 'admin.rbac', name: 'Manage roles & permissions', group: 'Administration' },
   { key: 'admin.categories', name: 'Manage visitor categories', group: 'Administration' },

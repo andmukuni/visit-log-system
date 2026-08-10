@@ -18,6 +18,7 @@ export const NAV_ICONS = {
   departments: 'Network',
   hosts: 'UserCheck',
   receptionists: 'ConciergeBell',
+  'security-guards': 'ShieldCheck',
   users: 'Users',
   roles: 'Shield',
   categories: 'Tags',

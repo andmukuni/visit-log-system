@@ -269,6 +269,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/org/offices')) return 'admin.offices';
   if (path.includes('/org/hosts')) return 'admin.hosts';
   if (path.includes('/org/receptionists')) return 'admin.receptionists';
+  if (path.includes('/org/security-guards')) return 'admin.security_guards';
   if (path.includes('/org/categories')) return 'admin.categories';
   if (path.includes('/org/badges')) return 'admin.badges';
   if (path.includes('/org/visitors')) return 'admin.visitors';

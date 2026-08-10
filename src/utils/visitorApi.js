@@ -239,6 +239,22 @@ export const visitorApi = {
   createReceptionist: (body) => apiFetch('/admin/org/receptionists', { method: 'POST', body: JSON.stringify(body) }),
   updateReceptionist: (id, body) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteReceptionist: (id) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'DELETE' }),
+  getSecurityGuards: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/security-guards`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createSecurityGuard: (body) => apiFetch('/admin/org/security-guards', { method: 'POST', body: JSON.stringify(body) }),
+  updateSecurityGuard: (id, body) => apiFetch(`/admin/org/security-guards/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteSecurityGuard: (id) => apiFetch(`/admin/org/security-guards/${id}`, { method: 'DELETE' }),
   getCategories: () => apiFetch('/admin/org/categories'),
   getBadges: () => apiFetch('/admin/org/badges'),
 };

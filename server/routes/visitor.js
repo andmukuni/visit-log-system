@@ -32,6 +32,7 @@ import {
   refreshHostAvailabilityAfterVisit,
 } from '../hostAvailability.js';
 import { loadReceptionistRow, syncReceptionistPortalUser } from '../receptionistService.js';
+import { loadSecurityGuardRow, syncSecurityGuardPortalUser } from '../securityGuardService.js';
 import { sendHostPasswordResetEmail, syncHostPortalUser } from '../hostPortalService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
 
@@ -1879,6 +1880,8 @@ export function createOrgAdminRouter() {
         departments,
         offices,
         hosts,
+        receptionists,
+        security_guards,
         users,
       ] = await Promise.all([
         countOne(
@@ -1923,6 +1926,16 @@ export function createOrgAdminRouter() {
           [orgId],
           'SELECT COUNT(*) AS count FROM hosts',
         ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM receptionists WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM receptionists',
+        ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM security_guards WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM security_guards',
+        ),
         pool.query('SELECT COUNT(*) AS count FROM users').then(([[row]]) => Number(row?.count || 0)),
       ]);
 
@@ -1936,6 +1949,8 @@ export function createOrgAdminRouter() {
           departments,
           offices,
           hosts,
+          receptionists,
+          security_guards,
           users,
         },
       });
@@ -3342,6 +3357,243 @@ export function createOrgAdminRouter() {
 
       await pool.query('DELETE FROM receptionists WHERE id = ?', [receptionistId]);
       res.json({ ok: true, message: 'Receptionist deleted.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Security Guard → Organisation + Site + Station (portal login with gate_security)
+  router.get('/security-guards', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const selectSql = `
+        SELECT g.*,
+               o.name AS organisation_name,
+               s.name AS site_name,
+               st.name AS station_name,
+               d.name AS department_name
+        FROM security_guards g
+        LEFT JOIN organisations o ON o.id = g.organisation_id
+        LEFT JOIN sites s ON s.id = g.site_id
+        LEFT JOIN stations st ON st.id = g.station_id
+        LEFT JOIN departments d ON d.id = g.department_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE g.organisation_id = ? ORDER BY g.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, g.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        with_station: rows.filter((row) => row.station_id).length,
+        with_login: rows.filter((row) => row.user_id).length,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/security-guards', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const bodyOrgId = String(req.body?.organisationId || req.body?.organisation_id || '').trim() || null;
+      const orgId = bodyOrgId || scope?.organisation_id || null;
+      const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
+      const stationId = String(req.body?.stationId || req.body?.station_id || '').trim() || null;
+      const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim() || null;
+      const name = String(req.body?.name || '').trim();
+      const email = String(req.body?.email || '').trim().toLowerCase() || null;
+      const phone = String(req.body?.phone || '').trim() || null;
+      const status = String(req.body?.status || 'active').trim() || 'active';
+      const password = String(req.body?.password || '').trim() || null;
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Security guard name is required.' });
+      if (!orgId) return res.status(400).json({ ok: false, message: 'Organisation is required.' });
+      if (scope?.organisation_id && orgId !== scope.organisation_id) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
+      }
+      if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
+      if (!email) return res.status(400).json({ ok: false, message: 'Email is required for security guard login.' });
+
+      const placement = await assertStationPlacement(pool, { organisationId: orgId, siteId });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      if (stationId) {
+        const [[station]] = await pool.query(
+          `SELECT st.id, st.site_id
+           FROM stations st
+           INNER JOIN sites s ON s.id = st.site_id
+           WHERE st.id = ? AND s.organisation_id = ?
+           LIMIT 1`,
+          [stationId, orgId],
+        );
+        if (!station) {
+          return res.status(400).json({ ok: false, message: 'Station not found in this organisation.' });
+        }
+        if (station.site_id && station.site_id !== siteId) {
+          return res.status(400).json({ ok: false, message: 'Station must belong to the selected site.' });
+        }
+      }
+
+      const [[emailTaken]] = await pool.query(
+        'SELECT id FROM security_guards WHERE LOWER(email) = ? LIMIT 1',
+        [email],
+      );
+      if (emailTaken) {
+        return res.status(400).json({ ok: false, message: 'A security guard with this email already exists.' });
+      }
+
+      const linkedUserId = await syncSecurityGuardPortalUser(pool, {
+        name,
+        email,
+        phone,
+        organisationId: orgId,
+        siteId,
+        stationId,
+        departmentId,
+        password,
+        active: status === 'active',
+      });
+
+      const id = generateId('grd');
+      await pool.query(
+        `INSERT INTO security_guards
+           (id, organisation_id, site_id, station_id, department_id, user_id, name, email, phone, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, siteId, stationId, departmentId, linkedUserId, name, email, phone, status],
+      );
+
+      const row = await loadSecurityGuardRow(pool, id);
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/security-guards/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const guardId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM security_guards WHERE id = ? LIMIT 1', [guardId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Security guard not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this security guard.' });
+      }
+
+      const siteId = req.body?.siteId != null || req.body?.site_id != null
+        ? String(req.body.siteId || req.body.site_id || '').trim()
+        : existing.site_id;
+      const stationId = req.body?.stationId != null || req.body?.station_id != null
+        ? String(req.body.stationId || req.body.station_id || '').trim() || null
+        : existing.station_id;
+      const departmentId = req.body?.departmentId != null || req.body?.department_id != null
+        ? String(req.body.departmentId || req.body.department_id || '').trim() || null
+        : existing.department_id;
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const email = req.body?.email != null
+        ? String(req.body.email).trim().toLowerCase() || null
+        : existing.email;
+      const phone = req.body?.phone != null ? String(req.body.phone).trim() || null : existing.phone;
+      const status = req.body?.status != null
+        ? String(req.body.status).trim() || existing.status
+        : existing.status;
+      const password = String(req.body?.password || '').trim() || null;
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Security guard name is required.' });
+      if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
+      if (!email) return res.status(400).json({ ok: false, message: 'Email is required for security guard login.' });
+
+      const placement = await assertStationPlacement(pool, {
+        organisationId: existing.organisation_id,
+        siteId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      if (stationId) {
+        const [[station]] = await pool.query(
+          `SELECT st.id, st.site_id
+           FROM stations st
+           INNER JOIN sites s ON s.id = st.site_id
+           WHERE st.id = ? AND s.organisation_id = ?
+           LIMIT 1`,
+          [stationId, existing.organisation_id],
+        );
+        if (!station) {
+          return res.status(400).json({ ok: false, message: 'Station not found in this organisation.' });
+        }
+        if (station.site_id && station.site_id !== siteId) {
+          return res.status(400).json({ ok: false, message: 'Station must belong to the selected site.' });
+        }
+      }
+
+      const linkedUserId = await syncSecurityGuardPortalUser(pool, {
+        userId: existing.user_id,
+        name,
+        email,
+        phone,
+        organisationId: existing.organisation_id,
+        siteId,
+        stationId,
+        departmentId,
+        password,
+        active: status === 'active',
+      });
+
+      await pool.query(
+        `UPDATE security_guards
+         SET site_id = ?, station_id = ?, department_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?
+         WHERE id = ?`,
+        [siteId, stationId, departmentId, linkedUserId, name, email, phone, status, guardId],
+      );
+
+      const row = await loadSecurityGuardRow(pool, guardId);
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/security-guards/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const guardId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM security_guards WHERE id = ? LIMIT 1', [guardId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Security guard not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this security guard.' });
+      }
+
+      if (existing.user_id && existing.email) {
+        await syncSecurityGuardPortalUser(pool, {
+          userId: existing.user_id,
+          name: existing.name,
+          email: existing.email,
+          phone: existing.phone,
+          organisationId: existing.organisation_id,
+          siteId: existing.site_id,
+          stationId: existing.station_id,
+          departmentId: existing.department_id,
+          active: false,
+        });
+      }
+
+      await pool.query('DELETE FROM security_guards WHERE id = ?', [guardId]);
+      res.json({ ok: true, message: 'Security guard deleted.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
