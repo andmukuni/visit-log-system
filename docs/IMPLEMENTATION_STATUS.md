@@ -1,6 +1,23 @@
 # VM360 — Implementation Status
 
-Last updated: 2026-08-08
+Last updated: 2026-08-10
+
+## Phase H — Reception Access Portal (`/reception`)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Dedicated `/reception` portal shell + nav | Done | `shared/portalNavigation.js`, `src/App.jsx` |
+| Reception RBAC permissions + roles | Done | `shared/rbacPermissions.js` (`main_reception`, `executive_reception`) |
+| Reception API (dashboard, calendar, host availability, queue) | Done | `server/routes/reception.js` |
+| Calendar of expected visitors (week/day/month) | Done | `/reception/calendar` + `ExecutiveWeekCalendar` |
+| Reception check-in desk | Done | `/reception/check-in` |
+| Walk-in register → host approval request | Done | `/reception/register` |
+| Approval tracker + remind host | Done | `/reception/approvals` |
+| Queue to host + in-meeting | Done | `/reception/host-queue` |
+| Host occupied/available board | Done | `/reception/hosts` |
+| Visitor logs, detail, occupancy, badges | Done | `/reception/visitors`, `/reception/occupancy`, `/reception/badges` |
+| Host notifications for waiting | Done | `visit.waiting_at_reception` template |
+| Automated tests | Done | `tests/reception.test.js` |
 
 ## Phase A — Guard/Reception vertical slice
 
@@ -8,7 +25,7 @@ Last updated: 2026-08-08
 |------|--------|----------|
 | Read scope documents | Done | Build prompt + scope files |
 | Implementation plan | Done | `docs/IMPLEMENTATION_PLAN.md` |
-| Portal navigation (8 portals) | Done | `shared/portalNavigation.js` |
+| Portal navigation (9 portals) | Done | `shared/portalNavigation.js` |
 | RBAC permissions + roles | Done | `shared/rbacPermissions.js` |
 | Visitor DB schema | Done | `server/visitorSchema.js` |
 | Station dashboard (KPIs) | Done | `/station` + `/api/admin/station/dashboard` |
@@ -156,8 +173,8 @@ Seed command: `npm run seed:portal-users` (local) or `npm run seed:portal-users:
 | dceo@demo.org | DCEO | `/executive` (Dashboard, Appointments, Visitors, Notifications only) |
 | ceo.secretary@demo.org | CEO Secretary | `/host` (can assign VIP/VVIP) |
 | dceo.secretary@demo.org | DCEO Secretary | `/host` (can assign VIP/VVIP) |
-| exec.reception@demo.org | Executive Reception | `/station` (full VIP contact) |
-| reception@demo.org | Main Receptionist | `/station` |
+| exec.reception@demo.org | Executive Reception | `/reception` (Reception Access Portal) |
+| reception@demo.org | Main Receptionist | `/reception` (Reception Access Portal) |
 | gate@demo.org | Security Officer / Gate | `/station` |
 | guard@demo.org | Receptionist / Guard | `/station` |
 | security@demo.org | Security Manager | `/security` |
@@ -171,6 +188,7 @@ Seed command: `npm run seed:portal-users` (local) or `npm run seed:portal-users:
 
 | Date | Command | Result |
 |------|---------|--------|
+| 2026-08-10 | `npm test` | Pass (includes `tests/reception.test.js`) |
 | 2026-08-07 | `npm test` | Pass (24 tests) |
 | 2026-08-07 | `npm run build` | Pass |
 | 2026-08-07 | Phase C security + roll call | Implemented |

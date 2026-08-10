@@ -140,6 +140,13 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked in.`,
   },
   {
+    key: 'visit.waiting_at_reception',
+    subject: 'Visitor waiting',
+    inApp: '{{visitor_name}} is waiting for you at reception.',
+    email: `Hello {{host_name}},\n\n{{visitor_name}} is waiting for you at reception.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} is waiting at reception.`,
+  },
+  {
     key: 'visit.checked_out',
     subject: 'Visitor departed',
     inApp: '{{visitor_name}} has checked out.',

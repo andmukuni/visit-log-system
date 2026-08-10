@@ -405,3 +405,28 @@ export const executiveApi = {
     return apiFetch(`/admin/executive/contacts?${qs}`);
   },
 };
+
+export const receptionApi = {
+  getDashboard: () => apiFetch('/admin/reception/dashboard'),
+  getCheckInAppointments: (type = 'walk-in') => apiFetch(`/admin/reception/check-in-appointments?type=${encodeURIComponent(type)}`),
+  getCalendar: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/reception/calendar${qs ? `?${qs}` : ''}`);
+  },
+  getHostAvailability: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/reception/host-availability${qs ? `?${qs}` : ''}`);
+  },
+  getHostQueue: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/reception/host-queue${qs ? `?${qs}` : ''}`);
+  },
+  getReferenceData: () => apiFetch('/admin/reception/reference-data'),
+  getOccupancy: () => apiFetch('/admin/reception/occupancy'),
+  queueToHost: (id, body = {}) => apiFetch(`/admin/reception/visits/${id}/queue-host`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }),
+  markInMeeting: (id) => apiFetch(`/admin/reception/visits/${id}/in-meeting`, { method: 'POST' }),
+  requestApproval: (id) => apiFetch(`/admin/reception/visits/${id}/request-approval`, { method: 'POST' }),
+};

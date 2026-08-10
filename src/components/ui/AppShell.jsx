@@ -5,6 +5,7 @@ import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
 import AppSidebar from './AppSidebar';
 import PortalSwitcherMenu from './PortalSwitcherMenu';
+import NavbarNotificationsBell from './NavbarNotificationsBell';
 import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
@@ -34,10 +35,10 @@ function isGateEntryKiosk(pathname) {
 function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk }) {
   const location = useLocation();
   const mainRef = useRef(null);
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
-  const compactChrome = portalId === 'host' || portalId === 'executive';
+  const compactChrome = portalId === 'host' || portalId === 'executive' || portalId === 'reception';
   const shellBreadcrumbs = pageHeader.breadcrumbs?.length
     ? pageHeader.breadcrumbs
     : getShellBreadcrumbs();
@@ -128,6 +129,9 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             )}
           </div>
           <div className={`flex shrink-0 items-center ${compactChrome ? 'gap-2' : 'gap-3'}`}>
+            {portalId === 'host' && hasPermission('host.notifications') ? (
+              <NavbarNotificationsBell compact={compactChrome} />
+            ) : null}
             <PortalSwitcherMenu compact={compactChrome} />
             <AdminUserMenu compact={compactChrome} />
           </div>
@@ -182,6 +186,8 @@ function ShellBody({ portalId, title }) {
   useEffect(() => {
     if (portalId === 'host' || portalId === 'executive') {
       document.documentElement.dataset.portal = 'host';
+    } else if (portalId === 'reception') {
+      document.documentElement.dataset.portal = 'reception';
     } else {
       delete document.documentElement.dataset.portal;
     }

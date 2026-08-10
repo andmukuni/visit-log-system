@@ -20,7 +20,7 @@ const EVENT_LABELS = {
   checked_out: 'Checked out',
 };
 
-export default function VisitDetailPage() {
+export default function VisitDetailPage({ portalPrefix = '/station' }) {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,13 +51,13 @@ export default function VisitDetailPage() {
         title={visit?.full_name || 'Visit details'}
         subtitle={visit ? `Pass code: ${visit.pass_code || '—'}` : 'Loading…'}
         breadcrumbs={[
-          { label: 'Station', to: '/station' },
-          { label: 'Visitor Logs', to: '/station/visitors' },
+          { label: portalPrefix === '/reception' ? 'Reception' : 'Station', to: portalPrefix },
+          { label: 'Visitor Logs', to: `${portalPrefix}/visitors` },
           { label: 'Details' },
         ]}
         actions={(
           <ActionToolbar>
-            <BackAction to="/station/visitors" label="Back to logs" />
+            <BackAction to={`${portalPrefix}/visitors`} label="Back to logs" />
             <RefreshAction onClick={load} loading={loading} />
           </ActionToolbar>
         )}
@@ -71,7 +71,7 @@ export default function VisitDetailPage() {
         <Card title="Error">
           <p className="text-sm text-red-600">{error}</p>
           <div className="mt-3">
-            <BackAction to="/station/visitors" label="Back to logs" />
+            <BackAction to={`${portalPrefix}/visitors`} label="Back to logs" />
           </div>
         </Card>
       )}

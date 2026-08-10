@@ -12,7 +12,7 @@ import {
   permissionMatches,
   hasAnyPermission,
 } from '../shared/rbacPermissions.js';
-import { resolveRouteAdminPermission, loadUserAdminPermissions } from './rbacService.js';
+import { resolveRouteAdminPermission, loadUserAdminPermissions, resolveVisitRoutePermissions } from './rbacService.js';
 import { createHealthRouter } from './routes/health.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createAdminRouter } from './routes/admin.js';
@@ -29,6 +29,7 @@ import { createReportsRouter } from './routes/reports.js';
 import { createComplianceRouter } from './routes/compliance.js';
 import { createPlatformRouter } from './routes/platform.js';
 import { createExecutiveRouter } from './routes/executive.js';
+import { createReceptionRouter } from './routes/reception.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createAdminSettingsRouter } from './routes/adminSettings.js';
 import { createKioskRouter } from './routes/kiosk.js';
@@ -185,6 +186,10 @@ app.use('/api', async (req, res, next) => {
     if (!hasAnyPermission(perms, platformRegisterGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
+  } else if (!isLegacyAdmin && routePath.includes('/admin/visits')) {
+    if (!hasAnyPermission(perms, resolveVisitRoutePermissions(req))) {
+      return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
+    }
   } else if (!isLegacyAdmin && !permissionMatches(perms, requiredPerm)) {
     return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
   }
@@ -198,6 +203,7 @@ app.use('/api/auth', createAuthRouter({ authService }));
 app.use('/api/admin', createAdminRouter());
 app.use('/api/admin', createAdminSettingsRouter());
 app.use('/api/admin/station', createStationRouter());
+app.use('/api/admin/reception', createReceptionRouter());
 app.use('/api/admin/visits', createVisitsRouter());
 app.use('/api/admin/vehicles', createVehiclesRouter());
 app.use('/api/admin/org', createOrgAdminRouter());

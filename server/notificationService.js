@@ -249,6 +249,8 @@ export async function notifyVisitEvent(pool, {
     rejected: 'visit.rejected',
     checked_in: 'visit.checked_in',
     reception_check_in: 'visit.checked_in',
+    waiting: 'visit.waiting_at_reception',
+    in_meeting: 'visit.waiting_at_reception',
     checked_out: 'visit.checked_out',
     pre_registered: 'visit.invite_sent',
     arrived_at_gate: 'visit.arrived_at_gate',

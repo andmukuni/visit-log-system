@@ -40,9 +40,20 @@ const OccupancyPage = lazy(() => import('./pages/station/OccupancyPage'));
 const VisitDetailPage = lazy(() => import('./pages/station/VisitDetailPage'));
 const PendingApprovalsModule = lazy(() => import('./pages/station/PendingApprovalsPage'));
 
+const ReceptionDashboardPage = lazy(() => import('./pages/reception/ReceptionDashboardPage'));
+const ReceptionCalendarPage = lazy(() => import('./pages/reception/ReceptionCalendarPage'));
+const ReceptionCheckInPage = lazy(() => import('./pages/reception/ReceptionCheckInPage'));
+const ReceptionRegisterPage = lazy(() => import('./pages/reception/ReceptionRegisterPage'));
+const ReceptionApprovalsPage = lazy(() => import('./pages/reception/ReceptionApprovalsPage'));
+const ReceptionHostQueuePage = lazy(() => import('./pages/reception/ReceptionHostQueuePage'));
+const ReceptionHostAvailabilityPage = lazy(() => import('./pages/reception/ReceptionHostAvailabilityPage'));
+const ReceptionVisitorLogsPage = lazy(() => import('./pages/reception/ReceptionVisitorLogsPage'));
+const ReceptionVisitDetailPage = lazy(() => import('./pages/reception/ReceptionVisitDetailPage'));
+const ReceptionOccupancyPage = lazy(() => import('./pages/reception/ReceptionOccupancyPage'));
+const ReceptionBadgesPage = lazy(() => import('./pages/reception/ReceptionBadgesPage'));
+
 const HostDashboardPage = lazy(() => import('./pages/host/HostDashboardPage'));
 const HostInvitePage = lazy(() => import('./pages/host/HostInvitePage'));
-const HostVisitorsPage = lazy(() => import('./pages/host/HostVisitorsPage'));
 const HostApprovalsPage = lazy(() => import('./pages/host/HostApprovalsPage'));
 const HostOnSitePage = lazy(() => import('./pages/host/HostOnSitePage'));
 const HostVisitDetailPage = lazy(() => import('./pages/host/HostVisitDetailPage'));
@@ -155,6 +166,10 @@ class ErrorBoundary extends Component {
     }
     return this.props.children;
   }
+}
+
+function ReceptionPortalLayout() {
+  return <PortalLayout key="reception" portalId="reception" title={`${APP_NAME_SHORT} Reception`} />;
 }
 
 function StationPortalLayout() {
@@ -282,6 +297,25 @@ export const router = createBrowserRouter([
       { path: 'visit/invite/:token', element: <VisitInvitePage /> },
 
       {
+        path: 'reception',
+        element: <ProtectedRoute><ReceptionPortalLayout /></ProtectedRoute>,
+        children: [
+          { index: true, element: <ReceptionDashboardPage /> },
+          { path: 'calendar', element: <ReceptionCalendarPage /> },
+          { path: 'check-in', element: <ReceptionCheckInPage /> },
+          { path: 'register', element: <ReceptionRegisterPage /> },
+          { path: 'approvals', element: <ReceptionApprovalsPage /> },
+          { path: 'host-queue', element: <ReceptionHostQueuePage /> },
+          { path: 'hosts', element: <ReceptionHostAvailabilityPage /> },
+          { path: 'visitors', element: <ReceptionVisitorLogsPage /> },
+          { path: 'visitors/:id', element: <ReceptionVisitDetailPage /> },
+          { path: 'badges', element: <ReceptionBadgesPage /> },
+          { path: 'occupancy', element: <ReceptionOccupancyPage /> },
+          { path: '*', element: <PlaceholderPage title="Reception" portalLabel="Reception" /> },
+        ],
+      },
+
+      {
         path: 'station',
         element: <ProtectedRoute><StationPortalLayout /></ProtectedRoute>,
         children: [
@@ -405,7 +439,7 @@ export const router = createBrowserRouter([
           { index: true, element: <ExecutiveDashboardPage /> },
           { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
           { path: 'invite', element: <HostInvitePage /> },
-          { path: 'visitors', element: <HostVisitorsPage /> },
+          { path: 'visitors', element: <Navigate to="/host/contacts" replace /> },
           { path: 'visitors/:id', element: <HostVisitDetailPage /> },
           { path: 'register', element: <ExecutiveVisitorsPage /> },
           { path: 'register/:id', element: <ExecutiveVisitDetailPage /> },

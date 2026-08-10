@@ -3,7 +3,7 @@ import { PageHeader, Spinner } from '../../components/ui';
 import ExecutiveWeekCalendar, { periodQueryRange, normalizePeriodStart } from '../../components/executive/ExecutiveWeekCalendar';
 import ExecutiveDashboardHeaderActions from '../../components/executive/ExecutiveDashboardHeaderActions';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
-import { executiveApi, notificationsApi } from '../../utils/visitorApi';
+import { executiveApi } from '../../utils/visitorApi';
 import { useAuth } from '../../context/AuthContext';
 
 async function fetchWithRetry(fn, attempts = 2) {
@@ -30,7 +30,6 @@ export default function ExecutiveDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [newAppointmentTrigger, setNewAppointmentTrigger] = useState(0);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     if (!isAuthenticated || isLoading || !hasPermission('executive.dashboard')) return;
@@ -68,23 +67,6 @@ export default function ExecutiveDashboardPage() {
     load();
   }, [load, permissions]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return undefined;
-
-    let cancelled = false;
-    notificationsApi.list(true)
-      .then((rows) => {
-        if (!cancelled) setUnreadCount(Array.isArray(rows) ? rows.length : 0);
-      })
-      .catch(() => {
-        if (!cancelled) setUnreadCount(0);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, dashboard]);
-
   const executive = dashboard?.executive || {};
   const kpis = dashboard?.kpis || {};
   const dashboardTitle = useMemo(() => {
@@ -115,10 +97,7 @@ export default function ExecutiveDashboardPage() {
         title={dashboardTitle}
         subtitle={formatExecutiveDashboardDate()}
         actions={(
-          <ExecutiveDashboardHeaderActions
-            onNewAppointment={handleNewAppointment}
-            unreadCount={unreadCount}
-          />
+          <ExecutiveDashboardHeaderActions onNewAppointment={handleNewAppointment} />
         )}
       />
 

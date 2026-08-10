@@ -1,0 +1,252 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogIn, Users } from 'lucide-react';
+import {
+  PageHeader,
+  Card,
+  Spinner,
+  LoadingButton,
+  StatusBadge,
+  UnderlineTabs,
+} from '../../components/ui';
+import GateCheckInPanel from '../station/GateCheckInPanel';
+import QueueToHostModal from '../../components/reception/QueueToHostModal';
+import { useToast } from '../../context/ToastContext';
+import { receptionApi } from '../../utils/visitorApi';
+
+const TABS = {
+  ready: 'ready',
+  atReception: 'at-reception',
+};
+
+export default function ReceptionCheckInPage() {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [badges, setBadges] = useState([]);
+  const [hosts, setHosts] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [offices, setOffices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastCheckedInId, setLastCheckedInId] = useState(null);
+  const [readyToQueue, setReadyToQueue] = useState([]);
+  const [queueVisit, setQueueVisit] = useState(null);
+  const [queuing, setQueuing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [tab, setTab] = useState(TABS.ready);
+
+  const loadRef = useCallback(async () => {
+    setLoading(true);
+    try {
+      const ref = await receptionApi.getReferenceData();
+      setBadges(ref.badges || []);
+      setHosts(ref.hosts || []);
+      setDepartments(ref.departments || []);
+      setOffices(ref.offices || []);
+    } catch {
+      setBadges([]);
+      setHosts([]);
+      setDepartments([]);
+      setOffices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadReadyToQueue = useCallback(async () => {
+    try {
+      const rows = await receptionApi.getHostQueue({ includeReady: '1' });
+      setReadyToQueue(
+        (rows || []).filter((row) => ['reception_check_in', 'checked_in'].includes(row.status)),
+      );
+    } catch {
+      setReadyToQueue([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRef();
+    loadReadyToQueue();
+  }, [loadRef, loadReadyToQueue]);
+
+  const openQueueModal = (visitOrId) => {
+    if (visitOrId && typeof visitOrId === 'object') {
+      setQueueVisit(visitOrId);
+      return;
+    }
+    const fromList = readyToQueue.find((row) => row.id === visitOrId);
+    setQueueVisit(fromList || { id: visitOrId, full_name: 'Visitor' });
+  };
+
+  const handleQueueConfirm = async (payload) => {
+    if (!queueVisit?.id) return;
+    setQueuing(true);
+    try {
+      await receptionApi.queueToHost(queueVisit.id, payload);
+      toast.success('Visitor queued — host notified.');
+      setLastCheckedInId(null);
+      setQueueVisit(null);
+      setReadyToQueue((prev) => prev.filter((row) => row.id !== queueVisit.id));
+      navigate('/reception/host-queue');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  const tabOptions = useMemo(() => [
+    {
+      value: TABS.ready,
+      label: 'Ready for check-in',
+      icon: LogIn,
+      count: pendingCount,
+    },
+    {
+      value: TABS.atReception,
+      label: 'Queue to host',
+      icon: Users,
+      count: readyToQueue.length,
+    },
+  ], [pendingCount, readyToQueue.length]);
+
+  return (
+    <div className="w-full">
+      <PageHeader
+        title="Check-in Desk"
+        subtitle="Check in gate arrivals and today’s appointments, then queue them to the host"
+        breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Check-in' }]}
+      />
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Spinner size={28} /></div>
+      ) : (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-navy-100 bg-white px-2 pt-1 sm:px-4">
+            <UnderlineTabs
+              fullWidth
+              options={tabOptions.map(({ value, label, icon, count }) => ({
+                value,
+                icon,
+                label: count > 0 ? `${label} (${count})` : label,
+              }))}
+              value={tab}
+              onChange={setTab}
+            />
+          </div>
+
+          {tab === TABS.ready ? (
+            <>
+              <GateCheckInPanel
+                badges={badges}
+                mode="walk-in"
+                showPendingHeader={false}
+                fetchPendingVisits={(mode) => receptionApi.getCheckInAppointments(mode)}
+                pendingSubtitle="Today's appointments and gate arrivals waiting for reception"
+                pendingEmptyHint="Visitors logged at the gate (arrived at gate) and today’s appointments appear here."
+                onPendingCountChange={setPendingCount}
+                onCheckedIn={(visitId) => {
+                  setLastCheckedInId(visitId);
+                  void loadReadyToQueue();
+                  setTab(TABS.atReception);
+                }}
+                onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
+                emptyExtra={(
+                  <button
+                    type="button"
+                    onClick={() => setTab(TABS.atReception)}
+                    className="text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                  >
+                    Already checked in? Queue to host →
+                  </button>
+                )}
+              />
+
+              {lastCheckedInId ? (
+                <Card title="Next step">
+                  <p className="mb-4 text-sm text-navy-600">
+                    Visitor checked in successfully. Queue them to the host so they can be notified.
+                  </p>
+                  <LoadingButton
+                    onClick={() => openQueueModal(lastCheckedInId)}
+                    className="rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-cyan-500"
+                  >
+                    Queue to host
+                  </LoadingButton>
+                </Card>
+              ) : null}
+            </>
+          ) : (
+            <Card>
+              {readyToQueue.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-navy-100 bg-navy-50 text-navy-400">
+                    <Users size={22} aria-hidden="true" />
+                  </span>
+                  <p className="text-sm font-medium text-navy-700">No visitors ready to queue</p>
+                  <p className="max-w-sm text-xs text-navy-400">
+                    After check-in, visitors appear here until you queue them to their host.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTab(TABS.ready)}
+                    className="mt-1 text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                  >
+                    Back to ready for check-in →
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-navy-100 rounded-xl border border-navy-100">
+                  {readyToQueue.map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-navy-900">
+                          {row.full_name || 'Visitor'}
+                        </p>
+                        <p className="mt-0.5 truncate text-sm text-navy-500">
+                          Host: {row.host_name || '—'}
+                          {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
+                        </p>
+                        <div className="mt-2">
+                          <StatusBadge status={row.status} />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        <Link
+                          to={`/reception/visitors/${row.id}`}
+                          className="inline-flex items-center rounded-xl border border-navy-200 px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50"
+                        >
+                          View
+                        </Link>
+                        <LoadingButton
+                          size="lg"
+                          onClick={() => openQueueModal(row)}
+                          className="bg-cyan-600 hover:bg-cyan-500 border-cyan-600"
+                        >
+                          Queue to host
+                        </LoadingButton>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
+        </div>
+      )}
+
+      <QueueToHostModal
+        isOpen={Boolean(queueVisit)}
+        onClose={() => !queuing && setQueueVisit(null)}
+        visit={queueVisit}
+        hosts={hosts}
+        departments={departments}
+        offices={offices}
+        submitting={queuing}
+        onConfirm={handleQueueConfirm}
+      />
+    </div>
+  );
+}

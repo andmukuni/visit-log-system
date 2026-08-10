@@ -26,7 +26,32 @@ function FormSection({ title, subtitle, children }) {
   );
 }
 
-export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'walk-in' }) {
+function SignaturePreview({ src, name }) {
+  if (!src) {
+    return <span className="text-xs text-navy-400">No signature</span>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name ? `Gate signature for ${name}` : 'Gate signature'}
+      className="h-10 w-full max-w-[5.5rem] rounded-md bg-white object-contain object-left"
+    />
+  );
+}
+
+export default function GateCheckInPanel({
+  badges: initialBadges = [],
+  mode = 'walk-in',
+  onCheckedIn,
+  onRowClick,
+  onPendingCountChange,
+  fetchPendingVisits,
+  pendingSubtitle,
+  pendingEmptyHint,
+  emptyExtra,
+  showPendingHeader = true,
+}) {
   const toast = useToast();
   const isVehicle = mode === 'vehicle';
   const [query, setQuery] = useState('');
@@ -45,7 +70,9 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
     try {
-      const rows = await visitorApi.getPendingCheckIns(mode);
+      const rows = fetchPendingVisits
+        ? await fetchPendingVisits(mode)
+        : await visitorApi.getPendingCheckIns(mode);
       setResults(Array.isArray(rows) ? rows.filter((v) => isCheckInEligible(v.status)) : []);
     } catch (err) {
       toast.error(err.message || 'Failed to load pending check-ins.');
@@ -53,13 +80,17 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
     } finally {
       setLoadingPending(false);
     }
-  }, [mode, toast]);
+  }, [fetchPendingVisits, mode, toast]);
 
   useEffect(() => {
     setQuery('');
     setSelectedBadge('');
     void loadPending();
   }, [loadPending]);
+
+  useEffect(() => {
+    onPendingCountChange?.(results.length);
+  }, [results.length, onPendingCountChange]);
 
   const ensureBadges = async () => {
     if (badges.length) return;
@@ -98,6 +129,7 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
     try {
       await visitorApi.checkInVisit(visitId, selectedBadge);
       toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked in successfully.`);
+      onCheckedIn?.(visitId);
       setResults((prev) => prev.filter((v) => v.id !== visitId));
       setSelectedBadge('');
       if (!hasSearch) {
@@ -116,6 +148,18 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
 
   const emptyIcon = isVehicle ? Car : User;
   const EmptyIcon = emptyIcon;
+
+  const pendingListSubtitle = (() => {
+    if (loadingPending) return 'Loading pending arrivals…';
+    if (results.length) {
+      if (hasSearch) return `${results.length} match${results.length === 1 ? '' : 'es'}`;
+      if (pendingSubtitle) {
+        return `${results.length} appointment${results.length === 1 ? '' : 's'} today`;
+      }
+      return `${results.length} waiting`;
+    }
+    return pendingSubtitle || `Gate entries and approved ${isVehicle ? 'vehicle' : 'walk-in'} visits appear here`;
+  })();
 
   return (
     <div className="space-y-5">
@@ -169,14 +213,8 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
       ) : null}
 
       <FormSection
-        title={isVehicle ? 'Ready for check-in' : 'Ready for check-in'}
-        subtitle={
-          loadingPending
-            ? 'Loading pending arrivals…'
-            : results.length
-              ? `${results.length} ${hasSearch ? 'match' : 'waiting'}`
-              : `Gate entries and approved ${isVehicle ? 'vehicle' : 'walk-in'} visits appear here`
-        }
+        title={showPendingHeader ? 'Ready for check-in' : undefined}
+        subtitle={showPendingHeader ? pendingListSubtitle : undefined}
       >
         {loadingPending ? (
           <div className="py-10 text-center text-sm text-navy-500">Loading visitors…</div>
@@ -191,48 +229,107 @@ export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'w
             <p className="max-w-sm text-xs text-navy-400">
               {hasSearch
                 ? 'Try another name, phone, badge or pass code.'
-                : 'Walk-in gate entries and approved visits will show here automatically.'}
+                : (pendingEmptyHint || 'Walk-in gate entries and approved visits will show here automatically.')}
             </p>
+            {!hasSearch && emptyExtra ? <div className="mt-3">{emptyExtra}</div> : null}
           </div>
         ) : (
-          <ul className="divide-y divide-navy-100 rounded-xl border border-navy-100">
-            {results.map((row) => (
-              <li key={row.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
-                  <p className="mt-0.5 truncate text-sm text-navy-500">
-                    Host: {row.host_name || '—'}
-                    {row.plate_numbers ? ` · ${row.plate_numbers}` : ''}
-                    {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <StatusBadge status={row.status} />
-                    {isVehicle ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
-                        <Car size={12} aria-hidden="true" />
-                        Vehicle
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
-                        <Footprints size={12} aria-hidden="true" />
-                        Walk-in
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <LoadingButton
-                  loading={checkingIn === row.id}
-                  loadingLabel="Checking in…"
-                  icon={LogIn}
-                  size="lg"
-                  onClick={() => handleCheckIn(row.id)}
-                  className="w-full shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600 sm:w-auto sm:min-w-[9rem]"
-                >
-                  Check in
-                </LoadingButton>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto rounded-xl border border-navy-100">
+            <div className="min-w-[640px]">
+              <div className="hidden grid-cols-[minmax(0,1fr)_5.75rem_7rem_9rem] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+                <span>Visitor</span>
+                <span>Signature</span>
+                <span>Status</span>
+                <span className="text-right">Action</span>
+              </div>
+              <ul className="divide-y divide-navy-100">
+                {results.map((row) => {
+                  const busy = checkingIn === row.id || Boolean(checkingIn);
+                  const rowInteractive = typeof onRowClick === 'function';
+                  return (
+                    <li
+                      key={row.id}
+                      role={rowInteractive ? 'button' : undefined}
+                      tabIndex={rowInteractive && !busy ? 0 : undefined}
+                      aria-label={rowInteractive ? `View ${row.full_name || 'visitor'}` : undefined}
+                      onClick={() => {
+                        if (!rowInteractive || busy) return;
+                        onRowClick(row);
+                      }}
+                      onKeyDown={(e) => {
+                        if (!rowInteractive || busy) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }}
+                      className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,1fr)_5.75rem_7rem_9rem] sm:items-center sm:gap-3 ${
+                        busy
+                          ? 'opacity-70'
+                          : rowInteractive
+                            ? 'cursor-pointer hover:bg-navy-50/70 focus-visible:bg-navy-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500'
+                            : ''
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
+                        <p className="mt-0.5 truncate text-sm text-navy-500">
+                          Host: {row.host_name || '—'}
+                          {row.plate_numbers ? ` · ${row.plate_numbers}` : ''}
+                          {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 sm:hidden">
+                          <StatusBadge status={row.status} />
+                          {isVehicle ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                              <Car size={12} aria-hidden="true" />
+                              Vehicle
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                              <Footprints size={12} aria-hidden="true" />
+                              Walk-in
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 sm:justify-start">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Signature</span>
+                        <SignaturePreview src={row.check_in_signature} name={row.full_name} />
+                      </div>
+                      <div className="hidden flex-col gap-1 sm:flex sm:justify-start">
+                        <StatusBadge status={row.status} />
+                        {isVehicle ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                            <Car size={12} aria-hidden="true" />
+                            Vehicle
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                            <Footprints size={12} aria-hidden="true" />
+                            Walk-in
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex sm:justify-end" onClick={(e) => e.stopPropagation()}>
+                        <LoadingButton
+                          loading={checkingIn === row.id}
+                          loadingLabel="Checking in…"
+                          icon={LogIn}
+                          size="lg"
+                          disabled={busy}
+                          onClick={() => void handleCheckIn(row.id)}
+                          className="w-full shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600 sm:w-auto sm:min-w-[9rem]"
+                        >
+                          Check in
+                        </LoadingButton>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
         )}
       </FormSection>
     </div>

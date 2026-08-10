@@ -19,7 +19,7 @@ import {
   startOfDay,
 } from '../../components/executive/calendarUtils';
 import { useToast } from '../../context/ToastContext';
-import { executiveApi, notificationsApi } from '../../utils/visitorApi';
+import { executiveApi } from '../../utils/visitorApi';
 
 const initialForm = () => ({
   title: '',
@@ -86,7 +86,6 @@ export default function ExecutiveAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const [draft, setDraft] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -164,20 +163,6 @@ export default function ExecutiveAppointmentsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    notificationsApi.list(true)
-      .then((items) => {
-        if (!cancelled) setUnreadCount(Array.isArray(items) ? items.length : 0);
-      })
-      .catch(() => {
-        if (!cancelled) setUnreadCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
     executiveApi.getReferenceData()
       .then((data) => {
         if (!cancelled) setReferenceData(data);
@@ -238,11 +223,8 @@ export default function ExecutiveAppointmentsPage() {
   const modalOpen = Boolean(draft?.openFullEditor);
 
   const pageActions = useMemo(() => (
-    <ExecutiveDashboardHeaderActions
-      onNewAppointment={openNewAppointment}
-      unreadCount={unreadCount}
-    />
-  ), [openNewAppointment, unreadCount]);
+    <ExecutiveDashboardHeaderActions onNewAppointment={openNewAppointment} />
+  ), [openNewAppointment]);
 
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col gap-2.5 overflow-hidden sm:gap-3">

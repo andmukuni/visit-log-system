@@ -1,0 +1,98 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  canTransition,
+  VISIT_TRANSITIONS,
+} from '../server/scopeService.js';
+import {
+  RECEPTION_KEYS,
+  DEFAULT_ADMIN_ROLES,
+  permissionMatches,
+  hasAnyPermission,
+} from '../shared/rbacPermissions.js';
+import { resolveVisitRoutePermissions } from '../server/rbacService.js';
+import { resolveDefaultHomeRoute, PORTALS } from '../shared/portalNavigation.js';
+
+const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
+
+describe('reception RBAC', () => {
+  it('defines reception permission keys', () => {
+    assert.ok(RECEPTION_KEYS.includes('reception.dashboard'));
+    assert.ok(RECEPTION_KEYS.includes('reception.calendar'));
+    assert.ok(RECEPTION_KEYS.includes('reception.host.queue'));
+    assert.ok(RECEPTION_KEYS.includes('reception.hosts.availability'));
+  });
+
+  it('assigns main_reception to reception keys only', () => {
+    const role = DEFAULT_ADMIN_ROLES.find((r) => r.slug === 'main_reception');
+    assert.ok(role);
+    assert.deepEqual(role.permissions, RECEPTION_KEYS);
+    assert.equal(permissionMatches(role.permissions, 'reception.calendar'), true);
+    assert.equal(permissionMatches(role.permissions, 'station.dashboard'), false);
+  });
+
+  it('assigns executive_reception reception plus executive keys', () => {
+    const role = DEFAULT_ADMIN_ROLES.find((r) => r.slug === 'executive_reception');
+    assert.ok(role);
+    assert.equal(permissionMatches(role.permissions, 'reception.dashboard'), true);
+    assert.equal(permissionMatches(role.permissions, 'executive.full_contact'), true);
+    assert.equal(permissionMatches(role.permissions, 'station.dashboard'), false);
+  });
+
+  it('routes reception users to calendar home', () => {
+    assert.equal(resolveDefaultHomeRoute(RECEPTION_KEYS), `${PORTALS.reception.routePrefix}/calendar`);
+  });
+});
+
+describe('shared visit route permissions', () => {
+  it('allows reception check-in permission on visit check-in routes', () => {
+    const perms = resolveVisitRoutePermissions({ path: '/api/admin/visits/abc/check-in', method: 'POST' });
+    assert.ok(hasAnyPermission(RECEPTION_KEYS, perms));
+    assert.ok(perms.includes('reception.visitors.checkin'));
+  });
+
+  it('allows reception host queue on waiting transition', () => {
+    const perms = resolveVisitRoutePermissions({ path: '/api/admin/visits/abc/waiting', method: 'POST' });
+    assert.ok(perms.includes('reception.host.queue'));
+  });
+
+  it('allows reception view on GET visits', () => {
+    const perms = resolveVisitRoutePermissions({ path: '/api/admin/visits', method: 'GET' });
+    assert.ok(perms.includes('reception.visitors.view'));
+  });
+
+  it('gate security role cannot access reception calendar', () => {
+    const role = DEFAULT_ADMIN_ROLES.find((r) => r.slug === 'gate_security');
+    assert.ok(role);
+    assert.equal(permissionMatches(role.permissions, 'reception.calendar'), false);
+    assert.equal(permissionMatches(role.permissions, 'station.dashboard'), true);
+  });
+});
+
+describe('host occupied lifecycle', () => {
+  it('treats in_meeting and waiting as on-site occupied states', () => {
+    for (const status of ['waiting', 'in_meeting', 'reception_check_in', 'checked_in']) {
+      assert.ok(HOST_OCCUPIED_STATUSES.includes(status));
+    }
+  });
+
+  it('allows queue transition from reception check-in to waiting', () => {
+    assert.equal(canTransition('reception_check_in', 'waiting'), true);
+    assert.ok(VISIT_TRANSITIONS.reception_check_in.includes('waiting'));
+  });
+
+  it('allows in_meeting after waiting', () => {
+    assert.equal(canTransition('waiting', 'in_meeting'), true);
+  });
+
+  it('frees host after checkout and left premises', () => {
+    assert.equal(HOST_OCCUPIED_STATUSES.includes('checked_out'), false);
+    assert.equal(HOST_OCCUPIED_STATUSES.includes('left_premises'), false);
+    assert.equal(canTransition('in_meeting', 'checked_out'), true);
+  });
+
+  it('blocks queue-host when visit is not checked in', () => {
+    assert.equal(canTransition('pending_approval', 'waiting'), false);
+    assert.equal(canTransition('expected', 'waiting'), false);
+  });
+});

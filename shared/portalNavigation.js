@@ -144,17 +144,9 @@ export const PORTAL_NAVIGATION = {
   host: [
     { key: 'dashboard', name: 'Dashboard', to: '/host', permissions: ['executive.dashboard', 'host.dashboard'], end: true, section: 'primary', isPrimaryRoute: true },
     { key: 'appointments', name: 'Appointments', to: '/host/appointments', permission: 'executive.calendar', section: 'primary' },
-    { key: 'invite', name: 'Invite Visitor', to: '/host/invite', permission: 'host.invite', section: 'primary' },
-    { key: 'my-visitors', name: 'My Visitors', to: '/host/visitors', permission: 'host.visitors', section: 'primary' },
-    { key: 'register', name: 'Visitor Register', to: '/host/register', permission: 'executive.visits', section: 'primary' },
     { key: 'approvals', name: 'Approval Requests', to: '/host/approvals', permission: 'host.approvals', section: 'primary' },
     { key: 'on-site', name: 'Visitors On-site', to: '/host/on-site', permission: 'host.onsite', section: 'primary' },
     { key: 'contacts', name: 'My Contacts', to: '/host/contacts', permission: 'executive.contacts', section: 'primary' },
-    { key: 'notifications', name: 'Notifications', to: '/host/notifications', permission: 'host.notifications', section: 'primary', badgeKey: 'notifications' },
-    { key: 'recurring', name: 'Recurring Visits', to: '/host/recurring', permission: 'host.recurring', section: 'system' },
-    { key: 'groups', name: 'Group Visits', to: '/host/groups', permission: 'host.groups', section: 'system' },
-    { key: 'delegates', name: 'My Delegates', to: '/host/delegates', permission: 'host.delegates', section: 'system' },
-    { key: 'profile', name: 'My Profile', to: '/host/profile', permission: 'host.profile', section: 'system' },
   ],
   management: [
     { key: 'dashboard', name: 'Executive Dashboard', to: '/management', permission: 'management.dashboard', end: true, section: 'primary' },

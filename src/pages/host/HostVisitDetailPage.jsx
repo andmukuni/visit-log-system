@@ -44,7 +44,7 @@ export default function HostVisitDetailPage() {
         subtitle={visit ? `Pass code: ${visit.pass_code || '—'}` : ''}
         breadcrumbs={[
           { label: 'Host', to: '/host' },
-          { label: 'My Visitors', to: '/host/visitors' },
+          { label: 'My Contacts', to: '/host/contacts' },
           { label: 'Details' },
         ]}
       />
@@ -55,7 +55,7 @@ export default function HostVisitDetailPage() {
         <Card title="Error">
           <p className="text-sm text-red-600">{error}</p>
           <div className="mt-2">
-            <BackAction to="/host/visitors" label="Back" />
+            <BackAction to="/host/contacts" label="Back" />
           </div>
         </Card>
       )}

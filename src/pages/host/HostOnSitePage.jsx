@@ -41,11 +41,13 @@ export default function HostOnSitePage() {
     },
   ];
 
+  const hasActiveGuest = visits.some((v) => ['waiting', 'in_meeting'].includes(v.status));
+
   return (
     <div>
       <PageHeader
         title="Visitors On-site"
-        subtitle="Guests currently inside the building"
+        subtitle={hasActiveGuest ? 'You have a visitor with you — marked occupied until they leave via gate checkout' : 'Guests currently inside the building'}
         breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'On-site' }]}
       />
 

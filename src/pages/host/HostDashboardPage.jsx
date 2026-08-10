@@ -67,14 +67,14 @@ export default function HostDashboardPage() {
             <HighlightBalanceCard
               title="Visitors on-site"
               value={data.onSite}
-              subtitle={`${data.completed} completed · ${data.pendingApprovals} awaiting approval`}
+              subtitle={`${data.completed} completed · ${data.pendingApprovals} awaiting approval${data.onSite > 0 ? ' · You are occupied' : ''}`}
             />
             <QuickActionList
               items={[
                 { label: 'Invite visitor', icon: UserPlus, to: '/host/invite' },
                 { label: 'Approval queue', icon: ClipboardList, to: '/host/approvals' },
                 { label: 'On-site visitors', icon: UserCheck, to: '/host/on-site' },
-                { label: 'All visitors', icon: Users, to: '/host/visitors' },
+                { label: 'My contacts', icon: Users, to: '/host/contacts' },
                 { label: 'Pending approvals', icon: Clock, to: '/host/approvals' },
               ]}
             />

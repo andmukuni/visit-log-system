@@ -10,21 +10,26 @@ import {
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
-export default function OccupancyPage() {
+export default function OccupancyPage({
+  portalPrefix = '/station',
+  title = 'Current Occupancy',
+  subtitle = 'Visitors currently on site',
+  fetchOccupancy = () => visitorApi.getOccupancy(),
+}) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await visitorApi.getOccupancy();
+      const data = await fetchOccupancy();
       setRows(data);
     } catch {
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchOccupancy]);
 
   useEffect(() => {
     load();
@@ -48,9 +53,9 @@ export default function OccupancyPage() {
   return (
     <div>
       <PageHeader
-        title="Current Occupancy"
-        subtitle="Visitors currently on site"
-        breadcrumbs={[{ label: 'Station', to: '/station' }, { label: 'Occupancy' }]}
+        title={title}
+        subtitle={subtitle}
+        breadcrumbs={[{ label: portalPrefix === '/reception' ? 'Reception' : 'Station', to: portalPrefix }, { label: 'Occupancy' }]}
         actions={(
           <ActionToolbar>
             <RefreshAction onClick={load} loading={loading} />
