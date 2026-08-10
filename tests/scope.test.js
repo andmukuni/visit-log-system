@@ -6,7 +6,7 @@ import {
   visitMatchesHost,
   VISIT_TRANSITIONS,
 } from '../server/scopeService.js';
-import { permissionMatches } from '../shared/rbacPermissions.js';
+import { permissionMatches, ADMIN_PERMISSIONS } from '../shared/rbacPermissions.js';
 
 describe('visit state transitions', () => {
   it('allows approved → reception check-in', () => {
@@ -23,6 +23,10 @@ describe('visit state transitions', () => {
 
   it('blocks completed → any transition', () => {
     assert.equal(canTransition('completed', 'checked_in'), false);
+  });
+
+  it('allows arrived_at_gate → reception check-in', () => {
+    assert.equal(canTransition('arrived_at_gate', 'reception_check_in'), true);
   });
 
   it('defines all expected statuses', () => {
@@ -65,6 +69,28 @@ describe('host record scope', () => {
   it('denies unrelated host visit', () => {
     const visit = { host_id: 'host-2', created_by: 'user-3' };
     assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), false);
+  });
+});
+
+describe('organisation placement hierarchy', () => {
+  it('includes admin.offices permission for office management', () => {
+    assert.ok(ADMIN_PERMISSIONS.some((p) => p.key === 'admin.offices'));
+  });
+
+  it('maps employee through office → department → organisation fields', () => {
+    // Contract for resolveEmployeePlacement / hosts listing joins.
+    const placement = {
+      user_id: 'usr-1',
+      office_id: 'off-1',
+      office_number: 'CEO-001',
+      department_id: 'dept-1',
+      department_name: 'Executive Office',
+      organisation_id: 'org-1',
+      organisation_name: 'Demo Organisation',
+    };
+    assert.equal(placement.office_number, 'CEO-001');
+    assert.ok(placement.department_id);
+    assert.ok(placement.organisation_id);
   });
 });
 

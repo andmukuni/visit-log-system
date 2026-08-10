@@ -17,16 +17,23 @@ const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage')
 const AdminVisitorsPage = lazy(() => import('./pages/admin/AdminVisitorsPage'));
 const AdminVehiclesPage = lazy(() => import('./pages/admin/AdminVehiclesPage'));
 const AdminLogBookPage = lazy(() => import('./pages/admin/AdminLogBookPage'));
+const AdminLogBookVisitPage = lazy(() => import('./pages/admin/AdminLogBookVisitPage'));
 const DemoUsersPage = lazy(() => import('./pages/admin/DemoUsersPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const DemoAccessControlPage = lazy(() => import('./pages/admin/DemoAccessControlPage'));
 const AdminOrgPages = lazy(() => import('./pages/admin/AdminOrgPages.jsx'));
+const AdminSitesPage = lazy(() => import('./pages/admin/AdminSitesPage.jsx'));
+const AdminZonesPage = lazy(() => import('./pages/admin/AdminZonesPage.jsx'));
+const AdminOrganisationsPage = lazy(() => import('./pages/admin/AdminOrganisationsPage.jsx'));
+const AdminDepartmentsPage = lazy(() => import('./pages/admin/AdminDepartmentsPage.jsx'));
+const AdminStationsPage = lazy(() => import('./pages/admin/AdminStationsPage.jsx'));
+const AdminOfficesPage = lazy(() => import('./pages/admin/AdminOfficesPage.jsx'));
+const AdminHostsPage = lazy(() => import('./pages/admin/AdminHostsPage.jsx'));
 
 const StationDashboardPage = lazy(() => import('./pages/station/StationDashboardPage'));
+const GateEntryPage = lazy(() => import('./pages/station/GateEntryPage'));
 const NewVisitorPage = lazy(() => import('./pages/station/NewVisitorPage'));
 const NewVehiclePage = lazy(() => import('./pages/station/NewVehiclePage'));
-const CheckInPage = lazy(() => import('./pages/station/CheckInPage'));
-const CheckOutPage = lazy(() => import('./pages/station/CheckOutPage'));
 const VisitorLogsPage = lazy(() => import('./pages/station/VisitorLogsPage'));
 const VehicleLogsPage = lazy(() => import('./pages/station/VehicleLogsPage'));
 const OccupancyPage = lazy(() => import('./pages/station/OccupancyPage'));
@@ -81,15 +88,6 @@ const CompliancePrivacyPage = lazy(() => import('./pages/compliance/CompliancePr
 const ComplianceRetentionPage = lazy(() => import('./pages/compliance/ComplianceRetentionPage'));
 
 const SecurityReportsPage = lazy(() => import('./pages/security/SecurityReportsPage'));
-
-const PlatformDashboardPage = lazy(() => import('./pages/platform/PlatformDashboardPage'));
-const PlatformOrganisationsPage = lazy(() => import('./pages/platform/PlatformOrganisationsPage'));
-const PlatformCalendarPage = lazy(() => import('./pages/platform/PlatformCalendarPage'));
-const PlatformLogBookPage = lazy(() => import('./pages/platform/PlatformLogBookPage'));
-const PlatformVisitorsPage = lazy(() => import('./pages/platform/PlatformVisitorsPage'));
-const PlatformVehiclesPage = lazy(() => import('./pages/platform/PlatformVehiclesPage'));
-const PlatformAuditPage = lazy(() => import('./pages/platform/PlatformAuditPage'));
-const PlatformUsersPage = lazy(() => import('./pages/platform/PlatformUsersPage'));
 
 const HostNotificationsPage = lazy(() => import('./pages/host/HostNotificationsPage'));
 const AdminNotificationsPage = lazy(() => import('./pages/admin/AdminNotificationsPage'));
@@ -211,10 +209,6 @@ function EmergencyPortalLayout() {
   return <PortalLayout key="emergency" portalId="emergency" title={`${APP_NAME_SHORT} Emergency`} />;
 }
 
-function PlatformPortalLayout() {
-  return <PortalLayout key="platform" portalId="platform" title={`${APP_NAME_SHORT} Platform`} />;
-}
-
 function AppRoot() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -292,12 +286,13 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute><StationPortalLayout /></ProtectedRoute>,
         children: [
           { index: true, element: <StationDashboardPage /> },
+          { path: 'gate-entry', element: <GateEntryPage /> },
           { path: 'visitors/new', element: <NewVisitorPage /> },
           { path: 'vehicles/new', element: <NewVehiclePage /> },
           { path: 'expected', element: <LazyPendingApprovals variant="expected" /> },
           { path: 'pending', element: <LazyPendingApprovals variant="pending" /> },
-          { path: 'check-in', element: <CheckInPage /> },
-          { path: 'check-out', element: <CheckOutPage /> },
+          { path: 'check-in', element: <Navigate to="/station/gate-entry?tab=checkin" replace /> },
+          { path: 'check-out', element: <Navigate to="/station/gate-entry?tab=checkout" replace /> },
           { path: 'visitors', element: <VisitorLogsPage /> },
           { path: 'visitors/:id', element: <VisitDetailPage /> },
           { path: 'vehicles', element: <VehicleLogsPage /> },
@@ -311,12 +306,65 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute><AdminPortalLayout /></ProtectedRoute>,
         children: [
           { index: true, element: <AdminDashboardPage /> },
-          { path: 'sites', element: <LazyAdminOrgPage page="sites" /> },
-          { path: 'stations', element: <LazyAdminOrgPage page="stations" /> },
-          { path: 'departments', element: <LazyAdminOrgPage page="departments" /> },
-          { path: 'hosts', element: <LazyAdminOrgPage page="hosts" /> },
+          {
+            path: 'organisations',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminOrganisationsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'sites',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminSitesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'zones',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminZonesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'stations',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminStationsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'departments',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminDepartmentsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'offices',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminOfficesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'hosts',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminHostsPage />
+              </Suspense>
+            ),
+          },
           { path: 'categories', element: <LazyAdminOrgPage page="categories" /> },
           { path: 'visitors', element: <AdminVisitorsPage /> },
+          { path: 'log-book/:visitId', element: <AdminLogBookVisitPage /> },
           { path: 'log-book', element: <AdminLogBookPage /> },
           { path: 'walking-visits', element: <Navigate to="/admin/log-book?tab=walking" replace /> },
           { path: 'vehicles', element: <AdminVehiclesPage /> },
@@ -421,25 +469,9 @@ export const router = createBrowserRouter([
         ],
       },
 
-      {
-        path: 'platform',
-        element: <ProtectedRoute><PlatformPortalLayout /></ProtectedRoute>,
-        children: [
-          { index: true, element: <PlatformDashboardPage /> },
-          { path: 'calendar', element: <PlatformCalendarPage /> },
-          { path: 'log-book', element: <PlatformLogBookPage /> },
-          { path: 'visitors', element: <PlatformVisitorsPage /> },
-          { path: 'vehicles', element: <PlatformVehiclesPage /> },
-          { path: 'organisations', element: <PlatformOrganisationsPage /> },
-          { path: 'users', element: <PlatformUsersPage /> },
-          { path: 'health', element: <Navigate to="/platform/settings?tab=health" replace /> },
-          { path: 'integrations', element: <PlaceholderPage title="Integrations" portalLabel="Platform" /> },
-          { path: 'support', element: <PlaceholderPage title="Support Access" portalLabel="Platform" /> },
-          { path: 'audit', element: <PlatformAuditPage /> },
-          { path: 'settings', element: <AdminSettingsPage /> },
-          { path: '*', element: <PlaceholderPage title="Platform" portalLabel="Platform" /> },
-        ],
-      },
+      // Platform portal retired — keep bookmarks working by sending users to Administration.
+      { path: 'platform', element: <Navigate to="/admin" replace /> },
+      { path: 'platform/*', element: <Navigate to="/admin" replace /> },
     ],
   },
 ]);

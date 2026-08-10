@@ -212,8 +212,15 @@ function QuickActionRowContent({ label, icon: Icon, badge = 0, showBadge = false
   );
 }
 
-export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className = '', compact = false }) {
+export function ExecutiveQuickActions({
+  kpis = {},
+  onNewAppointment,
+  canCreateAppointments = true,
+  className = '',
+  compact = false,
+}) {
   const rowClass = `group flex w-full items-center text-left transition-colors hover:bg-navy-50/60 ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-3'}`;
+  const actions = QUICK_ACTIONS.filter((item) => item.action !== 'new' || canCreateAppointments);
 
   return (
     <div className={`overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ${className}`.trim()}>
@@ -221,7 +228,7 @@ export function ExecutiveQuickActions({ kpis = {}, onNewAppointment, className =
         <p className={`font-semibold uppercase tracking-wider text-navy-900 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Quick Actions</p>
       </div>
       <div className="divide-y divide-gray-100">
-        {QUICK_ACTIONS.map(({ key, label, icon, to, action, badgeKey }) => {
+        {actions.map(({ key, label, icon, to, action, badgeKey }) => {
           const badge = badgeKey ? Number(kpis[badgeKey] ?? 0) : 0;
 
           if (action === 'new') {

@@ -12,6 +12,11 @@ import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertHostContact } from '../accessSchema.js';
 import { formatVisitListResponse, formatVisitResponse, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
+import {
+  canAssignVipClassification,
+  filterAssignableCategories,
+} from '../../shared/visitorPrivacy.js';
+import { permissionMatches } from '../../shared/rbacPermissions.js';
 
 function executiveVisitSql(extraWhere = '', orderBy = 'vis.expected_at ASC, vis.created_at DESC') {
   return `
@@ -360,8 +365,9 @@ export function createExecutiveRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       const orgId = ctx.scope.organisation_id;
+      const permissions = permissionsFromRequest(req);
       const [categories] = await pool.query(
-        `SELECT id, name, slug, requires_approval, default_duration_minutes
+        `SELECT id, name, slug, classification, requires_approval, default_duration_minutes
          FROM visitor_categories WHERE organisation_id = ? ORDER BY name`,
         [orgId],
       );
@@ -370,13 +376,17 @@ export function createExecutiveRouter() {
         [orgId],
       );
 
+      const canAssignVip = canAssignVipClassification(permissions);
+
       return res.json({
         ok: true,
         data: {
-          categories,
+          categories: filterAssignableCategories(categories, permissions),
           sites,
           host: ctx.host,
           defaultSiteId: ctx.scope.site_id,
+          canAssignVip,
+          canCreateAppointments: permissionMatches(permissions, 'executive.appointments'),
         },
       });
     } catch (error) {

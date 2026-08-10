@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { LogOut, Menu, ShieldCheck } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
 import AppSidebar from './AppSidebar';
+import PortalSwitcherMenu from './PortalSwitcherMenu';
 import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
-import { canAccessPortal, isExecutiveOnlyUser, resolvePortalRoute } from '../../../shared/portalNavigation.js';
+import { canAccessPortal, isExecutiveOnlyUser, resolveDefaultHomeRoute } from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
   return (
@@ -26,21 +27,38 @@ function getShellBreadcrumbs() {
   return [];
 }
 
-function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
+function isGateEntryKiosk(pathname) {
+  return pathname.endsWith('/gate-entry');
+}
+
+function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk }) {
   const location = useLocation();
   const mainRef = useRef(null);
   const { user } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
-  const shellBreadcrumbs = getShellBreadcrumbs();
+  const shellBreadcrumbs = pageHeader.breadcrumbs?.length
+    ? pageHeader.breadcrumbs
+    : getShellBreadcrumbs();
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (isKiosk) {
+      document.documentElement.dataset.kiosk = 'gate-entry';
+    } else {
+      delete document.documentElement.dataset.kiosk;
+    }
+    return () => {
+      delete document.documentElement.dataset.kiosk;
+    };
+  }, [isKiosk]);
+
   return (
     <>
-      {sidebarOpen && (
+      {!isKiosk && sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-navy-950/60 backdrop-blur-sm md:hidden"
           onClick={onCloseSidebar}
@@ -48,11 +66,37 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
         />
       )}
 
-      <div className="md:ml-[var(--sidebar-width)] flex h-screen min-h-0 flex-col overflow-hidden">
-        <header className={`z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-100 bg-navy-50 ${
-          portalId === 'executive' ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'
+      <div className={`flex h-screen min-h-0 flex-col overflow-hidden ${isKiosk ? '' : 'md:ml-[var(--sidebar-width)]'}`}>
+        <header className={`z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between border-b bg-navy-50 ${
+          isKiosk ? 'border-gray-200 bg-white px-4 sm:px-6' : `border-navy-100 ${portalId === 'executive' ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'}`
         }`}
         >
+          {isKiosk ? (
+            <>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-navy-200 bg-navy-50 text-cyan-700 sm:flex">
+                  <ShieldCheck size={18} strokeWidth={2} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h1 className="truncate text-base font-bold text-navy-900 sm:text-lg">Gate Entry</h1>
+                  <p className="truncate text-xs text-navy-500">Security kiosk</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <PortalSwitcherMenu compact />
+                <AdminUserMenu compact />
+                <Link
+                  to="/station"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-navy-200 bg-white px-3 text-sm font-semibold text-navy-700 transition-colors hover:bg-navy-50 sm:px-4"
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  <span className="hidden sm:inline">Exit to Station</span>
+                  <span className="sm:hidden">Exit</span>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
           <div className={`flex min-w-0 flex-1 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
             <button
               type="button"
@@ -83,9 +127,11 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
             )}
           </div>
           <div className={`flex shrink-0 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
-            {pageHeader.actions}
+            <PortalSwitcherMenu compact={portalId === 'executive'} />
             <AdminUserMenu compact={portalId === 'executive'} />
           </div>
+            </>
+          )}
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -93,14 +139,14 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar }) {
             ref={mainRef}
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto overscroll-y-contain"
           >
-            <div className="flex min-h-0 flex-1 flex-col p-4 pt-4 pb-6 sm:p-6 lg:px-8">
+            <div className={`flex min-h-0 flex-1 flex-col ${isKiosk ? '' : 'p-4 pt-4 pb-6 sm:p-6 lg:px-8'}`}>
               <Suspense fallback={<PortalOutletLoader />}>
                 <Outlet />
               </Suspense>
             </div>
           </main>
 
-          {content && !collapsed && (
+          {content && !collapsed && !isKiosk && (
             <aside className="hidden xl:block w-[var(--panel-width)] shrink-0 p-4 pl-0">
               <div className="sticky top-[var(--header-height)] max-h-[calc(100vh-var(--header-height))] overflow-y-auto space-y-4">
                 {content}
@@ -118,8 +164,9 @@ function ShellBody({ portalId, title }) {
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isKiosk = isGateEntryKiosk(location.pathname);
   const { permissions, hasPermission } = useAuth();
-
   useEffect(() => {
     if (!permissions.length) return;
     if (isExecutiveOnlyUser(permissions) && portalId === 'management') {
@@ -127,7 +174,7 @@ function ShellBody({ portalId, title }) {
       return;
     }
     if (!canAccessPortal(portalId, hasPermission, permissions)) {
-      navigate(resolvePortalRoute(permissions), { replace: true });
+      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
     }
   }, [portalId, permissions, hasPermission, navigate]);
 
@@ -156,11 +203,13 @@ function ShellBody({ portalId, title }) {
   return (
     <SidebarProvider portalId={portalId}>
       <div className={`h-screen overflow-hidden bg-navy-50 portal-${portalId}`}>
-        <AppSidebar
-          title={title}
-          sidebarOpen={sidebarOpen}
-          onCloseSidebar={closeSidebar}
-        />
+        {!isKiosk && (
+          <AppSidebar
+            title={title}
+            sidebarOpen={sidebarOpen}
+            onCloseSidebar={closeSidebar}
+          />
+        )}
 
         <AnalyticsPanelProvider>
           <PageHeaderProvider>
@@ -169,6 +218,7 @@ function ShellBody({ portalId, title }) {
               sidebarOpen={sidebarOpen}
               onOpenSidebar={openSidebar}
               onCloseSidebar={closeSidebar}
+              isKiosk={isKiosk}
             />
           </PageHeaderProvider>
         </AnalyticsPanelProvider>

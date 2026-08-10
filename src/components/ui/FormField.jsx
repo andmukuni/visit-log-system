@@ -16,6 +16,9 @@ export default function FormField({
   min,
   max,
   step,
+  inputMode,
+  maxLength,
+  autoComplete,
 }) {
   const baseClass = `w-full px-4 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
     error
@@ -77,6 +80,9 @@ export default function FormField({
         min={min}
         max={max}
         step={step}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        autoComplete={autoComplete}
         className={baseClass}
       />
     );

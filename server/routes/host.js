@@ -16,6 +16,7 @@ import {
 } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
+import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
 
 function visitSelectSql(extraWhere = '', orderBy = 'vis.created_at DESC') {
   return `
@@ -93,8 +94,9 @@ export function createHostRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       const orgId = ctx.scope.organisation_id;
+      const permissions = permissionsFromRequest(req);
       const [categories] = await pool.query(
-        `SELECT id, name, slug, requires_approval, default_duration_minutes
+        `SELECT id, name, slug, classification, requires_approval, default_duration_minutes
          FROM visitor_categories WHERE organisation_id = ? ORDER BY name`,
         [orgId],
       );
@@ -105,7 +107,12 @@ export function createHostRouter() {
 
       res.json({
         ok: true,
-        data: { categories, sites, host: ctx.host, defaultSiteId: ctx.scope.site_id },
+        data: {
+          categories: filterAssignableCategories(categories, permissions),
+          sites,
+          host: ctx.host,
+          defaultSiteId: ctx.scope.site_id,
+        },
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });

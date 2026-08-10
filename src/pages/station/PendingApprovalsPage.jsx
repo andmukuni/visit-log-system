@@ -8,21 +8,27 @@ import {
   ActionToolbar,
   RefreshAction,
   ConfirmAction,
+  FilterPills,
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 
+const RANGE_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This week' },
+];
+
 const VARIANTS = {
   pending: {
-    statusFilter: 'pending_approval',
     title: 'Pending Approvals',
     subtitle: 'Visitors awaiting host or security approval',
+    load: (params) => visitorApi.getVisits({ status: 'pending_approval', ...params }),
   },
   expected: {
-    statusFilter: 'approved',
     title: 'Expected Arrivals',
-    subtitle: 'Approved and pre-registered visitors expected today',
+    subtitle: 'Visitors and appointments expected at the gate — including executive calendar bookings',
+    load: (params) => visitorApi.getExpectedArrivals(params),
   },
 };
 
@@ -32,18 +38,20 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(null);
+  const [range, setRange] = useState('week');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await visitorApi.getVisits({ status: config.statusFilter });
+      const params = variant === 'expected' ? { range } : {};
+      const rows = await config.load(params);
       setVisits(rows);
     } catch {
       setVisits([]);
     } finally {
       setLoading(false);
     }
-  }, [config.statusFilter]);
+  }, [config, range, variant]);
 
   useEffect(() => {
     load();
@@ -65,17 +73,30 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
     { key: 'host_name', label: 'Host' },
-    { key: 'purpose', label: 'Purpose' },
+    {
+      key: 'purpose',
+      label: 'Purpose',
+      render: (_, row) => row.appointment_title || row.purpose || '—',
+    },
+    ...(variant === 'expected' ? [{
+      key: 'expected_at',
+      label: 'Expected arrival',
+      render: (_, row) => formatDateTime(row.expected_at || row.appointment_scheduled_at),
+    }, {
+      key: 'expected_plates',
+      label: 'Vehicle',
+      render: (_, row) => row.expected_plates || '—',
+    }] : []),
     {
       key: 'status',
       label: 'Status',
       render: (_, row) => <StatusBadge status={row.status} />,
     },
-    {
+    ...(variant === 'pending' ? [{
       key: 'created_at',
       label: 'Registered',
       render: (_, row) => formatDateTime(row.created_at),
-    },
+    }] : []),
     ...(variant === 'pending' ? [{
       key: 'actions',
       label: '',
@@ -102,11 +123,31 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
           </ActionToolbar>
         )}
       />
+
+      {variant === 'expected' ? (
+        <Card title="Arrival window" className="mb-6">
+          <FilterPills
+            options={RANGE_OPTIONS}
+            value={range}
+            onChange={setRange}
+          />
+        </Card>
+      ) : null}
+
       {loading ? (
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card>
-          <DataTable columns={columns} data={visits} emptyTitle="No visits in this queue" />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle={variant === 'expected' ? 'No expected arrivals' : 'No visits in this queue'}
+            emptyDescription={
+              variant === 'expected'
+                ? 'Executive calendar appointments and pre-registered visitors will appear here when they are expected at the gate.'
+                : undefined
+            }
+          />
         </Card>
       )}
     </div>

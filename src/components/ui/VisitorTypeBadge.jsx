@@ -36,11 +36,11 @@ export default function VisitorTypeBadge({
 
   const sizeClasses = {
     xs: 'text-[9px] px-1 py-px gap-0.5 leading-none',
-    sm: 'text-sm px-2 py-0.5 gap-1',
+    sm: 'text-xs px-1.5 py-0.5 gap-1',
     md: 'text-sm px-2.5 py-1 gap-1.5',
   };
 
-  const iconSizes = { xs: 9, sm: 14, md: 16 };
+  const iconSizes = { xs: 9, sm: 12, md: 16 };
 
   if (iconOnly) {
     return (

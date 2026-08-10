@@ -7,6 +7,7 @@ export const VEHICLE_STATUS_OPTIONS = [
 
 export const VISIT_LOG_STATUS_OPTIONS = [
   { value: '', label: 'All', dot: 'bg-navy-300' },
+  { value: 'arrived_at_gate', label: 'At gate', dot: 'bg-violet-400' },
   { value: 'pending_approval', label: 'Pending approval', dot: 'bg-amber-400' },
   { value: 'approved', label: 'Approved', dot: 'bg-sky-400' },
   { value: 'checked_in', label: 'Checked in', dot: 'bg-emerald-400' },

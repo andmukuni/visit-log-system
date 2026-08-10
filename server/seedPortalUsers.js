@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import pool from './db.js';
 import { hashPassword } from './auth.js';
-import { generateId } from './visitorSchema.js';
+import { generateId, seedOfficeHierarchy } from './visitorSchema.js';
 import { createAppointmentForVisit } from './accessSchema.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -91,11 +91,33 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
     return { skipped: true, reason: 'no_organisation' };
   }
 
+  await seedOfficeHierarchy(poolConn);
+
   const [[site]] = await poolConn.query('SELECT id FROM sites WHERE organisation_id = ? LIMIT 1', [org.id]);
   const [[station]] = site?.id
     ? await poolConn.query('SELECT id FROM stations WHERE site_id = ? LIMIT 1', [site.id])
     : [[]];
   const [[dept]] = await poolConn.query('SELECT id FROM departments WHERE organisation_id = ? LIMIT 1', [org.id]);
+  const [[execDept]] = await poolConn.query(
+    `SELECT id FROM departments WHERE organisation_id = ? AND (code = 'EXEC' OR LOWER(name) LIKE '%executive%') LIMIT 1`,
+    [org.id],
+  );
+  const [[defaultOffice]] = await poolConn.query(
+    'SELECT id, department_id FROM offices WHERE organisation_id = ? ORDER BY office_number ASC LIMIT 1',
+    [org.id],
+  );
+  const [[ceoOffice]] = await poolConn.query(
+    `SELECT id, department_id FROM offices
+     WHERE organisation_id = ? AND (office_number LIKE 'CEO%' OR LOWER(name) LIKE '%ceo%')
+     ORDER BY office_number ASC LIMIT 1`,
+    [org.id],
+  );
+  const [[dceoOffice]] = await poolConn.query(
+    `SELECT id, department_id FROM offices
+     WHERE organisation_id = ? AND (office_number LIKE 'DCEO%' OR LOWER(name) LIKE '%dceo%')
+     ORDER BY office_number ASC LIMIT 1`,
+    [org.id],
+  );
 
   const passwordHash = hashPassword(DEV_PORTAL_PASSWORD);
   let created = 0;
@@ -122,11 +144,25 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
       updated += 1;
     }
 
+    let office = defaultOffice;
+    let departmentId = dept?.id || defaultOffice?.department_id || null;
+    if (portalUser.roleSlug === 'ceo' || portalUser.roleSlug === 'ceo_secretary') {
+      office = ceoOffice || defaultOffice;
+      departmentId = office?.department_id || execDept?.id || departmentId;
+    } else if (portalUser.roleSlug === 'dceo' || portalUser.roleSlug === 'dceo_secretary') {
+      office = dceoOffice || ceoOffice || defaultOffice;
+      departmentId = office?.department_id || execDept?.id || departmentId;
+    }
+
     await poolConn.query(
-      `INSERT INTO user_scopes (user_id, organisation_id, site_id, station_id, department_id)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE site_id = VALUES(site_id), station_id = VALUES(station_id), department_id = VALUES(department_id)`,
-      [userId, org.id, site?.id || null, station?.id || null, dept?.id || null],
+      `INSERT INTO user_scopes (user_id, organisation_id, site_id, station_id, department_id, office_id)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         site_id = VALUES(site_id),
+         station_id = VALUES(station_id),
+         department_id = VALUES(department_id),
+         office_id = VALUES(office_id)`,
+      [userId, org.id, site?.id || null, station?.id || null, departmentId, office?.id || null],
     );
 
     const [[roleRow]] = await poolConn.query('SELECT id FROM admin_roles WHERE slug = ? LIMIT 1', [portalUser.roleSlug]);
@@ -145,21 +181,26 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
         [email],
       );
       if (existingHost?.id) {
-        await poolConn.query('UPDATE hosts SET user_id = ?, name = ? WHERE id = ?', [userId, portalUser.name, existingHost.id]);
+        await poolConn.query(
+          'UPDATE hosts SET user_id = ?, name = ?, department_id = ?, site_id = ?, office_id = ? WHERE id = ?',
+          [userId, portalUser.name, departmentId, site?.id || null, office?.id || null, existingHost.id],
+        );
       } else {
         await poolConn.query(
-          `INSERT INTO hosts (id, organisation_id, department_id, user_id, name, email, status)
-           VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-          [generateId('host'), org.id, dept?.id || null, userId, portalUser.name, email],
+          `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, name, email, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+          [generateId('host'), org.id, departmentId, site?.id || null, office?.id || null, userId, portalUser.name, email],
         );
       }
     }
   }
 
   console.log(`[seed] Portal users ready (${created} created, ${updated} updated). Password: demo1234`);
-  await seedHostDemoVisit(poolConn);
-  await seedExecutiveDemoVisits(poolConn);
-  await seedEmployeeAppointments(poolConn);
+  if (process.env.SEED_DEMO_VISITS === '1') {
+    await seedHostDemoVisit(poolConn);
+    await seedExecutiveDemoVisits(poolConn);
+    await seedEmployeeAppointments(poolConn);
+  }
   return { skipped: false, created, updated };
 }
 

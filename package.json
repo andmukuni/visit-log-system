@@ -16,7 +16,9 @@
     "seed:demo:remote": "node server/scripts/seedDemo.js --target=remote",
     "seed:portal-users": "node server/scripts/seedPortalUsersCli.js --force",
     "seed:portal-users:remote": "node server/scripts/seedPortalUsersCli.js --force --url=",
-    "seed:employee-appointments": "node server/scripts/seedEmployeeAppointmentsCli.js --force"
+    "seed:location": "node server/scripts/seedLocationStructureCli.js",
+    "seed:employee-appointments": "node server/scripts/seedEmployeeAppointmentsCli.js --force",
+    "db:reset-operational": "node server/scripts/resetOperationalData.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

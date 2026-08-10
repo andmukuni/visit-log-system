@@ -12,6 +12,7 @@ import {
   mapNextAppointmentToCalendarRow,
 } from './ExecutiveDashboardWidgets';
 import { executiveApi } from '../../utils/visitorApi';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
   addDays,
@@ -220,6 +221,8 @@ export default function ExecutiveWeekCalendar({
   newAppointmentTrigger = 0,
 }) {
   const toast = useToast();
+  const { isLoading, hasPermission } = useAuth();
+  const canCreateAppointments = hasPermission('executive.appointments');
   const toolbarRef = useRef(null);
   const dayHeadersRef = useRef(null);
   const gridScrollRef = useRef(null);
@@ -388,6 +391,7 @@ export default function ExecutiveWeekCalendar({
   }, [periodDays.length, viewMode, weekStart, gridMinWidth]);
 
   useEffect(() => {
+    if (isLoading || !hasPermission('executive.dashboard')) return undefined;
     let cancelled = false;
     executiveApi.getReferenceData()
       .then((data) => {
@@ -397,7 +401,7 @@ export default function ExecutiveWeekCalendar({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isLoading, hasPermission]);
 
   const refreshDraftSlotRect = useCallback((currentDraft) => {
     if (!currentDraft?.dayKey) return currentDraft;
@@ -409,6 +413,11 @@ export default function ExecutiveWeekCalendar({
   }, [gridBodyHeight]);
 
   const openNewAppointment = useCallback(() => {
+    if (!canCreateAppointments) {
+      toast.error('You do not have permission to create executive appointments.');
+      return;
+    }
+
     const nowDate = new Date();
     let startAt = new Date(nowDate);
     startAt.setMinutes(0, 0, 0);
@@ -434,14 +443,15 @@ export default function ExecutiveWeekCalendar({
       sessionId: `header-${Date.now()}`,
       openFullEditor: true,
     });
-  }, []);
+  }, [canCreateAppointments, toast]);
 
   useEffect(() => {
-    if (!newAppointmentTrigger) return;
+    if (!newAppointmentTrigger || !canCreateAppointments) return;
     openNewAppointment();
-  }, [newAppointmentTrigger, openNewAppointment]);
+  }, [newAppointmentTrigger, openNewAppointment, canCreateAppointments]);
 
   const handleSlotClick = useCallback((event, day) => {
+    if (!canCreateAppointments) return;
     if (event.target.closest('[data-calendar-event]')) return;
     const column = event.currentTarget;
     const rect = column.getBoundingClientRect();
@@ -463,7 +473,7 @@ export default function ExecutiveWeekCalendar({
       slotRect,
       sessionId: `${dayKey}-${startAt.getTime()}-${Date.now()}`,
     });
-  }, [gridBodyHeight, toast]);
+  }, [canCreateAppointments, gridBodyHeight, toast]);
 
   useEffect(() => {
     if (!draft) return undefined;
@@ -566,6 +576,10 @@ export default function ExecutiveWeekCalendar({
   }, [mappedNextAppointment]);
 
   const handleRescheduleNextAppointment = useCallback(() => {
+    if (!canCreateAppointments) {
+      toast.error('You do not have permission to create executive appointments.');
+      return;
+    }
     if (!nextAppointment?.scheduled_at) return;
     const startAt = new Date(nextAppointment.scheduled_at);
     if (Number.isNaN(startAt.getTime())) return;
@@ -581,7 +595,7 @@ export default function ExecutiveWeekCalendar({
       sessionId: `reschedule-${Date.now()}`,
       openFullEditor: true,
     });
-  }, [nextAppointment]);
+  }, [canCreateAppointments, nextAppointment, toast]);
 
   return (
     <div className={`flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden lg:flex-row lg:items-stretch lg:gap-3 ${className}`.trim()}>
@@ -611,6 +625,7 @@ export default function ExecutiveWeekCalendar({
           <ExecutiveQuickActions
             kpis={kpis}
             onNewAppointment={openNewAppointment}
+            canCreateAppointments={canCreateAppointments}
             compact={sidebarCompact}
           />
         </div>

@@ -26,6 +26,57 @@ export const VISIT_STATUSES = [
   'expired',
 ];
 
+async function ensureColumn(db, tableName, columnName, ddl) {
+  const [[exists]] = await db.query(
+    `SELECT COUNT(*) AS count FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [tableName, columnName],
+  );
+  if (!Number(exists?.count)) {
+    await db.query(`ALTER TABLE ${tableName} ${ddl}`);
+  }
+}
+
+async function tableExists(db, tableName) {
+  const [[row]] = await db.query(
+    `SELECT COUNT(*) AS count FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [tableName],
+  );
+  return Boolean(Number(row?.count));
+}
+
+/** Create offices table + office_id columns (safe to re-run). */
+export async function ensureOfficeSchema(db = pool) {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS offices (
+      id VARCHAR(90) PRIMARY KEY,
+      organisation_id VARCHAR(90) NOT NULL,
+      department_id VARCHAR(90) NOT NULL,
+      building_id VARCHAR(90),
+      site_id VARCHAR(90),
+      office_number VARCHAR(40) NOT NULL,
+      name VARCHAR(255),
+      status VARCHAR(30) DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_org_office_number (organisation_id, office_number),
+      INDEX idx_offices_org (organisation_id),
+      INDEX idx_offices_dept (department_id),
+      INDEX idx_offices_building (building_id),
+      INDEX idx_offices_site (site_id)
+    )
+  `);
+  await ensureColumn(db, 'offices', 'building_id', 'ADD COLUMN building_id VARCHAR(90) NULL');
+  if (await tableExists(db, 'hosts')) {
+    await ensureColumn(db, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
+    await ensureColumn(db, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
+  }
+  if (await tableExists(db, 'user_scopes')) {
+    await ensureColumn(db, 'user_scopes', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
+  }
+}
+
 export async function ensureVisitorSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -97,11 +148,17 @@ export async function ensureVisitorSchema() {
     )
   `);
 
+  // Office → Organisation + Department + Building (site inherited from building).
+  await ensureOfficeSchema(pool);
+
+  // Employee/host → Organisation + Department + Site (+ optional Office matching dept/site).
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hosts (
       id VARCHAR(90) PRIMARY KEY,
       organisation_id VARCHAR(90) NOT NULL,
       department_id VARCHAR(90),
+      site_id VARCHAR(90),
+      office_id VARCHAR(90),
       user_id VARCHAR(90),
       name VARCHAR(255) NOT NULL,
       email VARCHAR(255),
@@ -109,9 +166,13 @@ export async function ensureVisitorSchema() {
       status VARCHAR(30) DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_hosts_org (organisation_id),
-      INDEX idx_hosts_dept (department_id)
+      INDEX idx_hosts_dept (department_id),
+      INDEX idx_hosts_site (site_id),
+      INDEX idx_hosts_office (office_id)
     )
   `);
+  await ensureColumn(pool, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
+  await ensureColumn(pool, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_categories (
@@ -264,10 +325,14 @@ export async function ensureVisitorSchema() {
       site_id VARCHAR(90),
       station_id VARCHAR(90),
       department_id VARCHAR(90),
+      office_id VARCHAR(90),
       PRIMARY KEY (user_id, organisation_id),
-      INDEX idx_user_scopes_org (organisation_id)
+      INDEX idx_user_scopes_org (organisation_id),
+      INDEX idx_user_scopes_office (office_id)
     )
   `);
+  await ensureColumn(pool, 'user_scopes', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
+  await ensureColumn(pool, 'visits', 'check_in_signature', 'ADD COLUMN check_in_signature MEDIUMTEXT NULL');
 }
 
 export async function seedVisitorData() {
@@ -291,46 +356,12 @@ export async function seedVisitorData() {
 
   await pool.query(
     `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
-    [siteId, orgId, 'Head Office', 'HQ', 'Lusaka, Zambia'],
-  );
-
-  const site2Id = generateId('site');
-  const site3Id = generateId('site');
-  const site4Id = generateId('site');
-  const station2Id = generateId('stn');
-  const station3Id = generateId('stn');
-  const station4Id = generateId('stn');
-  await pool.query(
-    `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
-    [site2Id, orgId, 'Warehouse Branch', 'WH', 'Ndola, Zambia'],
-  );
-  await pool.query(
-    `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
-    [site3Id, orgId, 'Regional Office', 'RO', 'Kitwe, Zambia'],
-  );
-  await pool.query(
-    `INSERT INTO sites (id, organisation_id, name, code, address, status) VALUES (?, ?, ?, ?, ?, 'active')`,
-    [site4Id, orgId, 'Distribution Centre', 'DC', 'Livingstone, Zambia'],
-  );
-
-  await pool.query(
-    `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
-    [stationId, siteId, 'Main Reception'],
+    [siteId, orgId, 'HQ', 'HQ', 'Lusaka, Zambia'],
   );
 
   await pool.query(
     `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'gate', 'active')`,
-    [station2Id, site2Id, 'Warehouse Gate'],
-  );
-
-  await pool.query(
-    `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
-    [station3Id, site3Id, 'Regional Office Reception'],
-  );
-
-  await pool.query(
-    `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, 'reception', 'active')`,
-    [station4Id, site4Id, 'Distribution Centre Reception'],
+    [stationId, siteId, 'Main Gate'],
   );
 
   await pool.query(
@@ -338,14 +369,33 @@ export async function seedVisitorData() {
     [deptId, orgId, 'Human Resources', 'HR'],
   );
 
+  const deptOpsId = generateId('dept');
+  const deptExecId = generateId('dept');
   await pool.query(
-    `INSERT INTO buildings (id, site_id, name) VALUES (?, ?, ?)`,
-    [buildingId, siteId, 'Main Building'],
+    `INSERT INTO departments (id, organisation_id, name, code) VALUES (?, ?, ?, ?)`,
+    [deptOpsId, orgId, 'Operations', 'OPS'],
+  );
+  await pool.query(
+    `INSERT INTO departments (id, organisation_id, name, code) VALUES (?, ?, ?, ?)`,
+    [deptExecId, orgId, 'Executive Office', 'EXEC'],
   );
 
   await pool.query(
+    `INSERT INTO buildings (id, site_id, name) VALUES (?, ?, ?)`,
+    [buildingId, siteId, 'Wonderful Group Greatest'],
+  );
+
+  // Keep a single public zone for the building (zones depend on buildings).
+  await pool.query(
     `INSERT INTO zones (id, building_id, name, access_level) VALUES (?, ?, ?, ?)`,
     [zoneId, buildingId, 'Reception Area', 'public'],
+  );
+
+  const officeItId = generateId('off');
+  await pool.query(
+    `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+    [officeItId, orgId, deptOpsId, buildingId, siteId, '6', 'IT Dep Group office 6'],
   );
 
   const categories = [
@@ -366,16 +416,16 @@ export async function seedVisitorData() {
   }
 
   const hosts = [
-    { name: 'Jane Mwamba', email: 'jane.mwamba@demo.org', phone: '+260971000001' },
-    { name: 'Peter Banda', email: 'peter.banda@demo.org', phone: '+260971000002' },
-    { name: 'Grace Lungu', email: 'grace.lungu@demo.org', phone: '+260971000003' },
+    { name: 'Jane Mwamba', email: 'jane.mwamba@demo.org', phone: '+260971000001', departmentId: deptId },
+    { name: 'Peter Banda', email: 'peter.banda@demo.org', phone: '+260971000002', departmentId: deptOpsId },
+    { name: 'Grace Lungu', email: 'grace.lungu@demo.org', phone: '+260971000003', departmentId: deptExecId },
   ];
 
   for (const host of hosts) {
     await pool.query(
-      `INSERT INTO hosts (id, organisation_id, department_id, name, email, phone, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-      [generateId('host'), orgId, deptId, host.name, host.email, host.phone],
+      `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, name, email, phone, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [generateId('host'), orgId, host.departmentId, siteId, officeItId, host.name, host.email, host.phone],
     );
   }
 
@@ -389,13 +439,195 @@ export async function seedVisitorData() {
   const [admins] = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
   if (admins[0]?.id) {
     await pool.query(
-      `INSERT INTO user_scopes (user_id, organisation_id, site_id, station_id, department_id)
-       VALUES (?, ?, ?, ?, ?)`,
-      [admins[0].id, orgId, siteId, stationId, deptId],
+      `INSERT INTO user_scopes (user_id, organisation_id, site_id, station_id, department_id, office_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [admins[0].id, orgId, siteId, stationId, deptOpsId, officeItId],
     );
   }
 
-  console.log('[visitor] Demo organisation, site, station and reference data seeded.');
+  console.log('[visitor] Demo organisation seeded: HQ / Wonderful Group Greatest / Main Gate / IT Dep Group office 6');
+}
+
+/**
+ * Wipe sites / buildings / stations / offices (and dependent zones),
+ * then seed the canonical HQ location structure.
+ * Does NOT modify roles, employees/hosts rows (except location FKs), or departments.
+ */
+export async function resetAndSeedLocationStructure(db = pool) {
+  await ensureOfficeSchema(db);
+
+  // Prefer the demo/portal org so seeded locations match logged-in user scopes.
+  let [[org]] = await db.query(
+    `SELECT id FROM organisations WHERE slug = 'demo-org' LIMIT 1`,
+  );
+  if (!org?.id) {
+    [[org]] = await db.query(
+      `SELECT o.id
+       FROM organisations o
+       INNER JOIN user_scopes us ON us.organisation_id = o.id
+       GROUP BY o.id
+       ORDER BY COUNT(*) DESC
+       LIMIT 1`,
+    );
+  }
+  if (!org?.id) {
+    [[org]] = await db.query('SELECT id FROM organisations ORDER BY created_at ASC LIMIT 1');
+  }
+  if (!org?.id) {
+    return { skipped: true, reason: 'no_organisation' };
+  }
+
+  const [[dept]] = await db.query(
+    `SELECT id FROM departments
+     WHERE organisation_id = ?
+     ORDER BY
+       CASE
+         WHEN LOWER(name) LIKE '%it%' OR LOWER(code) LIKE '%it%' THEN 0
+         WHEN code = 'OPS' THEN 1
+         ELSE 2
+       END,
+       name ASC
+     LIMIT 1`,
+    [org.id],
+  );
+  if (!dept?.id) {
+    return { skipped: true, reason: 'no_department' };
+  }
+
+  const siteId = generateId('site');
+  const buildingId = generateId('bld');
+  const stationId = generateId('stn');
+  const officeId = generateId('off');
+
+  // Insert new site/building/station first so NOT NULL FKs can be remapped.
+  await db.query(
+    `INSERT INTO sites (id, organisation_id, name, code, address, status)
+     VALUES (?, ?, 'HQ', 'HQ', 'Lusaka, Zambia', 'active')`,
+    [siteId, org.id],
+  );
+  await db.query(
+    `INSERT INTO buildings (id, site_id, name) VALUES (?, ?, ?)`,
+    [buildingId, siteId, 'Wonderful Group Greatest'],
+  );
+  await db.query(
+    `INSERT INTO stations (id, site_id, name, type, status)
+     VALUES (?, ?, 'Main Gate', 'gate', 'active')`,
+    [stationId, siteId],
+  );
+
+  // Remap location pointers only (do not alter employee/department/role identity).
+  await db.query('UPDATE visits SET site_id = ?, station_id = ? WHERE organisation_id = ?', [
+    siteId,
+    stationId,
+    org.id,
+  ]);
+  await db.query(
+    `UPDATE user_scopes
+     SET site_id = ?, station_id = ?, office_id = NULL
+     WHERE organisation_id = ?`,
+    [siteId, stationId, org.id],
+  );
+  await db.query(
+    `UPDATE hosts
+     SET site_id = ?, office_id = NULL
+     WHERE organisation_id = ?`,
+    [siteId, org.id],
+  );
+
+  // Optional dependent location tables (safe if missing).
+  try {
+    await db.query('UPDATE reception_points SET site_id = ?, station_id = ?', [siteId, stationId]);
+  } catch {
+    /* table may not exist yet */
+  }
+  try {
+    await db.query('UPDATE parking_bays SET site_id = ?', [siteId]);
+  } catch {
+    /* table may not exist yet */
+  }
+  try {
+    await db.query(
+      'UPDATE vehicles SET entry_station_id = ?, exit_station_id = NULL WHERE organisation_id = ?',
+      [stationId, org.id],
+    );
+  } catch {
+    /* ignore */
+  }
+
+  // Clear previous seeded location rows, then insert the single office.
+  await db.query('DELETE FROM offices');
+  await db.query('DELETE FROM zones');
+  await db.query('DELETE FROM stations WHERE id <> ?', [stationId]);
+  await db.query('DELETE FROM buildings WHERE id <> ?', [buildingId]);
+  await db.query('DELETE FROM sites WHERE id <> ?', [siteId]);
+
+  await db.query(
+    `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
+     VALUES (?, ?, ?, ?, ?, '6', 'IT Dep Group office 6', 'active')`,
+    [officeId, org.id, dept.id, buildingId, siteId],
+  );
+  const zoneId = generateId('zone');
+  await db.query(
+    `INSERT INTO zones (id, building_id, name, access_level)
+     VALUES (?, ?, 'Reception Area', 'public')`,
+    [zoneId, buildingId],
+  );
+  await db.query(
+    `UPDATE user_scopes SET office_id = ? WHERE organisation_id = ?`,
+    [officeId, org.id],
+  );
+  await db.query(
+    `UPDATE hosts SET office_id = ? WHERE organisation_id = ?`,
+    [officeId, org.id],
+  );
+
+  // Drop orphaned reception/parking rows that still pointed at deleted sites.
+  try {
+    await db.query(
+      `DELETE FROM reception_points
+       WHERE site_id NOT IN (SELECT id FROM sites)`,
+    );
+  } catch {
+    /* ignore */
+  }
+  try {
+    await db.query(
+      `DELETE FROM parking_bays
+       WHERE site_id NOT IN (SELECT id FROM sites)`,
+    );
+  } catch {
+    /* ignore */
+  }
+
+  console.log('[visitor] Location structure reset: HQ → Wonderful Group Greatest → Main Gate + IT Dep Group office 6 + Reception Area');
+  return {
+    skipped: false,
+    siteId,
+    buildingId,
+    stationId,
+    officeId,
+    zoneId,
+    departmentId: dept.id,
+  };
+}
+
+/** Keep location seed stable; do not recreate old multi-site/office demo data. */
+export async function seedOfficeHierarchy(db = pool) {
+  await ensureOfficeSchema(db);
+
+  const [[hq]] = await db.query(
+    `SELECT s.id
+     FROM sites s
+     INNER JOIN buildings b ON b.site_id = s.id
+     WHERE s.code = 'HQ' AND b.name = 'Wonderful Group Greatest'
+     LIMIT 1`,
+  );
+  if (hq?.id) {
+    return { skipped: true, reason: 'canonical_location_exists' };
+  }
+
+  // Fresh/partial DBs: establish the canonical location once.
+  return resetAndSeedLocationStructure(db);
 }
 
 export { generateId };

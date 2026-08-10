@@ -46,6 +46,7 @@ function adaptOnDuplicateKeyUpdate(sql) {
 function adaptInformationSchema(sql) {
   return sql
     .replace(/information_schema\.COLUMNS/gi, 'information_schema.columns')
+    .replace(/information_schema\.TABLES/gi, 'information_schema.tables')
     .replace(/TABLE_SCHEMA\s*=\s*DATABASE\(\)/gi, "table_schema = 'public'")
     .replace(/\bTABLE_NAME\b/g, 'table_name')
     .replace(/\bCOLUMN_NAME\b/g, 'column_name');
@@ -107,6 +108,9 @@ export function adaptSqlForPostgres(sql) {
     .replace(/\bCURDATE\(\)/gi, 'CURRENT_DATE')
     .replace(/\bDATABASE\s*\(\s*\)/gi, 'current_database()')
     .replace(/\bTINYINT\s*\(\s*1\s*\)/gi, 'SMALLINT')
+    .replace(/\bMEDIUMTEXT\b/gi, 'TEXT')
+    .replace(/\bLONGTEXT\b/gi, 'TEXT')
+    .replace(/\bTINYTEXT\b/gi, 'TEXT')
     .replace(/\bDATETIME\b/gi, 'TIMESTAMP')
     .replace(/\s+ON UPDATE CURRENT_TIMESTAMP/gi, '');
 

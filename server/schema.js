@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import pool from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureRbacTables, seedRbac } from './rbacService.js';
-import { ensureVisitorSchema, seedVisitorData } from './visitorSchema.js';
+import { ensureVisitorSchema, seedVisitorData, seedOfficeHierarchy } from './visitorSchema.js';
 import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
@@ -67,11 +67,14 @@ export async function bootstrapDatabase() {
   await seedDefaultAdmin();
   await seedRbac(pool);
   await seedVisitorData();
+  await seedOfficeHierarchy();
   await seedSecurityData();
   await seedComplianceData();
   await seedPlatformData();
   await seedAccessData();
   await seedSettingsData();
   await seedPortalUsers();
-  await seedSampleVisits();
+  if (process.env.SEED_DEMO_VISITS === '1') {
+    await seedSampleVisits();
+  }
 }

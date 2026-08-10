@@ -9,6 +9,7 @@ import {
   StatusBadge,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
+import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function CheckInPage() {
@@ -36,7 +37,7 @@ export default function CheckInPage() {
     try {
       await loadBadges();
       const rows = await visitorApi.lookupVisit(query.trim());
-      setResults(rows.filter((v) => ['approved', 'pre_registered'].includes(v.status)));
+      setResults(rows.filter((v) => isCheckInEligible(v.status)));
       if (rows.length === 0) toast.info('No matching visits found.');
     } catch (err) {
       toast.error(err.message);

@@ -15,17 +15,15 @@ function navItemVisible(item, hasPermission) {
 }
 
 export const PORTALS = {
-  platform: {
-    id: 'platform',
-    label: 'Platform Portal',
-    routePrefix: '/platform',
-    navSections: { primary: 'Platform', system: 'Operations & Audit' },
-  },
   admin: {
     id: 'admin',
     label: 'Administration Portal',
     routePrefix: '/admin',
-    navSections: { primary: 'Configuration', system: 'Reports & Compliance' },
+    navSections: {
+      primary: 'Operations',
+      organisation: 'Administration',
+      system: 'Reports & Compliance',
+    },
   },
   security: {
     id: 'security',
@@ -72,33 +70,24 @@ export const PORTALS = {
 };
 
 export const PORTAL_NAVIGATION = {
-  platform: [
-    { key: 'dashboard', name: 'Dashboard', to: '/platform', permission: 'platform.dashboard', end: true, section: 'primary' },
-    { key: 'calendar', name: 'Calendar', to: '/platform/calendar', permission: 'platform.calendar', section: 'primary' },
-    { key: 'log-book', name: 'Log Book', to: '/platform/log-book', permission: 'platform.logbook', section: 'primary' },
-    { key: 'visitors', name: 'Visitors', to: '/platform/visitors', permissions: ['platform.visitors', 'platform.logbook', 'platform.dashboard'], section: 'primary' },
-    { key: 'vehicles', name: 'Vehicles', to: '/platform/vehicles', permissions: ['platform.vehicles', 'platform.logbook', 'platform.dashboard'], section: 'primary' },
-    { key: 'organisations', name: 'Organisations', to: '/platform/organisations', permission: 'platform.organisations', section: 'primary' },
-    { key: 'platform-users', name: 'Platform Users', to: '/platform/users', permission: 'platform.users', section: 'primary' },
-    { key: 'integrations', name: 'Integrations', to: '/platform/integrations', permission: 'platform.integrations', section: 'system' },
-    { key: 'support-access', name: 'Support Access', to: '/platform/support', permission: 'platform.support', section: 'system' },
-    { key: 'audit-logs', name: 'Global Audit Logs', to: '/platform/audit', permission: 'platform.audit', section: 'system' },
-    { key: 'settings', name: 'System Settings', to: '/platform/settings', permission: 'platform.settings', section: 'settings' },
-  ],
   admin: [
+    // Use-case order: overview → entities → records → configuration
     { key: 'dashboard', name: 'Dashboard', to: '/admin', permission: 'admin.dashboard', end: true, section: 'primary' },
-    { key: 'sites', name: 'Sites & Branches', to: '/admin/sites', permission: 'admin.sites', section: 'primary' },
-    { key: 'zones', name: 'Buildings & Zones', to: '/admin/zones', permission: 'admin.zones', section: 'primary' },
-    { key: 'stations', name: 'Stations & Gates', to: '/admin/stations', permission: 'admin.stations', section: 'primary' },
-    { key: 'departments', name: 'Departments', to: '/admin/departments', permission: 'admin.departments', section: 'primary' },
-    { key: 'hosts', name: 'Employees & Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'primary' },
-    { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'primary' },
-    { key: 'categories', name: 'Visitor Categories', to: '/admin/categories', permission: 'admin.categories', section: 'primary' },
     { key: 'visitors', name: 'Visitors', to: '/admin/visitors', permissions: ['admin.visitors', 'admin.dashboard'], section: 'primary' },
-    { key: 'log-book', name: 'Log Book', to: '/admin/log-book', permissions: ['admin.visitors', 'admin.vehicles', 'admin.dashboard'], section: 'primary' },
     { key: 'vehicles', name: 'Vehicles', to: '/admin/vehicles', permissions: ['admin.vehicles', 'admin.dashboard'], section: 'primary' },
+    { key: 'log-book', name: 'Log Book', to: '/admin/log-book', permissions: ['admin.visitors', 'admin.vehicles', 'admin.dashboard'], section: 'primary' },
     { key: 'workflows', name: 'Approval Workflows', to: '/admin/workflows', permission: 'admin.workflows', section: 'primary' },
     { key: 'badges', name: 'Badge Inventory', to: '/admin/badges', permission: 'admin.badges', section: 'primary' },
+    // Hierarchy setup order: Org → Site → Building/Zone → Station → Dept → Office → People → visitor policy
+    { key: 'organisations', name: 'Organisations', to: '/admin/organisations', permission: 'admin.organisations', section: 'organisation', badgeKey: 'organisations' },
+    { key: 'sites', name: 'Sites & Branches', to: '/admin/sites', permission: 'admin.sites', section: 'organisation', badgeKey: 'sites' },
+    { key: 'zones', name: 'Buildings & Zones', to: '/admin/zones', permission: 'admin.zones', section: 'organisation', badgeKey: 'zones' },
+    { key: 'stations', name: 'Stations & Gates', to: '/admin/stations', permission: 'admin.stations', section: 'organisation', badgeKey: 'stations' },
+    { key: 'departments', name: 'Departments', to: '/admin/departments', permission: 'admin.departments', section: 'organisation', badgeKey: 'departments' },
+    { key: 'offices', name: 'Offices', to: '/admin/offices', permission: 'admin.offices', section: 'organisation', badgeKey: 'offices' },
+    { key: 'hosts', name: 'Employees & Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'organisation', badgeKey: 'hosts' },
+    { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'organisation', badgeKey: 'users' },
+    { key: 'categories', name: 'Visitor Categories', to: '/admin/categories', permission: 'admin.categories', section: 'organisation' },
     { key: 'notifications', name: 'Notifications', to: '/admin/notifications', permission: 'admin.notifications', section: 'system' },
     { key: 'reports', name: 'Reports', to: '/admin/reports', permission: 'admin.reports', section: 'system' },
     { key: 'privacy', name: 'Privacy & Retention', to: '/admin/privacy', permission: 'admin.privacy', section: 'system' },
@@ -126,12 +115,9 @@ export const PORTAL_NAVIGATION = {
   ],
   station: [
     { key: 'dashboard', name: 'Dashboard', to: '/station', permission: 'station.dashboard', end: true, section: 'primary' },
-    { key: 'new-visitor', name: 'New Visitor', to: '/station/visitors/new', permission: 'station.visitors.register', section: 'primary' },
-    { key: 'new-vehicle', name: 'New Vehicle', to: '/station/vehicles/new', permission: 'station.vehicles.register', section: 'primary' },
+    { key: 'gate-entry', name: 'Gate Checkin / Checkout', to: '/station/gate-entry', permissions: ['station.visitors.register', 'station.visitors.checkin'], section: 'primary' },
     { key: 'expected', name: 'Expected Arrivals', to: '/station/expected', permission: 'station.visitors.view', section: 'primary' },
     { key: 'pending', name: 'Pending Approvals', to: '/station/pending', permission: 'station.visitors.view', section: 'primary' },
-    { key: 'check-in', name: 'Check-in', to: '/station/check-in', permission: 'station.visitors.checkin', section: 'primary' },
-    { key: 'check-out', name: 'Check-out', to: '/station/check-out', permission: 'station.visitors.checkout', section: 'primary' },
     { key: 'visitor-logs', name: 'Visitor Logs', to: '/station/visitors', permission: 'station.visitors.view', section: 'primary' },
     { key: 'vehicle-logs', name: 'Vehicle Logs', to: '/station/vehicles', permission: 'station.vehicles.view', section: 'primary' },
     { key: 'deliveries', name: 'Deliveries', to: '/station/deliveries', permission: 'station.deliveries', section: 'primary' },
@@ -202,7 +188,6 @@ export const PORTAL_NAVIGATION = {
 
 /** Portal priority for default redirect after login */
 export const PORTAL_PRIORITY = [
-  'platform',
   'admin',
   'executive',
   'security',
@@ -224,29 +209,35 @@ export function getVisibleNavItems(portalId, hasPermission) {
     }));
 }
 
-/** Split nav into Mutale-style sections: primary scroll area + system group + settings footer. */
+/** Split nav into Mutale-style sections: primary + organisation + system + settings footer. */
 export function groupNavItems(items) {
   const primary = [];
+  const organisation = [];
   const system = [];
   const settings = [];
 
   for (const item of items) {
     if (item.section === 'settings') settings.push(item);
     else if (item.section === 'system') system.push(item);
+    else if (item.section === 'organisation') organisation.push(item);
     else primary.push(item);
   }
 
-  return { primary, system, settings };
+  return { primary, organisation, system, settings };
 }
 
 /** CEO/DCEO users scoped to the personal executive portal only. */
 export function isExecutiveOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
-  return has('executive.dashboard') && !has('management.dashboard');
+  return has('executive.dashboard') && !has('management.dashboard') && !has('host.dashboard');
 }
 
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
   if (isExecutiveOnlyUser(permissions)) {
+    return 'executive';
+  }
+
+  if (permissionMatches(permissions, 'executive.dashboard')) {
     return 'executive';
   }
 
@@ -257,6 +248,32 @@ export function resolvePrimaryPortal(hasPermission, permissions = []) {
   return 'admin';
 }
 
+/** Resolve which portal a pathname belongs to (longest matching prefix). */
+export function resolvePortalFromPath(pathname = '') {
+  const path = String(pathname || '');
+  return Object.values(PORTALS)
+    .filter((portal) => path === portal.routePrefix || path.startsWith(`${portal.routePrefix}/`))
+    .sort((a, b) => b.routePrefix.length - a.routePrefix.length)[0] || null;
+}
+
+/** Short crumb label, e.g. "Administration Portal" → "Administration". */
+export function portalBreadcrumbLabel(portal) {
+  return String(portal?.label || '').replace(/\s+Portal$/i, '') || 'App';
+}
+
+/** Default breadcrumbs: Portal → current page title. */
+export function defaultPortalBreadcrumbs(pathname = '', pageTitle = '') {
+  const portal = resolvePortalFromPath(pathname);
+  if (!portal) return [];
+  const portalLabel = portalBreadcrumbLabel(portal);
+  const title = String(pageTitle || '').trim();
+  if (!title) return [{ label: portalLabel, to: portal.routePrefix }];
+  return [
+    { label: portalLabel, to: portal.routePrefix },
+    { label: title },
+  ];
+}
+
 /** Default post-login route for a permission set. */
 export function resolvePortalRoute(permissions = []) {
   const hasPermission = (key) => permissionMatches(permissions, key);
@@ -264,15 +281,28 @@ export function resolvePortalRoute(permissions = []) {
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
+/** Default home route after sign-in — calendar-first for employees with executive access. */
+export function resolveDefaultHomeRoute(permissions = []) {
+  if (permissionMatches(permissions, 'executive.dashboard')) {
+    return PORTALS.executive.routePrefix;
+  }
+  return resolvePortalRoute(permissions);
+}
+
 /** Prefer the user's primary portal; never send executive-only users to /management. */
 export function resolveLoginRedirect(fromPath = '', permissions = []) {
-  const portalRoute = resolvePortalRoute(permissions);
+  const homeRoute = resolveDefaultHomeRoute(permissions);
   const from = String(fromPath || '').trim();
-  if (!from || from === '/login' || from.startsWith('/admin/login')) {
-    return portalRoute;
+
+  if (permissionMatches(permissions, 'executive.dashboard')) {
+    return homeRoute;
+  }
+
+  if (!from || from === '/' || from === '/login' || from.startsWith('/admin/login') || from.startsWith('/platform')) {
+    return homeRoute;
   }
   if (isExecutiveOnlyUser(permissions) && from.startsWith('/management')) {
-    return portalRoute;
+    return homeRoute;
   }
   return from;
 }
@@ -280,6 +310,9 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
 export function canAccessPortal(portalId, hasPermission, permissions = []) {
   if (isExecutiveOnlyUser(permissions) && portalId !== 'executive') {
     return false;
+  }
+  if (portalId === 'executive') {
+    return ['executive.dashboard', 'executive.calendar', 'executive.visits'].some((perm) => hasPermission(perm));
   }
   return getVisibleNavItems(portalId, hasPermission).length > 0;
 }

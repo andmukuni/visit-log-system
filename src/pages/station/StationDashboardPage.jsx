@@ -1,18 +1,52 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserPlus, LogIn, LogOut, Car, ClipboardList, Users, UserCheck, Clock } from 'lucide-react';
-import { RefreshAction, ActionToolbar } from '../../components/ui';
+import { Link } from 'react-router-dom';
 import {
-  PortalDashboardLayout,
-  ActivityFeedPanel,
-  MetricsSection,
-  WeeklyBarChart,
-  HighlightBalanceCard,
-  QuickActionList,
-  DashboardInfoCard,
-  buildWeeklySeries,
-  metricTarget,
-} from '../../components/dashboard';
+  AlertTriangle,
+  CheckCircle,
+  ClipboardList,
+  Clock,
+  LogIn,
+  LogOut,
+  Shield,
+  UserCheck,
+  UserPlus,
+  Users,
+  XCircle,
+} from 'lucide-react';
+import {
+  Card,
+  DataTable,
+  PageHeader,
+  RefreshAction,
+  ActionToolbar,
+  Spinner,
+  StatusBadge,
+  ViewAllAction,
+} from '../../components/ui';
+import { DashboardOverviewLayout, metricTarget } from '../../components/dashboard';
+import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+
+const EVENT_LABELS = {
+  registered: 'Registered',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  checked_in: 'Check-in',
+  checked_out: 'Check-out',
+  arrived_at_gate: 'Arrived at gate',
+};
+
+const EVENT_ICONS = {
+  registered: UserPlus,
+  approved: CheckCircle,
+  checked_in: LogIn,
+  checked_out: LogOut,
+  rejected: XCircle,
+};
+
+function formatEventType(type) {
+  return EVENT_LABELS[type] || String(type || '').replace(/_/g, ' ');
+}
 
 export default function StationDashboardPage() {
   const [data, setData] = useState(null);
@@ -25,7 +59,8 @@ export default function StationDashboardPage() {
     try {
       setData(await visitorApi.getStationDashboard());
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Unable to load dashboard.');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -35,68 +70,165 @@ export default function StationDashboardPage() {
     load();
   }, [load]);
 
-  const weeklyData = useMemo(
-    () => buildWeeklySeries(data?.recentActivity, data?.visitorsToday),
-    [data],
+  const metricsSection = data ? {
+    title: '',
+    variant: 'overview',
+    cards: [
+      {
+        title: 'Visitors today',
+        value: data.visitorsToday,
+        target: metricTarget(data.visitorsToday, 5, 20),
+        accent: 'light',
+        icon: UserCheck,
+      },
+      {
+        title: 'Pending approvals',
+        value: data.pendingApprovals,
+        target: metricTarget(data.pendingApprovals),
+        accent: 'charcoal',
+        icon: Clock,
+      },
+      {
+        title: 'On site now',
+        value: data.currentlyInside,
+        target: metricTarget(data.currentlyInside, 5, 20),
+        accent: 'light',
+        icon: Users,
+      },
+      {
+        title: 'Overdue visits',
+        value: data.overdueVisits,
+        target: metricTarget(data.overdueVisits),
+        accent: 'charcoal',
+        icon: AlertTriangle,
+      },
+    ],
+  } : null;
+
+  const donutData = useMemo(
+    () => (data?.eventsByType || []).map((row) => ({
+      ...row,
+      event_label: formatEventType(row.event_type),
+      icon: EVENT_ICONS[row.event_type] || Shield,
+    })),
+    [data?.eventsByType],
   );
 
+  const activityColumns = [
+    {
+      key: 'created_at',
+      label: 'Time',
+      render: (_, row) => formatDateTime(row.created_at),
+    },
+    { key: 'visitor_name', label: 'Visitor' },
+    {
+      key: 'event_type',
+      label: 'Event',
+      render: (_, row) => formatEventType(row.event_type),
+    },
+    {
+      key: 'visit_status',
+      label: 'Status',
+      render: (_, row) => <StatusBadge status={row.visit_status} />,
+    },
+  ];
+
+  const subtitle = data?.scope
+    ? `${data.scope.stationName || data.scope.siteName} · ${data.scope.siteName}`
+    : 'Station overview';
+
   return (
-    <PortalDashboardLayout
-      title="Overview"
-      subtitle={data?.scope ? `${data.scope.stationName} · ${data.scope.siteName}` : undefined}
-      actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
-      loading={loading}
-      error={error}
-      left={<ActivityFeedPanel items={data?.recentActivity || []} />}
-      center={
-        data && (
-          <>
-            <MetricsSection
-              title=""
-              cards={[
-                {
-                  title: 'Visitors today',
-                  value: data.visitorsToday,
-                  target: metricTarget(data.visitorsToday, 5, 20),
-                  accent: 'light',
-                  icon: UserCheck,
-                },
-                {
-                  title: 'Pending approvals',
-                  value: data.pendingApprovals,
-                  target: metricTarget(data.pendingApprovals),
-                  accent: 'charcoal',
-                  icon: Clock,
-                },
-              ]}
+    <div className="mx-auto w-full max-w-7xl">
+      <PageHeader
+        title="Station Overview"
+        subtitle={subtitle}
+        iconKey="dashboard"
+        actions={<ActionToolbar><RefreshAction onClick={load} loading={loading} /></ActionToolbar>}
+      />
+
+      {loading && (
+        <div className="flex justify-center py-16">
+          <Spinner size={32} />
+        </div>
+      )}
+
+      {!loading && error && (
+        <Card title="Dashboard error" className="mb-6">
+          <p className="text-sm text-red-600">{error}</p>
+        </Card>
+      )}
+
+      {!loading && data && (
+        <>
+          <DashboardOverviewLayout
+            metricsSection={metricsSection}
+            lineChart={{
+              title: 'Visitor activity',
+              data: data.weeklyTrend,
+              trend: data.eventTrend,
+              emptyLabel: 'No visitor events this week yet.',
+            }}
+            donutChart={{
+              title: 'Recent month',
+              subtitle: 'Events',
+              centerTitle: 'Event mix',
+              centerIcon: Shield,
+              data: donutData,
+              nameKey: 'event_label',
+              valueKey: 'total',
+              emptyLabel: 'No event data yet.',
+              totalLabel: 'events',
+            }}
+          />
+
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card title="Vehicles today" subtitle="Registered at gate">
+              <p className="text-3xl font-bold text-navy-900">{data.vehiclesToday}</p>
+            </Card>
+            <Card title="Denied today" subtitle="Rejected or denied visits">
+              <p className="text-3xl font-bold text-navy-900">{data.deniedRejected}</p>
+            </Card>
+            <Card title="Quick links" subtitle="Common station tasks">
+              <div className="flex flex-wrap gap-2">
+                <Link to="/station/gate-entry?tab=checkin" className="inline-flex items-center gap-1.5 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50">
+                  <LogIn size={14} aria-hidden="true" />
+                  Checkin
+                </Link>
+                <Link to="/station/gate-entry?tab=checkout" className="inline-flex items-center gap-1.5 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50">
+                  <LogOut size={14} aria-hidden="true" />
+                  Checkout
+                </Link>
+                <Link to="/station/visitors" className="inline-flex items-center gap-1.5 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50">
+                  <ClipboardList size={14} aria-hidden="true" />
+                  Visitor logs
+                </Link>
+                <Link to="/station/pending" className="inline-flex items-center gap-1.5 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-medium text-navy-700 hover:bg-navy-50">
+                  <Users size={14} aria-hidden="true" />
+                  Pending
+                </Link>
+              </div>
+            </Card>
+          </div>
+
+          <Card
+            title="Recent activity"
+            subtitle="Latest visitor events at this station"
+            actions={<ViewAllAction to="/station/visitors" label="View visitor logs" />}
+          >
+            <DataTable
+              embedded
+              toolbar={{
+                placeholder: 'Search activity…',
+                searchKeys: ['visitor_name', 'event_type', 'visit_status'],
+              }}
+              columns={activityColumns}
+              data={data.recentActivity || []}
+              emptyTitle="No activity yet"
+              emptyDescription="Gate check-ins, approvals, and check-outs will appear here."
             />
-            <WeeklyBarChart title="Visitor flow" subtitle="Events this week" data={weeklyData} />
-          </>
-        )
-      }
-      right={
-        data && (
-          <>
-            <HighlightBalanceCard
-              value={data.currentlyInside}
-              subtitle={`${data.visitorsToday} arrivals today · ${data.vehiclesToday} vehicles`}
-            />
-            <QuickActionList
-              items={[
-                { label: 'Register visitor', icon: UserPlus, to: '/station/visitors/new' },
-                { label: 'Check in', icon: LogIn, to: '/station/check-in' },
-                { label: 'Check out', icon: LogOut, to: '/station/check-out' },
-                { label: 'Register vehicle', icon: Car, to: '/station/vehicles/new' },
-                { label: 'Visitor logs', icon: ClipboardList, to: '/station/visitors' },
-                { label: 'Pending approvals', icon: Users, to: '/station/pending' },
-              ]}
-            />
-            <DashboardInfoCard title="Station alerts">
-              Overdue visits: {data.overdueVisits} · Denied today: {data.deniedRejected}
-            </DashboardInfoCard>
-          </>
-        )
-      }
-    />
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

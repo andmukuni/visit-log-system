@@ -24,6 +24,44 @@ export const visitorApi = {
   getStationDashboard: () => apiFetch('/admin/station/dashboard'),
   getOccupancy: () => apiFetch('/admin/station/occupancy'),
   getReferenceData: () => apiFetch('/admin/station/reference-data'),
+  gateEntryWalkIn: async (body) => {
+    const res = await fetch(`${API_BASE}/admin/station/gate-entry/walk-in`, {
+      method: 'POST',
+      headers: {
+        ...getAdminAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      const err = new Error(json?.message || 'Request failed');
+      err.unavailable = Boolean(json?.unavailable);
+      throw err;
+    }
+    return json.data;
+  },
+  gateEntryVehicle: (body) => apiFetch('/admin/station/gate-entry/vehicle', { method: 'POST', body: JSON.stringify(body) }),
+  gateEntryNrcLookup: async (nrc) => {
+    const res = await fetch(`${API_BASE}/admin/station/gate-entry/nrc-lookup`, {
+      method: 'POST',
+      headers: {
+        ...getAdminAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ nrc }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      const err = new Error(json?.message || 'Request failed');
+      err.unavailable = Boolean(json?.unavailable);
+      throw err;
+    }
+    return json.data;
+  },
+  searchVehicleByPlate: (plate) => apiFetch(`/admin/vehicles/search?plate=${encodeURIComponent(plate)}`),
   getVisits: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/visits${qs ? `?${qs}` : ''}`);
@@ -34,7 +72,13 @@ export const visitorApi = {
   rejectVisit: (id, reason) => apiFetch(`/admin/visits/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   checkInVisit: (id, badgeNumber) => apiFetch(`/admin/visits/${id}/check-in`, { method: 'POST', body: JSON.stringify({ badgeNumber }) }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
-  lookupVisit: (query) => apiFetch('/admin/visits/lookup', { method: 'POST', body: JSON.stringify({ query }) }),
+  lookupVisit: (query, type) => apiFetch('/admin/visits/lookup', { method: 'POST', body: JSON.stringify({ query, type }) }),
+  getPendingCheckIns: (type = 'walk-in') => apiFetch(`/admin/visits/pending-check-in?type=${encodeURIComponent(type)}`),
+  getExpectedArrivals: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/admin/visits/expected-arrivals${qs ? `?${qs}` : ''}`);
+  },
+  getOnSiteVisits: (type = 'walk-in') => apiFetch(`/admin/visits/on-site?type=${encodeURIComponent(type)}`),
   getVehicles: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/vehicles${qs ? `?${qs}` : ''}`);
@@ -42,6 +86,7 @@ export const visitorApi = {
   registerVehicle: (body) => apiFetch('/admin/vehicles', { method: 'POST', body: JSON.stringify(body) }),
   checkOutVehicle: (id) => apiFetch(`/admin/vehicles/${id}/check-out`, { method: 'POST' }),
   getOrgDashboard: () => apiFetch('/admin/org/dashboard'),
+  getOrgNavCounts: () => apiFetch('/admin/org/nav-counts'),
   getOrgVisitors: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visitors${qs ? `?${qs}` : ''}`);
@@ -54,10 +99,115 @@ export const visitorApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visits${qs ? `?${qs}` : ''}`);
   },
-  getSites: () => apiFetch('/admin/org/sites'),
-  getStations: () => apiFetch('/admin/org/stations'),
-  getDepartments: () => apiFetch('/admin/org/departments'),
-  getHosts: () => apiFetch('/admin/org/hosts'),
+  getOrgVisit: (id) => apiFetch(`/admin/org/visits/${id}`),
+  getOrganisations: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/organisations`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createOrganisation: (body) => apiFetch('/admin/org/organisations', { method: 'POST', body: JSON.stringify(body) }),
+  updateOrganisation: (id, body) => apiFetch(`/admin/org/organisations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getSites: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/sites`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    // Preserve array shape for existing callers; attach stats when present.
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createSite: (body) => apiFetch('/admin/org/sites', { method: 'POST', body: JSON.stringify(body) }),
+  updateSite: (id, body) => apiFetch(`/admin/org/sites/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getZones: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/zones`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createZone: (body) => apiFetch('/admin/org/zones', { method: 'POST', body: JSON.stringify(body) }),
+  updateZone: (id, body) => apiFetch(`/admin/org/zones/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getBuildings: () => apiFetch('/admin/org/buildings'),
+  createBuilding: (body) => apiFetch('/admin/org/buildings', { method: 'POST', body: JSON.stringify(body) }),
+  getStations: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/stations`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createStation: (body) => apiFetch('/admin/org/stations', { method: 'POST', body: JSON.stringify(body) }),
+  updateStation: (id, body) => apiFetch(`/admin/org/stations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getDepartments: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/departments`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createDepartment: (body) => apiFetch('/admin/org/departments', { method: 'POST', body: JSON.stringify(body) }),
+  updateDepartment: (id, body) => apiFetch(`/admin/org/departments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getOffices: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/offices`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createOffice: (body) => apiFetch('/admin/org/offices', { method: 'POST', body: JSON.stringify(body) }),
+  updateOffice: (id, body) => apiFetch(`/admin/org/offices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getHosts: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/hosts`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createHost: (body) => apiFetch('/admin/org/hosts', { method: 'POST', body: JSON.stringify(body) }),
+  updateHost: (id, body) => apiFetch(`/admin/org/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getCategories: () => apiFetch('/admin/org/categories'),
   getBadges: () => apiFetch('/admin/org/badges'),
 };
@@ -193,12 +343,18 @@ export const platformApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/platform/visitors${qs ? `?${qs}` : ''}`);
   },
+  getVisit: (id) => apiFetch(`/admin/platform/visits/${id}`),
   getVehicles: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/platform/vehicles${qs ? `?${qs}` : ''}`);
   },
+  createVehicle: (body) => apiFetch('/admin/platform/vehicles', { method: 'POST', body: JSON.stringify(body) }),
+  updateVehicle: (id, body) => apiFetch(`/admin/platform/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteVehicle: (id) => apiFetch(`/admin/platform/vehicles/${id}`, { method: 'DELETE' }),
   getOrganisations: () => apiFetch('/admin/platform/organisations'),
+  createOrganisation: (body) => apiFetch('/admin/platform/organisations', { method: 'POST', body: JSON.stringify(body) }),
   updateOrganisation: (id, body) => apiFetch(`/admin/platform/organisations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteOrganisation: (id) => apiFetch(`/admin/platform/organisations/${id}`, { method: 'DELETE' }),
   getSubscriptions: () => apiFetch('/admin/platform/subscriptions'),
   getHealth: () => apiFetch('/admin/platform/health'),
   getAudit: (params = {}) => {

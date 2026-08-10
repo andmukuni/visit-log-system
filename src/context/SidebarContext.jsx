@@ -25,7 +25,7 @@ function buildSidebarSnapshot(portalId, hasPermission, permissions = [], extraIt
     });
   }
 
-  const { primary, system, settings } = groupNavItems(mergedItems);
+  const { primary, organisation, system, settings } = groupNavItems(mergedItems);
   const accessiblePortals = getAccessiblePortals(hasPermission, permissions).filter((portal) => portal.id !== portalId);
   const portalMeta = PORTALS[portalId];
   const sectionLabels = portalMeta?.navSections || { primary: 'Overview', system: 'System' };
@@ -34,6 +34,7 @@ function buildSidebarSnapshot(portalId, hasPermission, permissions = [], extraIt
     portalId,
     routePrefix: portalMeta?.routePrefix || '/',
     primary,
+    organisation,
     system,
     settings,
     accessiblePortals,

@@ -36,7 +36,7 @@ export default function Breadcrumbs({ items = [], variant = 'page', className = 
               <span
                 className={
                   isShell && isLast
-                    ? 'truncate text-lg font-bold tracking-tight text-navy-900'
+                    ? 'truncate font-semibold text-navy-900'
                     : isLast
                       ? 'font-medium text-navy-600'
                       : 'text-navy-400'

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PageHeader,
   ActionToolbar,
@@ -13,6 +13,7 @@ import { visitorApi } from '../../utils/visitorApi';
 
 export default function AdminLogBookPage() {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
@@ -43,6 +44,11 @@ export default function AdminLogBookPage() {
     if (nextStatus) params.status = nextStatus;
     return visitorApi.getOrgVisits(params);
   }, []);
+
+  const handleRowClick = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/log-book/${row.id}?tab=${activeTab || 'walking'}`);
+  }, [activeTab, navigate]);
 
   if (availableTabs.length === 0) {
     return <Navigate to="/admin" replace />;
@@ -80,6 +86,7 @@ export default function AdminLogBookPage() {
           searchPlaceholder={currentTab.searchPlaceholder}
           loadRows={loadRows}
           showOrganisationColumn
+          onRowClick={handleRowClick}
         />
       )}
     </div>

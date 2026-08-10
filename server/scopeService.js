@@ -4,16 +4,63 @@
 
 export async function getUserScope(pool, userId) {
   const [[scope]] = await pool.query(
-    `SELECT us.*, o.name AS organisation_name, s.name AS site_name, st.name AS station_name
+    `SELECT us.*,
+            o.name AS organisation_name,
+            s.name AS site_name,
+            st.name AS station_name,
+            d.name AS department_name,
+            ofc.office_number,
+            ofc.name AS office_name
      FROM user_scopes us
      LEFT JOIN organisations o ON o.id = us.organisation_id
      LEFT JOIN sites s ON s.id = us.site_id
      LEFT JOIN stations st ON st.id = us.station_id
+     LEFT JOIN offices ofc ON ofc.id = us.office_id
+     LEFT JOIN departments d ON d.id = COALESCE(us.department_id, ofc.department_id)
      WHERE us.user_id = ?
      LIMIT 1`,
     [userId],
   );
   return scope || null;
+}
+
+/**
+ * Resolve where an employee/user belongs:
+ * Employee → Department (single departments table)
+ * Employee → Site/Branch
+ * Optional: Employee → Office → Building
+ * Then Organisation
+ */
+export async function resolveEmployeePlacement(pool, userId) {
+  const [[row]] = await pool.query(
+    `SELECT
+       u.id AS user_id,
+       u.name AS user_name,
+       u.email AS user_email,
+       ofc.id AS office_id,
+       ofc.office_number,
+       ofc.name AS office_name,
+       d.id AS department_id,
+       d.name AS department_name,
+       d.code AS department_code,
+       s.id AS site_id,
+       s.name AS site_name,
+       s.code AS site_code,
+       o.id AS organisation_id,
+       o.name AS organisation_name,
+       o.slug AS organisation_slug
+     FROM users u
+     LEFT JOIN user_scopes us ON us.user_id = u.id
+     LEFT JOIN hosts h ON h.user_id = u.id AND h.status = 'active'
+     LEFT JOIN offices ofc ON ofc.id = COALESCE(us.office_id, h.office_id)
+     LEFT JOIN departments d ON d.id = COALESCE(h.department_id, us.department_id, ofc.department_id)
+     LEFT JOIN sites s ON s.id = COALESCE(h.site_id, us.site_id, ofc.site_id)
+     LEFT JOIN organisations o ON o.id = COALESCE(h.organisation_id, us.organisation_id, ofc.organisation_id, d.organisation_id, s.organisation_id)
+     WHERE u.id = ?
+     LIMIT 1`,
+    [userId],
+  );
+  return row || null;
 }
 
 export function isSuperAdmin(claims = {}) {
@@ -64,8 +111,8 @@ export const VISIT_TRANSITIONS = {
   pending_approval: ['approved', 'expected', 'rejected', 'cancelled'],
   approved: ['expected', 'arrived_at_gate', 'checked_in', 'reception_check_in', 'cancelled', 'expired'],
   expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'cancelled', 'expired'],
-  arrived_at_gate: ['entered_premises', 'cancelled'],
-  entered_premises: ['reception_check_in', 'checked_in', 'cancelled'],
+  arrived_at_gate: ['entered_premises', 'reception_check_in', 'checked_out', 'cancelled'],
+  entered_premises: ['reception_check_in', 'checked_in', 'checked_out', 'cancelled'],
   reception_check_in: ['waiting', 'in_meeting', 'checked_in', 'checked_out'],
   checked_in: ['waiting', 'in_meeting', 'checked_out', 'overdue', 'completed'],
   waiting: ['in_meeting', 'checked_out'],

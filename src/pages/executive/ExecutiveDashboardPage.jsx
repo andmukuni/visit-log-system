@@ -22,7 +22,7 @@ async function fetchWithRetry(fn, attempts = 2) {
 }
 
 export default function ExecutiveDashboardPage() {
-  const { isAuthenticated, permissions } = useAuth();
+  const { isAuthenticated, isLoading, permissions, hasPermission } = useAuth();
   const [weekStart, setWeekStart] = useState(() => normalizePeriodStart(new Date(), 'week'));
   const [viewMode, setViewMode] = useState('week');
   const [dashboard, setDashboard] = useState(null);
@@ -33,7 +33,7 @@ export default function ExecutiveDashboardPage() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isLoading || !hasPermission('executive.dashboard')) return;
 
     setLoading(true);
     setError('');
@@ -62,7 +62,7 @@ export default function ExecutiveDashboardPage() {
     setAppointments(weekAppointments);
     setError(errors.join(' '));
     setLoading(false);
-  }, [weekStart, viewMode, isAuthenticated]);
+  }, [weekStart, viewMode, isAuthenticated, isLoading, hasPermission]);
 
   useEffect(() => {
     load();

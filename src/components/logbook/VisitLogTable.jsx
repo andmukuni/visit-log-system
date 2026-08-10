@@ -10,6 +10,7 @@ export default function VisitLogTable({
   searchPlaceholder,
   loadRows,
   showOrganisationColumn = true,
+  onRowClick,
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +88,7 @@ export default function VisitLogTable({
         data={rows}
         emptyTitle={emptyTitle}
         emptyDescription={emptyDescription}
+        onRowClick={onRowClick}
         toolbar={{
           placeholder: searchPlaceholder,
           searchKeys,

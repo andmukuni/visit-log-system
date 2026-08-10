@@ -171,6 +171,8 @@ export function resolveRouteAdminPermission(req) {
 
   if (path.includes('/station/dashboard') || path.endsWith('/station/reference-data')) return 'station.dashboard';
   if (path.includes('/station/occupancy')) return 'station.occupancy';
+  if (path.includes('/station/gate-entry/vehicle')) return 'station.vehicles.register';
+  if (path.includes('/station/gate-entry')) return 'station.visitors.register';
 
   if (path.includes('/host/dashboard')) return 'host.dashboard';
   if (path.includes('/host/reference-data') || path.includes('/host/invite')) return 'host.invite';
@@ -248,10 +250,13 @@ export function resolveRouteAdminPermission(req) {
     return 'station.vehicles.register';
   }
 
-  if (path.includes('/org/dashboard')) return 'admin.dashboard';
+  if (path.includes('/org/dashboard') || path.includes('/org/nav-counts')) return 'admin.dashboard';
+  if (path.includes('/org/organisations')) return 'admin.organisations';
   if (path.includes('/org/sites')) return 'admin.sites';
   if (path.includes('/org/stations')) return 'admin.stations';
+  if (path.includes('/org/buildings') || path.includes('/org/zones')) return 'admin.zones';
   if (path.includes('/org/departments')) return 'admin.departments';
+  if (path.includes('/org/offices')) return 'admin.offices';
   if (path.includes('/org/hosts')) return 'admin.hosts';
   if (path.includes('/org/categories')) return 'admin.categories';
   if (path.includes('/org/badges')) return 'admin.badges';

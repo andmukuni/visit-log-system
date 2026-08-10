@@ -22,10 +22,12 @@ const STATION_PERMISSIONS = [
 
 const ADMIN_PORTAL_PERMISSIONS = [
   { key: 'admin.dashboard', name: 'View admin dashboard', group: 'Administration' },
+  { key: 'admin.organisations', name: 'Manage organisations', group: 'Administration' },
   { key: 'admin.sites', name: 'Manage sites', group: 'Administration' },
   { key: 'admin.zones', name: 'Manage buildings & zones', group: 'Administration' },
   { key: 'admin.stations', name: 'Manage stations & gates', group: 'Administration' },
   { key: 'admin.departments', name: 'Manage departments', group: 'Administration' },
+  { key: 'admin.offices', name: 'Manage offices', group: 'Administration' },
   { key: 'admin.hosts', name: 'Manage employees & hosts', group: 'Administration' },
   { key: 'admin.users', name: 'Manage users', group: 'Administration' },
   { key: 'admin.rbac', name: 'Manage roles & permissions', group: 'Administration' },
@@ -125,7 +127,15 @@ export const EXECUTIVE_PORTAL_KEYS = [
   'executive.visits',
   'executive.contacts',
   'executive.full_contact',
+  'executive.assign_vip',
   'host.notifications',
+];
+
+/** Personal calendar access for employees who also use the host portal. */
+export const EMPLOYEE_CALENDAR_KEYS = [
+  'executive.dashboard',
+  'executive.calendar',
+  'executive.visits',
 ];
 
 const EXECUTIVE_KEYS = EXECUTIVE_PERMISSIONS.map((p) => p.key);
@@ -203,7 +213,7 @@ export const DEFAULT_ADMIN_ROLES = [
     name: 'Employee / Host',
     description: 'Invite, approve and monitor own visitors.',
     is_system: true,
-    permissions: HOST_KEYS,
+    permissions: [...HOST_KEYS, ...EMPLOYEE_CALENDAR_KEYS],
   },
   {
     slug: 'management_viewer',
@@ -229,9 +239,10 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: 'platform_admin',
     name: 'Platform Administrator',
-    description: 'Multi-organisation platform administration.',
+    description: 'Multi-organisation administration via the Administration portal.',
     is_system: true,
-    permissions: PLATFORM_KEYS,
+    // Platform portal retired — use Administration with platform-wide access retained.
+    permissions: [...new Set([...ADMIN_KEYS, ...PLATFORM_KEYS])],
   },
   {
     slug: 'gate_security',

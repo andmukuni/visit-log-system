@@ -8,6 +8,8 @@ import {
   canTransition,
   isSuperAdmin,
 } from '../scopeService.js';
+import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
+import { GATE_CHECKOUT_ELIGIBLE_STATUSES, isGateCheckoutEligible } from '../../shared/visitCheckout.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, applyVisitListMasking, formatVisitResponse } from '../visitResponseService.js';
@@ -17,7 +19,13 @@ import {
   upsertVisitorContactDetails,
   canTransitionVehicle,
 } from '../accessSchema.js';
-import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend } from '../dashboardStats.js';
+import { lookupNrc, getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
+import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend, fetchWeeklySecurityEvents, fetchSecurityEventsByType, fetchSecurityEventsTodayYesterday } from '../dashboardStats.js';
+import {
+  assertStationPlacement,
+  assertOfficePlacement,
+  assertEmployeePlacement,
+} from '../orgStructureService.js';
 
 function todayStart() {
   const d = new Date();
@@ -93,6 +101,12 @@ export function createStationRouter() {
         [...params, start],
       );
 
+      const siteSql = siteId ? ' AND vis.site_id = ?' : '';
+      const siteParams = siteId ? [siteId] : [];
+      const weeklyEvents = await fetchWeeklySecurityEvents(pool, orgId, siteSql, siteParams);
+      const { eventTrend } = await fetchSecurityEventsTodayYesterday(pool, orgId, siteSql, siteParams);
+      const eventsByType = await fetchSecurityEventsByType(pool, orgId, siteSql, siteParams);
+
       const [recentActivity] = await pool.query(
         `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
@@ -113,6 +127,9 @@ export function createStationRouter() {
           pendingApprovals: Number(pendingApprovals?.count || 0),
           overdueVisits: Number(overdueVisits?.count || 0),
           deniedRejected: Number(deniedRejected?.count || 0),
+          eventTrend,
+          weeklyTrend: buildWeeklyTrend(weeklyEvents),
+          eventsByType,
           recentActivity,
           scope: {
             organisationId: orgId,
@@ -170,7 +187,10 @@ export function createStationRouter() {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       if (!scope?.organisation_id) {
-        return res.json({ ok: true, data: { hosts: [], categories: [], badges: [] } });
+        return res.json({
+          ok: true,
+          data: { hosts: [], categories: [], badges: [], integrations: { dojah: { enabled: false, configured: false } } },
+        });
       }
 
       const orgId = scope.organisation_id;
@@ -187,6 +207,7 @@ export function createStationRouter() {
         `SELECT id, badge_number, status FROM badges WHERE organisation_id = ? AND status = 'available' ORDER BY badge_number`,
         [orgId],
       );
+      const dojah = await getDojahIntegrationStatus();
 
       res.json({
         ok: true,
@@ -195,7 +216,430 @@ export function createStationRouter() {
           hosts,
           categories,
           badges,
+          integrations: { dojah },
         },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/gate-entry/nrc-lookup', async (req, res) => {
+    try {
+      const scopeResult = await requireUserScope(pool, req.adminClaims?.sub, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const nrc = String(req.body?.nrc || '').trim();
+      if (!nrc) {
+        return res.status(400).json({ ok: false, message: 'NRC is required.' });
+      }
+
+      const lookup = await lookupNrc(nrc, {
+        customerReference: `gate-${scopeResult.scope.station_id || scopeResult.scope.site_id || 'entry'}`,
+      });
+
+      res.json({
+        ok: true,
+        data: {
+          nrc: lookup.nrc,
+          taxpayer_name: lookup.taxpayer_name,
+          current_status: lookup.current_status,
+          tpin: lookup.tpin || null,
+        },
+      });
+    } catch (error) {
+      const unavailable = isDojahUnavailableError(error);
+      res.status(unavailable ? 503 : (error.status || 400)).json({
+        ok: false,
+        message: error.message,
+        unavailable,
+      });
+    }
+  });
+
+  router.post('/gate-entry/walk-in', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+      const { scope } = scopeResult;
+      const {
+        fullName,
+        phone,
+        email,
+        company,
+        hostId,
+        categoryId,
+        purpose,
+        idType,
+        idNumber,
+        dojahOverride,
+        checkInSignature,
+      } = req.body || {};
+
+      let resolvedFullName = fullName?.trim() || '';
+      const usingDojahOverride = Boolean(dojahOverride);
+
+      if (String(idType || '').toLowerCase() === 'nrc' && idNumber?.trim()) {
+        const dojah = await getDojahIntegrationStatus();
+        if (dojah.enabled && !usingDojahOverride) {
+          try {
+            const lookup = await lookupNrc(idNumber.trim(), {
+              customerReference: `walkin-${scope.station_id || scope.site_id || 'entry'}`,
+            });
+            if (!resolvedFullName && lookup.taxpayer_name) {
+              resolvedFullName = lookup.taxpayer_name;
+            }
+          } catch (error) {
+            if (isDojahUnavailableError(error)) {
+              return res.status(503).json({
+                ok: false,
+                message: error.message || 'Dojah service is temporarily unavailable.',
+                unavailable: true,
+              });
+            }
+            return res.status(error.status || 400).json({
+              ok: false,
+              message: error.message || 'NRC verification failed.',
+            });
+          }
+        }
+      }
+
+      if (!resolvedFullName) {
+        return res.status(400).json({ ok: false, message: 'Full name is required.' });
+      }
+
+      const signature = String(checkInSignature || '').trim();
+      if (!signature.startsWith('data:image/')) {
+        return res.status(400).json({ ok: false, message: 'Check-in signature is required.' });
+      }
+      if (signature.length > 500_000) {
+        return res.status(400).json({ ok: false, message: 'Signature image is too large.' });
+      }
+
+      const watchlistMatches = await findWatchlistMatches(pool, scope.organisation_id, {
+        fullName: resolvedFullName,
+        phone: phone?.trim(),
+        email: email?.trim(),
+      });
+      if (watchlistMatches.length) {
+        await writeAuditLog(pool, {
+          organisationId: scope.organisation_id,
+          actorUserId: userId,
+          action: 'watchlist.matched',
+          targetType: 'visit',
+          targetId: null,
+          result: 'blocked',
+          details: { matchCount: watchlistMatches.length, source: 'gate_entry' },
+        });
+        return res.status(403).json({
+          ok: false,
+          message: 'Watchlist match — entry blocked pending security review.',
+          watchlistMatch: true,
+        });
+      }
+
+      let visitorId = null;
+      if (phone?.trim()) {
+        const [[existing]] = await pool.query(
+          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
+          [scope.organisation_id, phone.trim()],
+        );
+        visitorId = existing?.id;
+      }
+
+      if (!visitorId) {
+        visitorId = generateId('vis');
+        await pool.query(
+          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            visitorId,
+            scope.organisation_id,
+            resolvedFullName,
+            phone?.trim() || null,
+            email?.trim() || null,
+            company?.trim() || null,
+          ],
+        );
+      } else {
+        await pool.query(
+          `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
+           WHERE id = ?`,
+          [resolvedFullName, email?.trim() || null, company?.trim() || null, visitorId],
+        );
+      }
+
+      await upsertVisitorContactDetails(pool, visitorId, { idType, idNumber });
+
+      const visitId = generateId('visit');
+      const passCode = generatePassCode();
+
+      await pool.query(
+        `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, category_id, purpose, status, pass_code, check_in_signature, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'arrived_at_gate', ?, ?, ?)`,
+        [
+          visitId,
+          scope.organisation_id,
+          scope.site_id,
+          scope.station_id,
+          visitorId,
+          hostId || null,
+          categoryId || null,
+          purpose?.trim() || null,
+          passCode,
+          signature,
+          userId,
+        ],
+      );
+
+      await writeVisitEvent(pool, {
+        visitId,
+        eventType: 'arrived_at_gate',
+        actorUserId: userId,
+        stationId: scope.station_id,
+        reason: purpose?.trim() || null,
+      });
+
+      await createAppointmentForVisit(pool, {
+        organisationId: scope.organisation_id,
+        visitId,
+        hostId: hostId || null,
+        scheduledAt: null,
+        title: `Gate entry: ${resolvedFullName}`,
+        createdBy: userId,
+      });
+
+      await writeAuditLog(pool, {
+        organisationId: scope.organisation_id,
+        actorUserId: userId,
+        action: 'gate_entry.walk_in',
+        targetType: 'visit',
+        targetId: visitId,
+        details: usingDojahOverride ? { dojah_override: true, id_number: idNumber?.trim() || null } : undefined,
+      });
+
+      if (usingDojahOverride) {
+        await writeAuditLog(pool, {
+          organisationId: scope.organisation_id,
+          actorUserId: userId,
+          action: 'gate_entry.dojah_override',
+          targetType: 'visit',
+          targetId: visitId,
+          result: 'override',
+          details: {
+            id_type: idType,
+            id_number: idNumber?.trim() || null,
+            reason: 'dojah_unavailable',
+          },
+        });
+      }
+
+      await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
+
+      const [[visit]] = await pool.query(
+        `SELECT ${VISIT_SELECT_FIELDS} FROM visits vis ${VISIT_JOINS} WHERE vis.id = ?`,
+        [visitId],
+      );
+      const perms = permissionsFromRequest(req);
+      res.status(201).json({
+        ok: true,
+        data: await formatVisitResponse(pool, visit, perms, { actorUserId: userId }),
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/gate-entry/vehicle', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+      const { scope } = scopeResult;
+      const {
+        plateNumber,
+        vehicleType,
+        driverName,
+        phone,
+        company,
+        hostId,
+        purpose,
+        occupantCount = 0,
+        checkInSignature,
+      } = req.body || {};
+
+      if (!plateNumber?.trim()) {
+        return res.status(400).json({ ok: false, message: 'Plate number is required.' });
+      }
+
+      const signature = String(checkInSignature || '').trim();
+      if (!signature.startsWith('data:image/')) {
+        return res.status(400).json({ ok: false, message: 'Check-in signature is required.' });
+      }
+      if (signature.length > 500_000) {
+        return res.status(400).json({ ok: false, message: 'Signature image is too large.' });
+      }
+
+      const plate = plateNumber.trim().toUpperCase();
+      let visitId = null;
+
+      if (driverName?.trim() || hostId || purpose?.trim()) {
+        const watchlistMatches = await findWatchlistMatches(pool, scope.organisation_id, {
+          fullName: driverName?.trim(),
+          phone: phone?.trim(),
+        });
+        if (watchlistMatches.length) {
+          return res.status(403).json({
+            ok: false,
+            message: 'Watchlist match — entry blocked pending security review.',
+            watchlistMatch: true,
+          });
+        }
+
+        let visitorId = null;
+        if (phone?.trim()) {
+          const [[existing]] = await pool.query(
+            `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
+            [scope.organisation_id, phone.trim()],
+          );
+          visitorId = existing?.id;
+        }
+        if (!visitorId) {
+          visitorId = generateId('vis');
+          await pool.query(
+            `INSERT INTO visitors (id, organisation_id, full_name, phone, company)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              visitorId,
+              scope.organisation_id,
+              driverName?.trim() || 'Vehicle driver',
+              phone?.trim() || null,
+              company?.trim() || null,
+            ],
+          );
+        }
+
+        visitId = generateId('visit');
+        const passCode = generatePassCode();
+        await pool.query(
+          `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, purpose, status, pass_code, check_in_signature, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'expected', ?, ?, ?)`,
+          [
+            visitId,
+            scope.organisation_id,
+            scope.site_id,
+            scope.station_id,
+            visitorId,
+            hostId || null,
+            purpose?.trim() || null,
+            passCode,
+            signature,
+            userId,
+          ],
+        );
+      }
+
+      const occupants = Math.max(0, Math.min(20, Number(occupantCount) || 0));
+      const passengerNames = occupants > 1
+        ? Array.from({ length: occupants - 1 }, (_, i) => `Occupant ${i + 2}`)
+        : [];
+
+      const [[expected]] = await pool.query(
+        `SELECT * FROM expected_vehicles
+         WHERE organisation_id = ? AND plate_number = ? AND status = 'expected'
+         ORDER BY created_at DESC LIMIT 1`,
+        [scope.organisation_id, plate],
+      );
+      if (expected?.visit_id && !visitId) visitId = expected.visit_id;
+
+      let vehicleId = null;
+      const [[existingVehicle]] = await pool.query(
+        `SELECT * FROM vehicles WHERE organisation_id = ? AND plate_number = ? AND status IN ('on_site', 'arrived_at_gate', 'entry_approved') ORDER BY created_at DESC LIMIT 1`,
+        [scope.organisation_id, plate],
+      );
+
+      if (existingVehicle) {
+        vehicleId = existingVehicle.id;
+        await pool.query(
+          `UPDATE vehicles SET status = 'on_site', driver_name = COALESCE(?, driver_name), visit_id = COALESCE(?, visit_id), entered_at = COALESCE(entered_at, NOW()) WHERE id = ?`,
+          [driverName?.trim() || null, visitId || null, vehicleId],
+        );
+      } else {
+        vehicleId = generateId('veh');
+        await pool.query(
+          `INSERT INTO vehicles (id, organisation_id, visit_id, plate_number, vehicle_type, driver_name, status, entry_station_id, entered_at, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, 'on_site', ?, NOW(), ?)`,
+          [
+            vehicleId,
+            scope.organisation_id,
+            visitId,
+            plate,
+            vehicleType?.trim() || null,
+            driverName?.trim() || null,
+            scope.station_id,
+            userId,
+          ],
+        );
+      }
+
+      const entryId = generateId('vent');
+      await pool.query(
+        `INSERT INTO vehicle_entries (id, organisation_id, vehicle_id, expected_vehicle_id, visit_id, plate_number, driver_name, passenger_names, gate_station_id, status, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'entry_approved', ?)`,
+        [
+          entryId,
+          scope.organisation_id,
+          vehicleId,
+          expected?.id || null,
+          visitId,
+          plate,
+          driverName?.trim() || null,
+          JSON.stringify(passengerNames),
+          scope.station_id,
+          userId,
+        ],
+      );
+
+      if (expected?.id) {
+        await pool.query("UPDATE expected_vehicles SET status = 'entry_approved' WHERE id = ?", [expected.id]);
+      }
+
+      if (visitId) {
+        const [[visit]] = await pool.query('SELECT status FROM visits WHERE id = ?', [visitId]);
+        if (visit && canTransition(visit.status, 'arrived_at_gate')) {
+          await pool.query(
+            `UPDATE visits SET status = 'arrived_at_gate', check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,
+            [signature, visitId],
+          );
+          await writeVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId, stationId: scope.station_id });
+        } else {
+          await pool.query(
+            `UPDATE visits SET check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,
+            [signature, visitId],
+          );
+        }
+      }
+
+      await writeAuditLog(pool, {
+        organisationId: scope.organisation_id,
+        actorUserId: userId,
+        action: 'gate_entry.vehicle',
+        targetType: 'vehicle',
+        targetId: vehicleId,
+      });
+
+      const [[vehicle]] = await pool.query('SELECT * FROM vehicles WHERE id = ?', [vehicleId]);
+      res.status(201).json({
+        ok: true,
+        data: { vehicle, visitId, entryId, matchedExpected: Boolean(expected?.id) },
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -244,6 +688,139 @@ export function createVisitsRouter() {
          WHERE ${where}
          ORDER BY vis.created_at DESC
          LIMIT 200`,
+        params,
+      );
+
+      const perms = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/expected-arrivals', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const range = String(req.query.range || 'week').toLowerCase();
+      const params = [scope.organisation_id];
+      let where = `vis.organisation_id = ?
+        AND vis.status IN ('expected', 'approved', 'pre_registered')`;
+
+      if (scope.site_id) {
+        where += ' AND vis.site_id = ?';
+        params.push(scope.site_id);
+      }
+
+      if (range === 'today') {
+        where += ' AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()';
+      } else {
+        where += ` AND COALESCE(vis.expected_at, vis.created_at) >= CURDATE()
+          AND COALESCE(vis.expected_at, vis.created_at) < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+      }
+
+      const [rows] = await pool.query(
+        `SELECT ${VISIT_SELECT_FIELDS},
+                a.title AS appointment_title,
+                a.scheduled_at AS appointment_scheduled_at,
+                (SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
+                 FROM expected_vehicles ev
+                 WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates
+         FROM visits vis ${VISIT_JOINS}
+         LEFT JOIN appointments a ON a.visit_id = vis.id
+         WHERE ${where}
+         ORDER BY COALESCE(vis.expected_at, a.scheduled_at, vis.created_at) ASC
+         LIMIT 200`,
+        params,
+      );
+
+      const perms = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/pending-check-in', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const visitType = String(req.query.type || 'walk-in').toLowerCase();
+      const statusPlaceholders = CHECK_IN_ELIGIBLE_STATUSES.map(() => '?').join(', ');
+      const params = [scope.organisation_id, ...CHECK_IN_ELIGIBLE_STATUSES];
+      let siteFilter = '';
+      if (scope.site_id) {
+        siteFilter = ' AND vis.site_id = ?';
+        params.push(scope.site_id);
+      }
+
+      let typeFilter = '';
+      if (visitType === 'walking' || visitType === 'walk-in') {
+        typeFilter = ' AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      } else if (visitType === 'vehicle') {
+        typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      }
+
+      const [rows] = await pool.query(
+        `SELECT ${VISIT_SELECT_FIELDS},
+                (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+         FROM visits vis ${VISIT_JOINS}
+         WHERE vis.organisation_id = ?
+           AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
+         ORDER BY vis.created_at DESC
+         LIMIT 50`,
+        params,
+      );
+
+      const perms = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/on-site', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const visitType = String(req.query.type || 'walk-in').toLowerCase();
+      const statusPlaceholders = GATE_CHECKOUT_ELIGIBLE_STATUSES.map(() => '?').join(', ');
+      const params = [scope.organisation_id, ...GATE_CHECKOUT_ELIGIBLE_STATUSES];
+      let siteFilter = '';
+      if (scope.site_id) {
+        siteFilter = ' AND vis.site_id = ?';
+        params.push(scope.site_id);
+      }
+
+      let typeFilter = '';
+      if (visitType === 'walking' || visitType === 'walk-in') {
+        typeFilter = ' AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      } else if (visitType === 'vehicle') {
+        typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      }
+
+      const [rows] = await pool.query(
+        `SELECT ${VISIT_SELECT_FIELDS},
+                (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+         FROM visits vis ${VISIT_JOINS}
+         WHERE vis.organisation_id = ?
+           AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
+         ORDER BY COALESCE(vis.checked_in_at, vis.created_at) DESC
+         LIMIT 100`,
         params,
       );
 
@@ -503,7 +1080,7 @@ export function createVisitsRouter() {
         return res.status(400).json({ ok: false, message: 'Visitor is already checked in.' });
       }
       if (!canTransition(visit.status, 'reception_check_in') && !canTransition(visit.status, 'checked_in')) {
-        return res.status(400).json({ ok: false, message: 'Visit must be approved or expected before check-in.' });
+        return res.status(400).json({ ok: false, message: 'Visit is not ready for check-in.' });
       }
 
       const [[visitor]] = await pool.query('SELECT full_name, phone, email FROM visitors WHERE id = ?', [visit.visitor_id]);
@@ -598,14 +1175,19 @@ export function createVisitsRouter() {
 
       const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
       if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
-      if (visit.status !== 'checked_in' && visit.status !== 'reception_check_in'
-        && visit.status !== 'waiting' && visit.status !== 'in_meeting') {
+      if (!isGateCheckoutEligible(visit.status)) {
         return res.status(400).json({ ok: false, message: 'Visitor is not checked in.' });
       }
 
       await pool.query(
         `UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW() WHERE id = ?`,
         [visitId],
+      );
+
+      await pool.query(
+        `UPDATE vehicles SET status = 'exited', exited_at = NOW(), exit_station_id = ?
+         WHERE visit_id = ? AND status IN ('on_site', 'arrived_at_gate', 'entry_approved')`,
+        [scope?.station_id || null, visitId],
       );
 
       if (visit.badge_number) {
@@ -643,30 +1225,52 @@ export function createVisitsRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const { query } = req.body;
+      const { query, type } = req.body;
       if (!query?.trim()) {
         return res.status(400).json({ ok: false, message: 'Search query required.' });
       }
 
       const q = `%${query.trim()}%`;
-      const params = [scope?.organisation_id, q, q, q, q];
+      const params = [scope?.organisation_id, q, q, q, q, q];
       let siteFilter = '';
       if (scope?.site_id) {
         siteFilter = ' AND vis.site_id = ?';
         params.push(scope.site_id);
       }
 
+      let typeFilter = '';
+      const visitType = String(type || '').toLowerCase();
+      if (visitType === 'walking' || visitType === 'walk-in') {
+        typeFilter = ' AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      } else if (visitType === 'vehicle') {
+        typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
+      }
+
       const [rows] = await pool.query(
-        `SELECT ${VISIT_SELECT_FIELDS}
+        `SELECT ${VISIT_SELECT_FIELDS},
+                (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
          FROM visits vis ${VISIT_JOINS}
-         WHERE vis.organisation_id = ? AND (v.full_name LIKE ? OR v.phone LIKE ? OR vis.badge_number LIKE ? OR vis.pass_code LIKE ?)${siteFilter}
+         WHERE vis.organisation_id = ?
+           AND (
+             v.full_name LIKE ?
+             OR v.phone LIKE ?
+             OR vis.badge_number LIKE ?
+             OR vis.pass_code LIKE ?
+             OR EXISTS (
+               SELECT 1 FROM vehicles veh
+               WHERE veh.visit_id = vis.id AND veh.plate_number LIKE ?
+             )
+           )${siteFilter}${typeFilter}
          ORDER BY vis.created_at DESC
          LIMIT 20`,
         params,
       );
 
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const masked = applyVisitListMasking(rows, perms);
+      const eligible = masked.filter((row) => CHECK_IN_ELIGIBLE_STATUSES.includes(row.status));
+      res.json({ ok: true, data: eligible });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1185,20 +1789,390 @@ export function createVehiclesRouter() {
   return router;
 }
 
+function organisationSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+/** Sites, buildings, zones, offices, stations, departments and employees cannot exist without an organisation. */
+async function requireOrganisationForStructure(orgId) {
+  if (!orgId) {
+    return {
+      ok: false,
+      status: 403,
+      message:
+        'An organisation is required first. Sites, buildings, zones, offices, stations, departments and employees cannot exist without an organisation.',
+    };
+  }
+
+  const [[org]] = await pool.query(
+    'SELECT id, status FROM organisations WHERE id = ? LIMIT 1',
+    [orgId],
+  );
+  if (!org) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'Organisation not found. Create an organisation before adding structure.',
+    };
+  }
+  if (org.status !== 'active') {
+    return {
+      ok: false,
+      status: 403,
+      message: 'Organisation is not active. Activate it before adding sites or other structure.',
+    };
+  }
+  return { ok: true, org };
+}
+
+const ORGANISATION_SELECT = `
+  SELECT o.*,
+         (SELECT COUNT(*) FROM sites s WHERE s.organisation_id = o.id) AS site_count,
+         (SELECT COUNT(*) FROM buildings b
+            INNER JOIN sites s ON s.id = b.site_id
+           WHERE s.organisation_id = o.id) AS building_count,
+         (SELECT COUNT(*) FROM offices ofc WHERE ofc.organisation_id = o.id) AS office_count,
+         (SELECT COUNT(*) FROM departments d WHERE d.organisation_id = o.id) AS department_count,
+         (SELECT COUNT(*) FROM hosts h WHERE h.organisation_id = o.id) AS employee_count,
+         (SELECT COUNT(*) FROM user_scopes us WHERE us.organisation_id = o.id) AS user_count
+  FROM organisations o
+`;
+
 export function createOrgAdminRouter() {
   const router = express.Router();
+
+  router.get('/nav-counts', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+
+      const countOne = async (scopedSql, scopedParams, unscopedSql) => {
+        const [[row]] = orgId
+          ? await pool.query(scopedSql, scopedParams)
+          : await pool.query(unscopedSql);
+        return Number(row?.count || 0);
+      };
+
+      const [
+        organisations,
+        sites,
+        zones,
+        stations,
+        departments,
+        offices,
+        hosts,
+        users,
+      ] = await Promise.all([
+        countOne(
+          'SELECT COUNT(*) AS count FROM organisations WHERE id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM organisations',
+        ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM sites WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM sites',
+        ),
+        countOne(
+          `SELECT COUNT(*) AS count
+           FROM zones z
+           JOIN buildings b ON b.id = z.building_id
+           JOIN sites s ON s.id = b.site_id
+           WHERE s.organisation_id = ?`,
+          [orgId],
+          'SELECT COUNT(*) AS count FROM zones',
+        ),
+        countOne(
+          `SELECT COUNT(*) AS count
+           FROM stations st
+           INNER JOIN sites s ON s.id = st.site_id
+           WHERE s.organisation_id = ?`,
+          [orgId],
+          'SELECT COUNT(*) AS count FROM stations',
+        ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM departments WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM departments',
+        ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM offices WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM offices',
+        ),
+        countOne(
+          'SELECT COUNT(*) AS count FROM hosts WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM hosts',
+        ),
+        pool.query('SELECT COUNT(*) AS count FROM users').then(([[row]]) => Number(row?.count || 0)),
+      ]);
+
+      res.json({
+        ok: true,
+        data: {
+          organisations,
+          sites,
+          zones,
+          stations,
+          departments,
+          offices,
+          hosts,
+          users,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/organisations', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const [rows] = orgId
+        ? await pool.query(`${ORGANISATION_SELECT} WHERE o.id = ? ORDER BY o.name`, [orgId])
+        : await pool.query(`${ORGANISATION_SELECT} ORDER BY o.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        inactive: rows.filter((row) => row.status !== 'active').length,
+        sites: rows.reduce((sum, row) => sum + Number(row.site_count || 0), 0),
+        employees: rows.reduce((sum, row) => sum + Number(row.employee_count || 0), 0),
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/organisations', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      // Scoped org admins manage their company; creating additional companies is for group/platform admins.
+      if (scope?.organisation_id && !hasPlatformWideAccess(req.adminClaims)) {
+        return res.status(403).json({
+          ok: false,
+          message: 'Creating organisations requires group or platform administrator access.',
+        });
+      }
+
+      const name = String(req.body?.name || '').trim();
+      const slugInput = String(req.body?.slug || '').trim();
+      const timezone = String(req.body?.timezone || 'Africa/Lusaka').trim() || 'Africa/Lusaka';
+      const status = String(req.body?.status || 'active').trim() || 'active';
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Organisation name is required.' });
+      }
+
+      const slug = organisationSlug(slugInput || name);
+      if (!slug) {
+        return res.status(400).json({ ok: false, message: 'A valid organisation slug is required.' });
+      }
+
+      const [[existingSlug]] = await pool.query(
+        'SELECT id FROM organisations WHERE slug = ? LIMIT 1',
+        [slug],
+      );
+      if (existingSlug) {
+        return res.status(409).json({ ok: false, message: 'Organisation slug already exists.' });
+      }
+
+      const id = generateId('org');
+      await pool.query(
+        `INSERT INTO organisations (id, name, slug, status, timezone)
+         VALUES (?, ?, ?, ?, ?)`,
+        [id, name, slug, status, timezone],
+      );
+
+      const [[row]] = await pool.query(`${ORGANISATION_SELECT} WHERE o.id = ?`, [id]);
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/organisations/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const targetId = req.params.id;
+
+      if (orgId && orgId !== targetId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
+      }
+
+      const [[existing]] = await pool.query('SELECT * FROM organisations WHERE id = ? LIMIT 1', [targetId]);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: 'Organisation not found.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const timezone = req.body?.timezone != null
+        ? String(req.body.timezone).trim() || existing.timezone
+        : existing.timezone;
+      const status = req.body?.status != null
+        ? String(req.body.status).trim() || existing.status
+        : existing.status;
+      let slug = existing.slug;
+      if (req.body?.slug != null) {
+        slug = organisationSlug(req.body.slug);
+        if (!slug) {
+          return res.status(400).json({ ok: false, message: 'A valid organisation slug is required.' });
+        }
+        const [[slugTaken]] = await pool.query(
+          'SELECT id FROM organisations WHERE slug = ? AND id <> ? LIMIT 1',
+          [slug, targetId],
+        );
+        if (slugTaken) {
+          return res.status(409).json({ ok: false, message: 'Organisation slug already exists.' });
+        }
+      }
+
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Organisation name is required.' });
+      }
+
+      await pool.query(
+        'UPDATE organisations SET name = ?, slug = ?, status = ?, timezone = ? WHERE id = ?',
+        [name, slug, status, timezone, targetId],
+      );
+
+      const [[row]] = await pool.query(`${ORGANISATION_SELECT} WHERE o.id = ?`, [targetId]);
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
 
   router.get('/sites', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       const orgId = scope?.organisation_id;
-      if (!orgId) {
-        const [rows] = await pool.query(`SELECT s.*, o.name AS organisation_name FROM sites s JOIN organisations o ON o.id = s.organisation_id ORDER BY o.name, s.name`);
-        return res.json({ ok: true, data: rows });
+      const selectSql = `
+        SELECT s.*,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM stations st WHERE st.site_id = s.id) AS station_count,
+               (SELECT COUNT(*) FROM buildings b WHERE b.site_id = s.id) AS building_count,
+               (SELECT COUNT(*) FROM offices ofc WHERE ofc.site_id = s.id) AS office_count,
+               (SELECT COUNT(*) FROM hosts h WHERE h.site_id = s.id) AS employee_count
+        FROM sites s
+        LEFT JOIN organisations o ON o.id = s.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE s.organisation_id = ? ORDER BY s.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, s.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        inactive: rows.filter((row) => row.status !== 'active').length,
+        stations: rows.reduce((sum, row) => sum + Number(row.station_count || 0), 0),
+        employees: rows.reduce((sum, row) => sum + Number(row.employee_count || 0), 0),
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/sites', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const orgGate = await requireOrganisationForStructure(orgId);
+      if (!orgGate.ok) {
+        return res.status(orgGate.status).json({ ok: false, message: orgGate.message });
       }
-      const [rows] = await pool.query(`SELECT * FROM sites WHERE organisation_id = ? ORDER BY name`, [orgId]);
-      res.json({ ok: true, data: rows });
+
+      const name = String(req.body?.name || '').trim();
+      const code = String(req.body?.code || '').trim().toUpperCase() || null;
+      const address = String(req.body?.address || '').trim() || null;
+      const status = String(req.body?.status || 'active').trim() || 'active';
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Site name is required.' });
+      }
+
+      const id = generateId('site');
+      await pool.query(
+        `INSERT INTO sites (id, organisation_id, name, code, address, status)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, orgId, name, code, address, status],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT s.*,
+                o.name AS organisation_name,
+                0 AS station_count,
+                0 AS building_count,
+                0 AS office_count,
+                0 AS employee_count
+         FROM sites s
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE s.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/sites/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const siteId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM sites WHERE id = ? LIMIT 1', [siteId]);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: 'Site not found.' });
+      }
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this site.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const code = req.body?.code != null ? String(req.body.code).trim().toUpperCase() || null : existing.code;
+      const address = req.body?.address != null ? String(req.body.address).trim() || null : existing.address;
+      const status = req.body?.status != null ? String(req.body.status).trim() || existing.status : existing.status;
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Site name is required.' });
+      }
+
+      await pool.query(
+        'UPDATE sites SET name = ?, code = ?, address = ?, status = ? WHERE id = ?',
+        [name, code, address, status, siteId],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT s.*,
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM stations st WHERE st.site_id = s.id) AS station_count,
+                (SELECT COUNT(*) FROM buildings b WHERE b.site_id = s.id) AS building_count,
+                (SELECT COUNT(*) FROM offices ofc WHERE ofc.site_id = s.id) AS office_count,
+                (SELECT COUNT(*) FROM hosts h WHERE h.site_id = s.id) AS employee_count
+         FROM sites s
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE s.id = ?`,
+        [siteId],
+      );
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1209,18 +2183,334 @@ export function createOrgAdminRouter() {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       const orgId = scope?.organisation_id;
-      let rows;
-      if (orgId) {
-        [rows] = await pool.query(
-          `SELECT st.*, s.name AS site_name FROM stations st JOIN sites s ON s.id = st.site_id WHERE s.organisation_id = ? ORDER BY st.name`,
-          [orgId],
-        );
-      } else {
-        [rows] = await pool.query(
-          `SELECT st.*, s.name AS site_name FROM stations st JOIN sites s ON s.id = st.site_id ORDER BY st.name`,
-        );
+      const selectSql = `
+        SELECT st.*,
+               s.name AS site_name,
+               s.code AS site_code,
+               s.organisation_id,
+               o.name AS organisation_name
+        FROM stations st
+        JOIN sites s ON s.id = st.site_id
+        LEFT JOIN organisations o ON o.id = s.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE s.organisation_id = ? ORDER BY s.name, st.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, s.name, st.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        gates: rows.filter((row) => row.type === 'gate').length,
+        reception: rows.filter((row) => row.type === 'reception').length,
+        sites: new Set(rows.map((row) => row.site_id).filter(Boolean)).size,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Station / Gate → Site → Organisation
+  router.post('/stations', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id
+        || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
+        || null;
+      const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
+      const name = String(req.body?.name || '').trim();
+      const type = String(req.body?.type || 'reception').trim() || 'reception';
+      const status = String(req.body?.status || 'active').trim() || 'active';
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Station name is required.' });
+      if (!siteId) return res.status(400).json({ ok: false, message: 'Site is required for a station or gate.' });
+
+      const placement = await assertStationPlacement(pool, { organisationId: orgId, siteId });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
       }
+
+      const id = generateId('stn');
+      await pool.query(
+        `INSERT INTO stations (id, site_id, name, type, status) VALUES (?, ?, ?, ?, ?)`,
+        [id, siteId, name, type, status],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT st.*, s.name AS site_name, s.code AS site_code, s.organisation_id, o.name AS organisation_name
+         FROM stations st
+         JOIN sites s ON s.id = st.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE st.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/stations/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const stationId = req.params.id;
+
+      const [[existing]] = await pool.query(
+        `SELECT st.*, s.organisation_id
+         FROM stations st
+         JOIN sites s ON s.id = st.site_id
+         WHERE st.id = ?
+         LIMIT 1`,
+        [stationId],
+      );
+      if (!existing) return res.status(404).json({ ok: false, message: 'Station not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this station.' });
+      }
+
+      const siteId = req.body?.siteId != null || req.body?.site_id != null
+        ? String(req.body.siteId || req.body.site_id || '').trim()
+        : existing.site_id;
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const type = req.body?.type != null ? String(req.body.type).trim() || existing.type : existing.type;
+      const status = req.body?.status != null ? String(req.body.status).trim() || existing.status : existing.status;
+      if (!name) return res.status(400).json({ ok: false, message: 'Station name is required.' });
+
+      const placement = await assertStationPlacement(pool, {
+        organisationId: existing.organisation_id,
+        siteId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      await pool.query(
+        'UPDATE stations SET site_id = ?, name = ?, type = ?, status = ? WHERE id = ?',
+        [siteId, name, type, status, stationId],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT st.*, s.name AS site_name, s.code AS site_code, s.organisation_id, o.name AS organisation_name
+         FROM stations st
+         JOIN sites s ON s.id = st.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE st.id = ?`,
+        [stationId],
+      );
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/buildings', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const selectSql = `
+        SELECT b.*,
+               s.name AS site_name,
+               s.organisation_id,
+               (SELECT COUNT(*) FROM zones z WHERE z.building_id = b.id) AS zone_count
+        FROM buildings b
+        JOIN sites s ON s.id = b.site_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE s.organisation_id = ? ORDER BY s.name, b.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY s.name, b.name`);
       res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/buildings', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const orgGate = await requireOrganisationForStructure(orgId);
+      if (!orgGate.ok) {
+        return res.status(orgGate.status).json({ ok: false, message: orgGate.message });
+      }
+
+      const name = String(req.body?.name || '').trim();
+      const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
+      if (!name) return res.status(400).json({ ok: false, message: 'Building name is required.' });
+      if (!siteId) return res.status(400).json({ ok: false, message: 'Site is required.' });
+
+      const [[site]] = await pool.query(
+        'SELECT id FROM sites WHERE id = ? AND organisation_id = ? LIMIT 1',
+        [siteId, orgId],
+      );
+      if (!site) return res.status(400).json({ ok: false, message: 'Site not found in this organisation.' });
+
+      const id = generateId('bld');
+      await pool.query('INSERT INTO buildings (id, site_id, name) VALUES (?, ?, ?)', [id, siteId, name]);
+      const [[row]] = await pool.query(
+        `SELECT b.*, s.name AS site_name, s.organisation_id, 0 AS zone_count
+         FROM buildings b JOIN sites s ON s.id = b.site_id WHERE b.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/zones', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const selectSql = `
+        SELECT z.*,
+               b.name AS building_name,
+               b.site_id,
+               s.name AS site_name,
+               s.organisation_id,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM offices ofc WHERE ofc.building_id = b.id) AS office_count
+        FROM zones z
+        JOIN buildings b ON b.id = z.building_id
+        JOIN sites s ON s.id = b.site_id
+        LEFT JOIN organisations o ON o.id = s.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE s.organisation_id = ? ORDER BY s.name, b.name, z.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, s.name, b.name, z.name`);
+
+      const [[buildingCount]] = orgId
+        ? await pool.query(
+          `SELECT COUNT(*) AS count
+           FROM buildings b
+           JOIN sites s ON s.id = b.site_id
+           WHERE s.organisation_id = ?`,
+          [orgId],
+        )
+        : await pool.query('SELECT COUNT(*) AS count FROM buildings');
+
+      const stats = {
+        total: rows.length,
+        buildings: Number(buildingCount?.count || 0),
+        public: rows.filter((row) => row.access_level === 'public').length,
+        staff: rows.filter((row) => row.access_level === 'staff' || row.access_level === 'staff-only').length,
+        restricted: rows.filter((row) => ['restricted', 'high-security', 'high_security'].includes(row.access_level)).length,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/zones', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const orgGate = await requireOrganisationForStructure(orgId);
+      if (!orgGate.ok) {
+        return res.status(orgGate.status).json({ ok: false, message: orgGate.message });
+      }
+
+      const name = String(req.body?.name || '').trim();
+      const buildingId = String(req.body?.buildingId || req.body?.building_id || '').trim();
+      const accessLevel = String(req.body?.accessLevel || req.body?.access_level || 'public').trim() || 'public';
+      if (!name) return res.status(400).json({ ok: false, message: 'Zone name is required.' });
+      if (!buildingId) return res.status(400).json({ ok: false, message: 'Building is required.' });
+
+      const [[building]] = await pool.query(
+        `SELECT b.id FROM buildings b
+         JOIN sites s ON s.id = b.site_id
+         WHERE b.id = ? AND s.organisation_id = ?
+         LIMIT 1`,
+        [buildingId, orgId],
+      );
+      if (!building) return res.status(400).json({ ok: false, message: 'Building not found in this organisation.' });
+
+      const id = generateId('zone');
+      await pool.query(
+        'INSERT INTO zones (id, building_id, name, access_level) VALUES (?, ?, ?, ?)',
+        [id, buildingId, name, accessLevel],
+      );
+      const [[row]] = await pool.query(
+        `SELECT z.*, b.name AS building_name, b.site_id, s.name AS site_name, s.organisation_id, o.name AS organisation_name
+         FROM zones z
+         JOIN buildings b ON b.id = z.building_id
+         JOIN sites s ON s.id = b.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE z.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/zones/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const zoneId = req.params.id;
+
+      const [[existing]] = await pool.query(
+        `SELECT z.*, s.organisation_id
+         FROM zones z
+         JOIN buildings b ON b.id = z.building_id
+         JOIN sites s ON s.id = b.site_id
+         WHERE z.id = ?
+         LIMIT 1`,
+        [zoneId],
+      );
+      if (!existing) return res.status(404).json({ ok: false, message: 'Zone not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this zone.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const buildingId = req.body?.buildingId != null || req.body?.building_id != null
+        ? String(req.body.buildingId || req.body.building_id).trim()
+        : existing.building_id;
+      const accessLevel = req.body?.accessLevel != null || req.body?.access_level != null
+        ? String(req.body.accessLevel || req.body.access_level).trim() || existing.access_level
+        : existing.access_level;
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Zone name is required.' });
+
+      if (buildingId !== existing.building_id) {
+        const [[building]] = await pool.query(
+          `SELECT b.id FROM buildings b
+           JOIN sites s ON s.id = b.site_id
+           WHERE b.id = ? AND s.organisation_id = ?
+           LIMIT 1`,
+          [buildingId, existing.organisation_id],
+        );
+        if (!building) return res.status(400).json({ ok: false, message: 'Building not found in this organisation.' });
+      }
+
+      await pool.query(
+        'UPDATE zones SET name = ?, building_id = ?, access_level = ? WHERE id = ?',
+        [name, buildingId, accessLevel, zoneId],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT z.*, b.name AS building_name, b.site_id, s.name AS site_name, s.organisation_id, o.name AS organisation_name
+         FROM zones z
+         JOIN buildings b ON b.id = z.building_id
+         JOIN sites s ON s.id = b.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE z.id = ?`,
+        [zoneId],
+      );
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1231,12 +2521,290 @@ export function createOrgAdminRouter() {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       const orgId = scope?.organisation_id;
-      if (!orgId) {
-        const [rows] = await pool.query(`SELECT * FROM departments ORDER BY name`);
-        return res.json({ ok: true, data: rows });
+      const selectSql = `
+        SELECT d.*,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM offices ofc WHERE ofc.department_id = d.id) AS office_count,
+               (SELECT COUNT(*) FROM hosts h WHERE h.department_id = d.id) AS employee_count
+        FROM departments d
+        LEFT JOIN organisations o ON o.id = d.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE d.organisation_id = ? ORDER BY d.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, d.name`);
+
+      const stats = {
+        total: rows.length,
+        offices: rows.reduce((sum, row) => sum + Number(row.office_count || 0), 0),
+        employees: rows.reduce((sum, row) => sum + Number(row.employee_count || 0), 0),
+        organisations: new Set(rows.map((row) => row.organisation_id).filter(Boolean)).size,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Department belongs directly to an organisation (no site/building required).
+  router.post('/departments', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id
+        || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
+        || null;
+      const orgGate = await requireOrganisationForStructure(orgId);
+      if (!orgGate.ok) {
+        return res.status(orgGate.status).json({ ok: false, message: orgGate.message });
       }
-      const [rows] = await pool.query(`SELECT * FROM departments WHERE organisation_id = ? ORDER BY name`, [orgId]);
-      res.json({ ok: true, data: rows });
+
+      const name = String(req.body?.name || '').trim();
+      const code = String(req.body?.code || '').trim().toUpperCase() || null;
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Department name is required.' });
+      }
+
+      const id = generateId('dept');
+      await pool.query(
+        `INSERT INTO departments (id, organisation_id, name, code) VALUES (?, ?, ?, ?)`,
+        [id, orgId, name, code],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT d.*,
+                o.name AS organisation_name,
+                0 AS office_count,
+                0 AS employee_count
+         FROM departments d
+         LEFT JOIN organisations o ON o.id = d.organisation_id
+         WHERE d.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/departments/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const departmentId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM departments WHERE id = ? LIMIT 1', [departmentId]);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: 'Department not found.' });
+      }
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this department.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const code = req.body?.code != null
+        ? String(req.body.code).trim().toUpperCase() || null
+        : existing.code;
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Department name is required.' });
+      }
+
+      await pool.query('UPDATE departments SET name = ?, code = ? WHERE id = ?', [name, code, departmentId]);
+
+      const [[row]] = await pool.query(
+        `SELECT d.*,
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM offices ofc WHERE ofc.department_id = d.id) AS office_count,
+                (SELECT COUNT(*) FROM hosts h WHERE h.department_id = d.id) AS employee_count
+         FROM departments d
+         LEFT JOIN organisations o ON o.id = d.organisation_id
+         WHERE d.id = ?`,
+        [departmentId],
+      );
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/offices', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const selectSql = `
+        SELECT ofc.*,
+               d.name AS department_name,
+               d.code AS department_code,
+               o.name AS organisation_name,
+               b.name AS building_name,
+               s.name AS site_name,
+               (SELECT COUNT(*) FROM hosts h WHERE h.office_id = ofc.id) AS employee_count
+        FROM offices ofc
+        LEFT JOIN departments d ON d.id = ofc.department_id
+        LEFT JOIN organisations o ON o.id = ofc.organisation_id
+        LEFT JOIN buildings b ON b.id = ofc.building_id
+        LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE ofc.organisation_id = ? ORDER BY d.name, ofc.office_number`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, d.name, ofc.office_number`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        buildings: new Set(rows.map((row) => row.building_id).filter(Boolean)).size,
+        departments: new Set(rows.map((row) => row.department_id).filter(Boolean)).size,
+        employees: rows.reduce((sum, row) => sum + Number(row.employee_count || 0), 0),
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Office → Building + Department (+ Organisation); site inherited from building
+  router.post('/offices', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id
+        || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
+        || null;
+      const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
+      const buildingId = String(req.body?.buildingId || req.body?.building_id || '').trim();
+      const officeNumber = String(req.body?.officeNumber || req.body?.office_number || '').trim();
+      const name = String(req.body?.name || '').trim() || null;
+      const status = String(req.body?.status || 'active').trim() || 'active';
+
+      if (!officeNumber) {
+        return res.status(400).json({ ok: false, message: 'Office number is required.' });
+      }
+      if (!departmentId) {
+        return res.status(400).json({ ok: false, message: 'Department is required for an office.' });
+      }
+      if (!buildingId) {
+        return res.status(400).json({ ok: false, message: 'Building is required for an office.' });
+      }
+
+      const placement = await assertOfficePlacement(pool, {
+        organisationId: orgId,
+        departmentId,
+        buildingId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      const id = generateId('ofc');
+      try {
+        await pool.query(
+          `INSERT INTO offices (id, organisation_id, department_id, building_id, site_id, office_number, name, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, orgId, departmentId, buildingId, placement.siteId, officeNumber, name, status],
+        );
+      } catch (error) {
+        if (String(error?.code) === 'ER_DUP_ENTRY') {
+          return res.status(409).json({ ok: false, message: 'Office number already exists in this organisation.' });
+        }
+        throw error;
+      }
+
+      const [[row]] = await pool.query(
+        `SELECT ofc.*,
+                d.name AS department_name,
+                d.code AS department_code,
+                o.name AS organisation_name,
+                b.name AS building_name,
+                s.name AS site_name,
+                0 AS employee_count
+         FROM offices ofc
+         LEFT JOIN departments d ON d.id = ofc.department_id
+         LEFT JOIN organisations o ON o.id = ofc.organisation_id
+         LEFT JOIN buildings b ON b.id = ofc.building_id
+         LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
+         WHERE ofc.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/offices/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const officeId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM offices WHERE id = ? LIMIT 1', [officeId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Office not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this office.' });
+      }
+
+      const departmentId = req.body?.departmentId != null || req.body?.department_id != null
+        ? String(req.body.departmentId || req.body.department_id || '').trim()
+        : existing.department_id;
+      const buildingId = req.body?.buildingId != null || req.body?.building_id != null
+        ? String(req.body.buildingId || req.body.building_id || '').trim()
+        : existing.building_id;
+      const officeNumber = req.body?.officeNumber != null || req.body?.office_number != null
+        ? String(req.body.officeNumber || req.body.office_number || '').trim()
+        : existing.office_number;
+      const name = req.body?.name != null ? String(req.body.name).trim() || null : existing.name;
+      const status = req.body?.status != null
+        ? String(req.body.status).trim() || existing.status
+        : existing.status;
+
+      if (!officeNumber) {
+        return res.status(400).json({ ok: false, message: 'Office number is required.' });
+      }
+
+      const placement = await assertOfficePlacement(pool, {
+        organisationId: existing.organisation_id,
+        departmentId,
+        buildingId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      try {
+        await pool.query(
+          `UPDATE offices
+           SET department_id = ?, building_id = ?, site_id = ?, office_number = ?, name = ?, status = ?
+           WHERE id = ?`,
+          [departmentId, buildingId, placement.siteId, officeNumber, name, status, officeId],
+        );
+      } catch (error) {
+        if (String(error?.code) === 'ER_DUP_ENTRY') {
+          return res.status(409).json({ ok: false, message: 'Office number already exists in this organisation.' });
+        }
+        throw error;
+      }
+
+      const [[row]] = await pool.query(
+        `SELECT ofc.*,
+                d.name AS department_name,
+                d.code AS department_code,
+                o.name AS organisation_name,
+                b.name AS building_name,
+                s.name AS site_name,
+                (SELECT COUNT(*) FROM hosts h WHERE h.office_id = ofc.id) AS employee_count
+         FROM offices ofc
+         LEFT JOIN departments d ON d.id = ofc.department_id
+         LEFT JOIN organisations o ON o.id = ofc.organisation_id
+         LEFT JOIN buildings b ON b.id = ofc.building_id
+         LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
+         WHERE ofc.id = ?`,
+        [officeId],
+      );
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1247,15 +2815,165 @@ export function createOrgAdminRouter() {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       const orgId = scope?.organisation_id;
-      if (!orgId) {
-        const [rows] = await pool.query(`SELECT h.*, d.name AS department_name FROM hosts h LEFT JOIN departments d ON d.id = h.department_id ORDER BY h.name`);
-        return res.json({ ok: true, data: rows });
+      const hostSelect = `
+        SELECT h.*,
+               COALESCE(d.name, od.name) AS department_name,
+               ofc.office_number,
+               ofc.name AS office_name,
+               s.name AS site_name,
+               o.name AS organisation_name
+        FROM hosts h
+        LEFT JOIN offices ofc ON ofc.id = h.office_id
+        LEFT JOIN departments d ON d.id = h.department_id
+        LEFT JOIN departments od ON od.id = ofc.department_id
+        LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
+        LEFT JOIN organisations o ON o.id = h.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${hostSelect} WHERE h.organisation_id = ? ORDER BY h.name`, [orgId])
+        : await pool.query(`${hostSelect} ORDER BY o.name, h.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        with_office: rows.filter((row) => row.office_id).length,
+        departments: new Set(rows.map((row) => row.department_id).filter(Boolean)).size,
+        sites: new Set(rows.map((row) => row.site_id).filter(Boolean)).size,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Employee → Organisation + Department + Site (+ optional Office)
+  router.post('/hosts', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id
+        || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
+        || null;
+      const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
+      const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
+      const officeId = String(req.body?.officeId || req.body?.office_id || '').trim() || null;
+      const name = String(req.body?.name || '').trim();
+      const email = String(req.body?.email || '').trim() || null;
+      const phone = String(req.body?.phone || '').trim() || null;
+      const status = String(req.body?.status || 'active').trim() || 'active';
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Employee name is required.' });
+      if (!departmentId) {
+        return res.status(400).json({ ok: false, message: 'Department is required for an employee.' });
       }
-      const [rows] = await pool.query(
-        `SELECT h.*, d.name AS department_name FROM hosts h LEFT JOIN departments d ON d.id = h.department_id WHERE h.organisation_id = ? ORDER BY h.name`,
-        [orgId],
+      if (!siteId) {
+        return res.status(400).json({ ok: false, message: 'Site / branch is required for an employee.' });
+      }
+
+      const placement = await assertEmployeePlacement(pool, {
+        organisationId: orgId,
+        departmentId,
+        siteId,
+        officeId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      const id = generateId('host');
+      await pool.query(
+        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, name, email, phone, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, departmentId, siteId, placement.officeId, name, email, phone, status],
       );
-      res.json({ ok: true, data: rows });
+
+      const [[row]] = await pool.query(
+        `SELECT h.*,
+                d.name AS department_name,
+                ofc.office_number,
+                ofc.name AS office_name,
+                s.name AS site_name,
+                o.name AS organisation_name
+         FROM hosts h
+         LEFT JOIN departments d ON d.id = h.department_id
+         LEFT JOIN offices ofc ON ofc.id = h.office_id
+         LEFT JOIN sites s ON s.id = h.site_id
+         LEFT JOIN organisations o ON o.id = h.organisation_id
+         WHERE h.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/hosts/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const hostId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM hosts WHERE id = ? LIMIT 1', [hostId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Employee not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this employee.' });
+      }
+
+      const departmentId = req.body?.departmentId != null || req.body?.department_id != null
+        ? String(req.body.departmentId || req.body.department_id || '').trim()
+        : existing.department_id;
+      const siteId = req.body?.siteId != null || req.body?.site_id != null
+        ? String(req.body.siteId || req.body.site_id || '').trim()
+        : existing.site_id;
+      const officeRaw = req.body?.officeId != null || req.body?.office_id != null
+        ? String(req.body.officeId || req.body.office_id || '').trim()
+        : existing.office_id;
+      const officeId = officeRaw || null;
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const email = req.body?.email != null ? String(req.body.email).trim() || null : existing.email;
+      const phone = req.body?.phone != null ? String(req.body.phone).trim() || null : existing.phone;
+      const status = req.body?.status != null
+        ? String(req.body.status).trim() || existing.status
+        : existing.status;
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Employee name is required.' });
+
+      const placement = await assertEmployeePlacement(pool, {
+        organisationId: existing.organisation_id,
+        departmentId,
+        siteId,
+        officeId,
+      });
+      if (!placement.ok) {
+        return res.status(placement.status).json({ ok: false, message: placement.message });
+      }
+
+      await pool.query(
+        `UPDATE hosts
+         SET department_id = ?, site_id = ?, office_id = ?, name = ?, email = ?, phone = ?, status = ?
+         WHERE id = ?`,
+        [departmentId, siteId, placement.officeId, name, email, phone, status, hostId],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT h.*,
+                d.name AS department_name,
+                ofc.office_number,
+                ofc.name AS office_name,
+                s.name AS site_name,
+                o.name AS organisation_name
+         FROM hosts h
+         LEFT JOIN departments d ON d.id = h.department_id
+         LEFT JOIN offices ofc ON ofc.id = h.office_id
+         LEFT JOIN sites s ON s.id = h.site_id
+         LEFT JOIN organisations o ON o.id = h.organisation_id
+         WHERE h.id = ?`,
+        [hostId],
+      );
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1323,10 +3041,29 @@ export function createOrgAdminRouter() {
         weeklyTrend: [],
         statusBreakdown: [],
         visitsBySite: [],
+        visitsByOrganisation: [],
         recentVisits: [],
       };
 
+      const loadVisitsByOrganisation = async () => {
+        // Comparative org visit share for admin dashboards (ranked by volume).
+        const [rows] = await pool.query(
+          `SELECT o.name AS organisation_name, COUNT(vis.id) AS total
+           FROM organisations o
+           LEFT JOIN visits vis ON vis.organisation_id = o.id
+           GROUP BY o.id, o.name
+           HAVING COUNT(vis.id) > 0
+           ORDER BY total DESC
+           LIMIT 6`,
+        );
+        return rows.map((row) => ({
+          organisation_name: row.organisation_name,
+          total: Number(row.total || 0),
+        }));
+      };
+
       if (!orgId) {
+        const visitsByOrganisation = await loadVisitsByOrganisation();
         return res.json({
           ok: true,
           data: {
@@ -1336,6 +3073,7 @@ export function createOrgAdminRouter() {
             totalVisits: Number(visitCount?.count || 0),
             scope,
             ...emptyOrgMetrics,
+            visitsByOrganisation,
           },
         });
       }
@@ -1419,6 +3157,8 @@ export function createOrgAdminRouter() {
         [orgId],
       );
 
+      const visitsByOrganisation = await loadVisitsByOrganisation();
+
       const [recentVisits] = await pool.query(
         `SELECT vis.id, vis.created_at, vis.status, vis.badge_number,
                 v.full_name AS visitor_name, h.name AS host_name,
@@ -1464,6 +3204,7 @@ export function createOrgAdminRouter() {
             site_name: row.site_name,
             total: Number(row.total || 0),
           })),
+          visitsByOrganisation,
           recentVisits,
         },
       });
@@ -1579,9 +3320,10 @@ export function createOrgAdminRouter() {
       const visitType = String(req.query.type || 'walking').toLowerCase();
 
       let sql = `
-        SELECT vis.id, vis.reference_number, vis.status, vis.created_at, vis.check_in_at, vis.check_out_at,
+        SELECT vis.id, vis.pass_code AS reference_number, vis.status, vis.created_at,
+               vis.checked_in_at AS check_in_at, vis.checked_out_at AS check_out_at,
                v.full_name AS visitor_name,
-               u.name AS host_name,
+               h.name AS host_name,
                o.name AS organisation_name,
                s.name AS site_name,
                vc.name AS category_name,
@@ -1590,7 +3332,7 @@ export function createOrgAdminRouter() {
         FROM visits vis
         INNER JOIN visitors v ON v.id = vis.visitor_id
         INNER JOIN organisations o ON o.id = vis.organisation_id
-        LEFT JOIN users u ON u.id = vis.host_id
+        LEFT JOIN hosts h ON h.id = vis.host_id
         LEFT JOIN sites s ON s.id = vis.site_id
         LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
         WHERE 1=1
@@ -1613,13 +3355,14 @@ export function createOrgAdminRouter() {
       if (search) {
         sql += ` AND (
           v.full_name LIKE ?
-          OR vis.reference_number LIKE ?
-          OR u.name LIKE ?
+          OR vis.pass_code LIKE ?
+          OR vis.id LIKE ?
+          OR h.name LIKE ?
           OR o.name LIKE ?
           OR s.name LIKE ?
         )`;
         const term = `%${search}%`;
-        params.push(term, term, term, term, term);
+        params.push(term, term, term, term, term, term);
       }
 
       sql += ' ORDER BY vis.created_at DESC LIMIT ?';
@@ -1627,6 +3370,83 @@ export function createOrgAdminRouter() {
 
       const [rows] = await pool.query(sql, params);
       res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/visits/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub || null;
+      const visitId = req.params.id;
+      const scope = await getUserScope(pool, userId);
+      const viewAll = hasPlatformWideAccess(req.adminClaims);
+      const orgId = viewAll ? null : scope?.organisation_id;
+
+      let sql = `
+        SELECT ${VISIT_SELECT_FIELDS},
+               o.name AS organisation_name,
+               s.name AS site_name
+        FROM visits vis
+        ${VISIT_JOINS}
+        INNER JOIN organisations o ON o.id = vis.organisation_id
+        LEFT JOIN sites s ON s.id = vis.site_id
+        WHERE vis.id = ?
+      `;
+      const params = [visitId];
+      if (orgId) {
+        sql += ' AND vis.organisation_id = ?';
+        params.push(orgId);
+      }
+      sql += ' LIMIT 1';
+
+      const [[visit]] = await pool.query(sql, params);
+      if (!visit) {
+        return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      }
+
+      const permissions = permissionsFromRequest(req);
+      const formattedVisit = await formatVisitResponse(pool, visit, permissions, { actorUserId: userId });
+
+      const [events] = await pool.query(
+        `SELECT ve.*, u.name AS actor_name
+         FROM visit_events ve
+         LEFT JOIN users u ON u.id = ve.actor_user_id
+         WHERE ve.visit_id = ?
+         ORDER BY ve.created_at ASC`,
+        [visitId],
+      );
+
+      const [approvals] = await pool.query(
+        `SELECT va.*, u.name AS approver_name
+         FROM visit_approvals va
+         LEFT JOIN users u ON u.id = va.approver_user_id
+         WHERE va.visit_id = ?
+         ORDER BY va.created_at ASC`,
+        [visitId],
+      );
+
+      const [visitorHistory] = await pool.query(
+        `SELECT vis.id, vis.pass_code AS reference_number, vis.status, vis.purpose, vis.created_at,
+                h.name AS host_name
+         FROM visits vis
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         WHERE v.id = ? AND vis.id <> ?
+         ORDER BY vis.created_at DESC
+         LIMIT 10`,
+        [visit.visitor_id, visitId],
+      );
+
+      res.json({
+        ok: true,
+        data: {
+          visit: formattedVisit,
+          events,
+          approvals,
+          visitorHistory,
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

@@ -45,6 +45,16 @@ export function canAssignVipClassification(permissions = []) {
     || (permissions || []).includes('*');
 }
 
+/** Categories a caller may select when creating/editing a visit. */
+export function filterAssignableCategories(categories = [], permissions = []) {
+  const allowVip = canAssignVipClassification(permissions);
+  return (categories || []).filter((category) => {
+    const key = String(category?.classification || category?.slug || 'standard').toLowerCase();
+    if (key === 'vip' || key === 'vvip') return allowVip;
+    return true;
+  });
+}
+
 export function isRestrictedClassification(classification = 'standard') {
   const c = String(classification || 'standard').toLowerCase();
   return c === 'vip' || c === 'vvip';

@@ -1,0 +1,240 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Car, Footprints, LogIn, Search, User } from 'lucide-react';
+import { LoadingButton, StatusBadge } from '../../components/ui';
+import { useToast } from '../../context/ToastContext';
+import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
+import { visitorApi } from '../../utils/visitorApi';
+
+const INPUT_MD =
+  'w-full rounded-xl border border-navy-200 bg-navy-50 text-navy-900 placeholder:text-navy-400 transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500 py-3 pl-10 pr-3 text-base';
+
+function FieldLabel({ children }) {
+  return <label className="mb-2 block text-sm font-semibold text-navy-800">{children}</label>;
+}
+
+function FormSection({ title, subtitle, children }) {
+  return (
+    <section className="rounded-2xl border border-navy-100 bg-white p-4 sm:p-5">
+      {(title || subtitle) && (
+        <div className="mb-4 border-b border-navy-100 pb-3">
+          {title ? <h3 className="text-sm font-semibold text-navy-900">{title}</h3> : null}
+          {subtitle ? <p className="mt-0.5 text-xs text-navy-500">{subtitle}</p> : null}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export default function GateCheckInPanel({ badges: initialBadges = [], mode = 'walk-in' }) {
+  const toast = useToast();
+  const isVehicle = mode === 'vehicle';
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [badges, setBadges] = useState(initialBadges);
+  const [searching, setSearching] = useState(false);
+  const [loadingPending, setLoadingPending] = useState(true);
+  const [checkingIn, setCheckingIn] = useState(null);
+  const [selectedBadge, setSelectedBadge] = useState('');
+  const hasSearch = Boolean(query.trim());
+
+  useEffect(() => {
+    if (initialBadges.length) setBadges(initialBadges);
+  }, [initialBadges]);
+
+  const loadPending = useCallback(async () => {
+    setLoadingPending(true);
+    try {
+      const rows = await visitorApi.getPendingCheckIns(mode);
+      setResults(Array.isArray(rows) ? rows.filter((v) => isCheckInEligible(v.status)) : []);
+    } catch (err) {
+      toast.error(err.message || 'Failed to load pending check-ins.');
+      setResults([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  }, [mode, toast]);
+
+  useEffect(() => {
+    setQuery('');
+    setSelectedBadge('');
+    void loadPending();
+  }, [loadPending]);
+
+  const ensureBadges = async () => {
+    if (badges.length) return;
+    try {
+      const ref = await visitorApi.getReferenceData();
+      setBadges(ref.badges || []);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) {
+      void loadPending();
+      return;
+    }
+    setSearching(true);
+    try {
+      await ensureBadges();
+      const rows = await visitorApi.lookupVisit(query.trim(), mode);
+      const eligible = (rows || []).filter((v) => isCheckInEligible(v.status));
+      setResults(eligible);
+      if (eligible.length === 0) {
+        toast.info(`No matching ${isVehicle ? 'vehicle' : 'walk-in'} visits ready for check-in.`);
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleCheckIn = async (visitId) => {
+    setCheckingIn(visitId);
+    try {
+      await visitorApi.checkInVisit(visitId, selectedBadge);
+      toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked in successfully.`);
+      setResults((prev) => prev.filter((v) => v.id !== visitId));
+      setSelectedBadge('');
+      if (!hasSearch) {
+        void loadPending();
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCheckingIn(null);
+    }
+  };
+
+  const searchPlaceholder = isVehicle
+    ? 'Plate, driver name, pass code…'
+    : 'Name, phone, badge or pass code…';
+
+  const emptyIcon = isVehicle ? Car : User;
+  const EmptyIcon = emptyIcon;
+
+  return (
+    <div className="space-y-5">
+      <FormSection
+        title={isVehicle ? 'Find vehicle visit' : 'Find visitor'}
+        subtitle={isVehicle ? 'Search by plate, driver, or pass code' : 'Search by name, phone, badge or pass code'}
+      >
+        <form onSubmit={handleSearch} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <FieldLabel>Search</FieldLabel>
+            <div className="relative">
+              <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" aria-hidden="true" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className={INPUT_MD}
+                autoFocus
+              />
+            </div>
+          </div>
+          <LoadingButton
+            type="submit"
+            size="lg"
+            loading={searching}
+            loadingLabel="Searching…"
+            icon={Search}
+            className="w-full shrink-0 bg-cyan-600 hover:bg-cyan-700 border-cyan-600 sm:w-auto sm:min-w-[8rem]"
+          >
+            Search
+          </LoadingButton>
+        </form>
+      </FormSection>
+
+      {badges.length > 0 && !isVehicle ? (
+        <FormSection title="Badge assignment" subtitle="Optional physical badge for this check-in">
+          <FieldLabel>Available badge</FieldLabel>
+          <select
+            value={selectedBadge}
+            onChange={(e) => setSelectedBadge(e.target.value)}
+            className={`${INPUT_MD} pl-3`}
+          >
+            <option value="">No physical badge</option>
+            {badges.map((badge) => (
+              <option key={badge.badge_number} value={badge.badge_number}>
+                {badge.badge_number}
+              </option>
+            ))}
+          </select>
+        </FormSection>
+      ) : null}
+
+      <FormSection
+        title={isVehicle ? 'Ready for check-in' : 'Ready for check-in'}
+        subtitle={
+          loadingPending
+            ? 'Loading pending arrivals…'
+            : results.length
+              ? `${results.length} ${hasSearch ? 'match' : 'waiting'}`
+              : `Gate entries and approved ${isVehicle ? 'vehicle' : 'walk-in'} visits appear here`
+        }
+      >
+        {loadingPending ? (
+          <div className="py-10 text-center text-sm text-navy-500">Loading visitors…</div>
+        ) : results.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-navy-100 bg-navy-50 text-navy-400">
+              <EmptyIcon size={22} aria-hidden="true" />
+            </span>
+            <p className="text-sm font-medium text-navy-700">
+              {hasSearch ? 'No matching visits ready for check-in' : 'No visitors waiting for check-in'}
+            </p>
+            <p className="max-w-sm text-xs text-navy-400">
+              {hasSearch
+                ? 'Try another name, phone, badge or pass code.'
+                : 'Walk-in gate entries and approved visits will show here automatically.'}
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-navy-100 rounded-xl border border-navy-100">
+            {results.map((row) => (
+              <li key={row.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
+                  <p className="mt-0.5 truncate text-sm text-navy-500">
+                    Host: {row.host_name || '—'}
+                    {row.plate_numbers ? ` · ${row.plate_numbers}` : ''}
+                    {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusBadge status={row.status} />
+                    {isVehicle ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                        <Car size={12} aria-hidden="true" />
+                        Vehicle
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                        <Footprints size={12} aria-hidden="true" />
+                        Walk-in
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <LoadingButton
+                  loading={checkingIn === row.id}
+                  loadingLabel="Checking in…"
+                  icon={LogIn}
+                  size="lg"
+                  onClick={() => handleCheckIn(row.id)}
+                  className="w-full shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600 sm:w-auto sm:min-w-[9rem]"
+                >
+                  Check in
+                </LoadingButton>
+              </li>
+            ))}
+          </ul>
+        )}
+      </FormSection>
+    </div>
+  );
+}

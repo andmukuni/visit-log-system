@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MapPin, Users, ClipboardList, Clock3 } from 'lucide-react';
+import { MapPin, Users, ClipboardList, Clock3, Building2 } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -118,14 +118,14 @@ export default function AdminDashboardPage() {
               emptyLabel: 'No visit data for this week yet.',
             }}
             donutChart={{
-              title: 'Recent month',
-              subtitle: 'Visitors',
-              centerTitle: 'Site share',
-              centerIcon: MapPin,
-              data: data.visitsBySite || [],
-              nameKey: 'site_name',
+              title: 'Organisation stats',
+              subtitle: 'Visits by organisation',
+              centerTitle: 'Organisation share',
+              centerIcon: Building2,
+              data: data.visitsByOrganisation || [],
+              nameKey: 'organisation_name',
               valueKey: 'total',
-              emptyLabel: 'No site visit data yet.',
+              emptyLabel: 'No organisation visit data yet.',
             }}
           />
 

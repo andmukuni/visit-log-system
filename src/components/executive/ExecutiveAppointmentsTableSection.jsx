@@ -58,7 +58,7 @@ function FilterDropdown({ label, icon: Icon, value, onChange, options }) {
   return (
     <label className="relative inline-flex shrink-0">
       <span
-        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors sm:gap-2 sm:px-3.5 sm:py-2.5 ${
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors sm:gap-2 sm:px-3 sm:py-2 sm:text-sm ${
           isActive
             ? 'border-[#1a73e8]/30 bg-sky-50 text-[#1a73e8]'
             : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -92,7 +92,7 @@ function useAppointmentColumns(onView) {
         return (
           <div>
             <p className="font-medium tabular-nums text-gray-900">{range}</p>
-            <p className="text-sm text-gray-500">{dayLabel}</p>
+            <p className="text-xs text-gray-500">{dayLabel}</p>
           </div>
         );
       },
@@ -103,7 +103,7 @@ function useAppointmentColumns(onView) {
       render: (_, row) => (
         <div>
           <p className="font-medium text-gray-900">{row.visitor_name || '—'}</p>
-          {row.phone && <p className="text-sm text-gray-500">{row.phone}</p>}
+          {row.phone && <p className="text-xs text-gray-500">{row.phone}</p>}
         </div>
       ),
     },
@@ -120,7 +120,7 @@ function useAppointmentColumns(onView) {
         return (
           <div className="min-w-[120px]">
             <p className="font-medium text-gray-900">{title}</p>
-            {subtitle && <p className="line-clamp-2 text-sm text-gray-500">{subtitle}</p>}
+            {subtitle && <p className="line-clamp-2 text-xs text-gray-500">{subtitle}</p>}
           </div>
         );
       },
@@ -243,7 +243,7 @@ export default function ExecutiveAppointmentsTableSection({
                 key={id}
                 type="button"
                 onClick={() => onTabChange?.(id)}
-                className={`relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-sm font-semibold transition-colors sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-base ${
+                className={`relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold transition-colors sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm ${
                   active
                     ? 'text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8]'
                     : 'text-gray-500 hover:text-gray-800'
@@ -252,7 +252,7 @@ export default function ExecutiveAppointmentsTableSection({
                 <span className="inline-flex items-center gap-2">
                   {label}
                   {badge > 0 && (
-                    <span className="inline-flex min-h-[20px] min-w-[20px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-xs font-bold text-white">
+                    <span className="inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white">
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}
@@ -276,7 +276,7 @@ export default function ExecutiveAppointmentsTableSection({
               value={search}
               onChange={(e) => onSearchChange?.(e.target.value)}
               placeholder="Search by visitor name, purpose or host..."
-              className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-8 pr-3 text-base text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
             />
           </label>
 
@@ -304,7 +304,7 @@ export default function ExecutiveAppointmentsTableSection({
             />
             <button
               type="button"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3.5 sm:py-2.5"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
             >
               <SlidersHorizontal size={14} aria-hidden="true" />
               More Filters
@@ -314,7 +314,7 @@ export default function ExecutiveAppointmentsTableSection({
           <button
             type="button"
             onClick={() => exportAppointmentsCsv(rows)}
-            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3.5 sm:py-2.5 lg:self-center"
+            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm lg:self-center"
           >
             <Download size={14} aria-hidden="true" />
             Export
@@ -325,7 +325,6 @@ export default function ExecutiveAppointmentsTableSection({
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <DataTable
           embedded
-          size="comfortable"
           columns={columns}
           data={rows}
           loading={loading}

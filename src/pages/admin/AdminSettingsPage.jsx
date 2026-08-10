@@ -1,28 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import {
+  Activity,
+  AlertCircle,
+  Bell,
+  CheckCircle2,
+  Mail,
+  MessageSquare,
+  Printer,
+  ScanFace,
+  Settings,
+  Shield,
+  User,
+} from 'lucide-react';
 import {
   PageHeader,
   FormField,
   LoadingButton,
   Spinner,
-  FilterPills,
+  UnderlineTabs,
   useToast,
 } from '../../components/ui';
 import PlatformHealthPanel from '../../components/platform/PlatformHealthPanel';
 import { useAuth } from '../../context/AuthContext';
+import { formatNrcInput, isCompleteNrc, NRC_INPUT_MAX_LENGTH, NRC_PLACEHOLDER, printNrcVerificationSlip } from '../../utils/helpers';
 import { settingsApi } from '../../utils/settingsApi';
 
 const BASE_TABS = [
-  { value: 'general', label: 'General' },
-  { value: 'account', label: 'Account' },
-  { value: 'security', label: 'Security' },
-  { value: 'notifications', label: 'Notifications' },
-  { value: 'smtp', label: 'SMTP' },
-  { value: 'dojah', label: 'Dojah KYC' },
-  { value: 'sms', label: 'SMS' },
+  { value: 'general', label: 'General', icon: Settings },
+  { value: 'account', label: 'Account', icon: User },
+  { value: 'security', label: 'Security', icon: Shield },
+  { value: 'notifications', label: 'Notifications', icon: Bell },
+  { value: 'smtp', label: 'SMTP', icon: Mail },
+  { value: 'dojah', label: 'Dojah KYC', icon: ScanFace },
+  { value: 'sms', label: 'SMS', icon: MessageSquare },
 ];
 
-const HEALTH_TAB = { value: 'health', label: 'System Health' };
+const HEALTH_TAB = { value: 'health', label: 'System Health', icon: Activity };
 
 const NOTIFICATION_CATEGORIES = [
   { key: 'visit_registered', label: 'Visit registered', description: 'When a new visit is logged at a station or kiosk.' },
@@ -53,6 +67,81 @@ function TabPanelHeader({ title, subtitle }) {
   );
 }
 
+function IntegrationStatusBanner({
+  icon: Icon,
+  title,
+  description,
+  configured,
+  enabled,
+  source,
+  envVars,
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-navy-50/70 via-white to-white p-5 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
+          <Icon size={22} strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-navy-900">{title}</h2>
+            {configured ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/20">
+                <CheckCircle2 size={12} aria-hidden="true" />
+                Configured
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-600/20">
+                <AlertCircle size={12} aria-hidden="true" />
+                Not configured
+              </span>
+            )}
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                enabled
+                  ? 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'
+                  : 'bg-gray-100 text-gray-600 ring-gray-500/20'
+              }`}
+            >
+              {enabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <p className="mt-1.5 text-sm text-navy-500">{description}</p>
+          {configured && source ? (
+            <p className="mt-2 text-xs text-navy-400">
+              Active configuration from{' '}
+              <span className="font-medium text-navy-600">{source}</span>
+            </p>
+          ) : null}
+          {!configured && envVars ? (
+            <p className="mt-2 text-xs text-navy-400">
+              Or configure via{' '}
+              <code className="rounded-md bg-navy-100 px-1.5 py-0.5 font-mono text-[11px] text-navy-700">
+                {envVars}
+              </code>{' '}
+              environment variables
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsFormBlock({ title, subtitle, children, className = '' }) {
+  return (
+    <section className={`overflow-hidden rounded-2xl border border-gray-200 bg-white ${className}`}>
+      {(title || subtitle) && (
+        <div className="border-b border-gray-100 bg-navy-50/50 px-5 py-4">
+          {title && <h3 className="text-sm font-semibold text-navy-900">{title}</h3>}
+          {subtitle && <p className="mt-0.5 text-xs text-navy-500">{subtitle}</p>}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
 function TabSection({ title, subtitle, children }) {
   return (
     <section className="mt-8 border-t border-gray-100 pt-8">
@@ -69,33 +158,41 @@ function TabSection({ title, subtitle, children }) {
 
 function ToggleRow({ label, description, checked, onChange }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-gray-100 px-4 py-3 hover:bg-gray-50/80">
-      <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-navy-50/40 px-4 py-3.5 transition-colors hover:border-gray-300 hover:bg-navy-50/70">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-navy-900">{label}</p>
+        {description && <p className="mt-0.5 text-xs text-navy-500">{description}</p>}
       </div>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
-      />
+      <div className="relative inline-flex shrink-0">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer sr-only"
+        />
+        <span
+          className="block h-6 w-11 rounded-full bg-gray-200 transition-colors peer-checked:bg-cyan-600 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500 peer-focus-visible:ring-offset-2"
+          aria-hidden="true"
+        />
+        <span
+          className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"
+          aria-hidden="true"
+        />
+      </div>
     </label>
   );
 }
 
 export default function AdminSettingsPage() {
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isPlatform = location.pathname.startsWith('/platform');
   const { user, updateSession, hasPermission } = useAuth();
   const toast = useToast();
   const tabs = useMemo(() => {
-    if (isPlatform && hasPermission('platform.health')) {
-      return [...BASE_TABS, HEALTH_TAB];
+    if (hasPermission('platform.health') || hasPermission('admin.settings')) {
+      return hasPermission('platform.health') ? [...BASE_TABS, HEALTH_TAB] : BASE_TABS;
     }
     return BASE_TABS;
-  }, [isPlatform, hasPermission]);
+  }, [hasPermission]);
   const tabFromUrl = searchParams.get('tab');
   const [tab, setTab] = useState(() => (
     tabFromUrl && tabs.some((item) => item.value === tabFromUrl) ? tabFromUrl : 'general'
@@ -117,6 +214,7 @@ export default function AdminSettingsPage() {
   });
   const [testEmail, setTestEmail] = useState('');
   const [testNrc, setTestNrc] = useState('');
+  const [dojahLookupResult, setDojahLookupResult] = useState(null);
   const [testSmsPhone, setTestSmsPhone] = useState('');
   const [savingAccount, setSavingAccount] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
@@ -323,14 +421,45 @@ export default function AdminSettingsPage() {
   };
 
   const runDojahTest = async () => {
+    const nrc = formatNrcInput(testNrc);
+    if (nrc && !isCompleteNrc(nrc)) {
+      toast.error(`Enter a complete NRC (${NRC_PLACEHOLDER}).`);
+      return;
+    }
     setTestingDojah(true);
+    setDojahLookupResult(null);
     try {
-      const json = await settingsApi.testDojah({ nrc: testNrc.trim() || undefined });
+      const json = await settingsApi.testDojah({ nrc: nrc || undefined });
       toast.success(json.message || 'Dojah connection successful.');
+      if (json.mode === 'nrc_lookup' && json.sample) {
+        setDojahLookupResult({
+          message: json.message,
+          verifiedAt: new Date(),
+          ...json.sample,
+        });
+      }
     } catch (err) {
       toast.error(err.message || 'Dojah test failed.');
     } finally {
       setTestingDojah(false);
+    }
+  };
+
+  const printDojahLookup = () => {
+    if (!dojahLookupResult) {
+      toast.error('Run an NRC lookup first.');
+      return;
+    }
+    const printed = printNrcVerificationSlip({
+      nrc: dojahLookupResult.nrc,
+      taxpayerName: dojahLookupResult.taxpayer_name,
+      currentStatus: dojahLookupResult.current_status,
+      tpin: dojahLookupResult.tpin,
+      verifiedAt: dojahLookupResult.verifiedAt,
+      appName: generalForm.app_name || settings?.general?.app_name || 'Visitor Log',
+    });
+    if (!printed) {
+      toast.error('Allow pop-ups to print the verification slip.');
     }
   };
 
@@ -370,7 +499,7 @@ export default function AdminSettingsPage() {
           title="System Settings"
           subtitle="Configure organisation preferences, security, and delivery integrations"
           breadcrumbs={[
-            { label: isPlatform ? 'Platform' : 'Administration', to: isPlatform ? '/platform' : '/admin' },
+            { label: 'Administration', to: '/admin' },
             { label: 'Settings' },
           ]}
         />
@@ -389,7 +518,7 @@ export default function AdminSettingsPage() {
         title="System Settings"
         subtitle="Configure organisation preferences, security, and delivery integrations"
         breadcrumbs={[
-          { label: isPlatform ? 'Platform' : 'Administration', to: isPlatform ? '/platform' : '/admin' },
+          { label: 'Administration', to: '/admin' },
           { label: 'Settings' },
         ]}
       />
@@ -400,9 +529,10 @@ export default function AdminSettingsPage() {
         </SettingsCard>
       )}
 
-      <FilterPills options={tabs} value={tab} onChange={handleTabChange} className="mb-4" />
+      <SettingsCard className="mb-6 overflow-hidden">
+        <UnderlineTabs scrollable options={tabs} value={tab} onChange={handleTabChange} />
 
-      <SettingsCard className="p-5 sm:p-6">
+        <div className="p-5 sm:p-6">
         {tab === 'general' && (
           <div className="max-w-3xl">
             <TabPanelHeader
@@ -623,226 +753,311 @@ export default function AdminSettingsPage() {
         )}
 
         {tab === 'smtp' && (
-          <div className="max-w-2xl">
-            <TabPanelHeader
+          <div className="space-y-6">
+            <IntegrationStatusBanner
+              icon={Mail}
               title="SMTP"
-              subtitle={settings?.smtp?.configured
-                ? `Configured via ${settings.smtp.source}`
-                : 'Not configured — set values below or use SMTP_* environment variables'}
+              description="Send visit notifications, approvals, and system emails through your mail server."
+              configured={settings?.smtp?.configured}
+              enabled={smtpForm.enabled}
+              source={settings?.smtp?.source}
+              envVars="SMTP_*"
             />
-            <form onSubmit={saveSmtp} className="space-y-4">
-              <ToggleRow
-                label="Enable SMTP"
-                checked={Boolean(smtpForm.enabled)}
-                onChange={(value) => setSmtpForm({ ...smtpForm, enabled: value })}
-              />
-              <FormField label="Host" name="host" value={smtpForm.host} onChange={(e) => setSmtpForm({ ...smtpForm, host: e.target.value })} />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  label="Port"
-                  name="port"
-                  type="number"
-                  value={smtpForm.port}
-                  onChange={(e) => {
-                    const port = Number(e.target.value) || 587;
-                    setSmtpForm({ ...smtpForm, port, secure: port === 465 });
-                  }}
-                  helpText="587 for STARTTLS, 465 for SSL"
-                />
-                <FormField label="From address" name="from" value={smtpForm.from} onChange={(e) => setSmtpForm({ ...smtpForm, from: e.target.value })} />
-              </div>
-              <FormField label="From name" name="from_name" value={smtpForm.from_name} onChange={(e) => setSmtpForm({ ...smtpForm, from_name: e.target.value })} />
-              <FormField label="Username" name="user" value={smtpForm.user} onChange={(e) => setSmtpForm({ ...smtpForm, user: e.target.value })} />
-              <FormField
-                label="Password"
-                name="pass"
-                type="password"
-                value={smtpForm.pass}
-                onChange={(e) => setSmtpForm({ ...smtpForm, pass: e.target.value })}
-                placeholder={settings?.smtp?.pass_set ? 'Leave blank to keep existing password' : ''}
-              />
-              <ToggleRow
-                label="Use TLS/SSL"
-                description="Enable for port 465 or when your server requires a secure connection."
-                checked={Boolean(smtpForm.secure)}
-                onChange={(value) => setSmtpForm({ ...smtpForm, secure: value })}
-              />
-              <LoadingButton type="submit" loading={savingSmtp}>
-                Save SMTP settings
-              </LoadingButton>
-            </form>
 
-            <TabSection title="Send test email" subtitle="Uses the effective SMTP configuration">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <FormField
-                  label="Recipient"
-                  name="test_email"
-                  type="email"
-                  value={testEmail}
-                  onChange={(e) => setTestEmail(e.target.value)}
-                />
-                <LoadingButton type="button" loading={testingSmtp} onClick={runSmtpTest}>
-                  Send test
-                </LoadingButton>
-              </div>
-              <p className="mt-3 text-xs text-gray-500">
-                Delivery queue: {settings?.stats?.email_pending ?? 0} pending, {settings?.stats?.email_sent ?? 0} delivered
-              </p>
-            </TabSection>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <SettingsFormBlock title="Mail server" subtitle="Host, authentication, and sender details">
+                <form onSubmit={saveSmtp} className="space-y-4">
+                  <ToggleRow
+                    label="Enable SMTP"
+                    description="Turn off to queue emails without sending."
+                    checked={Boolean(smtpForm.enabled)}
+                    onChange={(value) => setSmtpForm({ ...smtpForm, enabled: value })}
+                  />
+                  <FormField label="Host" name="host" value={smtpForm.host} onChange={(e) => setSmtpForm({ ...smtpForm, host: e.target.value })} />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField
+                      label="Port"
+                      name="port"
+                      type="number"
+                      value={smtpForm.port}
+                      onChange={(e) => {
+                        const port = Number(e.target.value) || 587;
+                        setSmtpForm({ ...smtpForm, port, secure: port === 465 });
+                      }}
+                      helpText="587 for STARTTLS, 465 for SSL"
+                    />
+                    <FormField label="From address" name="from" value={smtpForm.from} onChange={(e) => setSmtpForm({ ...smtpForm, from: e.target.value })} />
+                  </div>
+                  <FormField label="From name" name="from_name" value={smtpForm.from_name} onChange={(e) => setSmtpForm({ ...smtpForm, from_name: e.target.value })} />
+                  <FormField label="Username" name="user" value={smtpForm.user} onChange={(e) => setSmtpForm({ ...smtpForm, user: e.target.value })} />
+                  <FormField
+                    label="Password"
+                    name="pass"
+                    type="password"
+                    value={smtpForm.pass}
+                    onChange={(e) => setSmtpForm({ ...smtpForm, pass: e.target.value })}
+                    placeholder={settings?.smtp?.pass_set ? 'Leave blank to keep existing password' : ''}
+                  />
+                  <ToggleRow
+                    label="Use TLS/SSL"
+                    description="Enable for port 465 or when your server requires a secure connection."
+                    checked={Boolean(smtpForm.secure)}
+                    onChange={(value) => setSmtpForm({ ...smtpForm, secure: value })}
+                  />
+                  <div className="flex justify-end border-t border-gray-100 pt-4">
+                    <LoadingButton type="submit" loading={savingSmtp}>
+                      Save SMTP settings
+                    </LoadingButton>
+                  </div>
+                </form>
+              </SettingsFormBlock>
+
+              <SettingsFormBlock title="Send test email" subtitle="Uses the effective SMTP configuration">
+                <div className="space-y-4">
+                  <FormField
+                    label="Recipient"
+                    name="test_email"
+                    type="email"
+                    value={testEmail}
+                    onChange={(e) => setTestEmail(e.target.value)}
+                  />
+                  <LoadingButton type="button" loading={testingSmtp} onClick={runSmtpTest} className="w-full sm:w-auto">
+                    Send test
+                  </LoadingButton>
+                  <p className="rounded-xl bg-navy-50 px-3 py-2 text-xs text-navy-500">
+                    Delivery queue: {settings?.stats?.email_pending ?? 0} pending,{' '}
+                    {settings?.stats?.email_sent ?? 0} delivered
+                  </p>
+                </div>
+              </SettingsFormBlock>
+            </div>
           </div>
         )}
 
         {tab === 'dojah' && (
-          <div className="max-w-2xl">
-            <TabPanelHeader
+          <div className="space-y-6">
+            <IntegrationStatusBanner
+              icon={ScanFace}
               title="Dojah KYC"
-              subtitle={settings?.dojah?.configured
-                ? `Configured via ${settings.dojah.source}`
-                : 'Not configured — set credentials below or use DOJAH_* environment variables'}
+              description="Verify visitor identity using National Registration Card lookup at gate entry and reception."
+              configured={settings?.dojah?.configured}
+              enabled={dojahForm.enabled}
+              source={settings?.dojah?.source}
+              envVars="DOJAH_*"
             />
-            <form onSubmit={saveDojah} className="space-y-4">
-              <ToggleRow
-                label="Enable Dojah"
-                description="Verify visitor identity via Dojah NRC lookup."
-                checked={Boolean(dojahForm.enabled)}
-                onChange={(value) => setDojahForm({ ...dojahForm, enabled: value })}
-              />
-              <FormField label="App ID" name="app_id" value={dojahForm.app_id} onChange={(e) => setDojahForm({ ...dojahForm, app_id: e.target.value })} />
-              <FormField label="Public key" name="public_key" value={dojahForm.public_key} onChange={(e) => setDojahForm({ ...dojahForm, public_key: e.target.value })} />
-              <FormField
-                label="Private key"
-                name="private_key"
-                type="password"
-                value={dojahForm.private_key}
-                onChange={(e) => setDojahForm({ ...dojahForm, private_key: e.target.value })}
-                placeholder={settings?.dojah?.private_key_set ? 'Leave blank to keep existing key' : ''}
-              />
-              <ToggleRow
-                label="Use sandbox"
-                description="Connect to Dojah sandbox instead of production."
-                checked={Boolean(dojahForm.use_sandbox)}
-                onChange={(value) => setDojahForm({ ...dojahForm, use_sandbox: value })}
-              />
-              <LoadingButton type="submit" loading={savingDojah}>
-                Save Dojah settings
-              </LoadingButton>
-            </form>
 
-            <TabSection title="Test connection" subtitle="Optional NRC lookup to verify credentials">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <FormField
-                  label="Test NRC (optional)"
-                  name="test_nrc"
-                  value={testNrc}
-                  onChange={(e) => setTestNrc(e.target.value)}
-                  helpText="Leave empty to run a lightweight balance check."
-                />
-                <LoadingButton type="button" loading={testingDojah} onClick={runDojahTest}>
-                  Test connection
-                </LoadingButton>
-              </div>
-            </TabSection>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <SettingsFormBlock title="API credentials" subtitle="Keys from your Dojah developer dashboard">
+                <form onSubmit={saveDojah} className="space-y-4">
+                  <ToggleRow
+                    label="Enable Dojah"
+                    description="Verify visitor identity via Dojah NRC lookup."
+                    checked={Boolean(dojahForm.enabled)}
+                    onChange={(value) => setDojahForm({ ...dojahForm, enabled: value })}
+                  />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="App ID" name="app_id" value={dojahForm.app_id} onChange={(e) => setDojahForm({ ...dojahForm, app_id: e.target.value })} helpText="Required header: AppId" />
+                    <FormField label="Public key" name="public_key" value={dojahForm.public_key} onChange={(e) => setDojahForm({ ...dojahForm, public_key: e.target.value })} helpText="Optional — for Dojah widgets/SDK only" />
+                  </div>
+                  <FormField
+                    label="Private key"
+                    name="private_key"
+                    type="password"
+                    value={dojahForm.private_key}
+                    onChange={(e) => setDojahForm({ ...dojahForm, private_key: e.target.value })}
+                    placeholder={settings?.dojah?.private_key_set ? 'Leave blank to keep existing key' : ''}
+                    helpText="Sent as Authorization header (raw secret key, not Bearer)"
+                  />
+                  <ToggleRow
+                    label="Use sandbox"
+                    description="Connect to Dojah sandbox instead of production."
+                    checked={Boolean(dojahForm.use_sandbox)}
+                    onChange={(value) => setDojahForm({ ...dojahForm, use_sandbox: value })}
+                  />
+                  <div className="flex justify-end border-t border-gray-100 pt-4">
+                    <LoadingButton type="submit" loading={savingDojah}>
+                      Save Dojah settings
+                    </LoadingButton>
+                  </div>
+                </form>
+              </SettingsFormBlock>
+
+              <SettingsFormBlock title="Test connection" subtitle="Optional NRC lookup to verify credentials">
+                <div className="space-y-4">
+                  <FormField
+                    label="Test NRC"
+                    name="test_nrc"
+                    value={testNrc}
+                    onChange={(e) => {
+                      setTestNrc(formatNrcInput(e.target.value));
+                      setDojahLookupResult(null);
+                    }}
+                    placeholder={NRC_PLACEHOLDER}
+                    inputMode="numeric"
+                    maxLength={NRC_INPUT_MAX_LENGTH}
+                    helpText="Enter 9 digits only — formatted automatically as 123456/78/9"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <LoadingButton type="button" loading={testingDojah} onClick={runDojahTest} className="sm:w-auto">
+                      {testNrc.trim() ? 'Lookup NRC' : 'Test connection'}
+                    </LoadingButton>
+                    {dojahLookupResult ? (
+                      <button
+                        type="button"
+                        onClick={printDojahLookup}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-800 transition-colors hover:border-gray-300 hover:bg-navy-50"
+                      >
+                        <Printer size={16} aria-hidden="true" />
+                        Print result
+                      </button>
+                    ) : null}
+                  </div>
+                  {dojahLookupResult ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                      <div className="mb-3 flex items-start gap-2">
+                        <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-900">Lookup successful</p>
+                          <p className="text-xs text-emerald-700">{dojahLookupResult.message}</p>
+                        </div>
+                      </div>
+                      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                        <div>
+                          <dt className="text-xs font-medium uppercase tracking-wide text-emerald-800/70">NRC</dt>
+                          <dd className="font-medium text-emerald-950">{dojahLookupResult.nrc || '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-medium uppercase tracking-wide text-emerald-800/70">Status</dt>
+                          <dd className="font-medium text-emerald-950">{dojahLookupResult.current_status || '—'}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-xs font-medium uppercase tracking-wide text-emerald-800/70">Registered name</dt>
+                          <dd className="font-medium text-emerald-950">{dojahLookupResult.taxpayer_name || '—'}</dd>
+                        </div>
+                        {dojahLookupResult.tpin ? (
+                          <div>
+                            <dt className="text-xs font-medium uppercase tracking-wide text-emerald-800/70">TPIN</dt>
+                            <dd className="font-medium text-emerald-950">{dojahLookupResult.tpin}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </div>
+                  ) : null}
+                </div>
+              </SettingsFormBlock>
+            </div>
           </div>
         )}
 
         {tab === 'sms' && (
-          <div className="max-w-2xl">
-            <TabPanelHeader
+          <div className="space-y-6">
+            <IntegrationStatusBanner
+              icon={MessageSquare}
               title="SMS provider"
-              subtitle={settings?.sms?.configured
-                ? `Configured via ${settings.sms.source} (${settings?.sms?.provider || 'console'})`
-                : 'Not configured — choose a provider below or use environment variables'}
+              description="Send visit alerts and reminders via Twilio, Ontech, or console logging."
+              configured={settings?.sms?.configured}
+              enabled={smsForm.enabled}
+              source={settings?.sms?.source ? `${settings.sms.source} (${settings?.sms?.provider || 'console'})` : undefined}
+              envVars="SMS_* / TWILIO_*"
             />
-            <form onSubmit={saveSms} className="space-y-4">
-              <ToggleRow
-                label="Enable SMS"
-                checked={Boolean(smsForm.enabled)}
-                onChange={(value) => setSmsForm({ ...smsForm, enabled: value })}
-              />
-              <FormField
-                label="Provider"
-                name="provider"
-                type="select"
-                value={smsForm.provider}
-                onChange={(e) => setSmsForm({ ...smsForm, provider: e.target.value })}
-                options={[
-                  { value: 'console', label: 'Console (log only)' },
-                  { value: 'twilio', label: 'Twilio' },
-                  { value: 'ontech', label: 'Ontech (Zambia)' },
-                ]}
-              />
 
-              {smsForm.provider === 'twilio' && (
-                <>
-                  <FormField
-                    label="Twilio Account SID"
-                    name="twilio_account_sid"
-                    value={smsForm.twilio_account_sid}
-                    onChange={(e) => setSmsForm({ ...smsForm, twilio_account_sid: e.target.value })}
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <SettingsFormBlock title="Provider settings" subtitle="Choose a delivery provider and credentials">
+                <form onSubmit={saveSms} className="space-y-4">
+                  <ToggleRow
+                    label="Enable SMS"
+                    description="Turn off to log messages without sending."
+                    checked={Boolean(smsForm.enabled)}
+                    onChange={(value) => setSmsForm({ ...smsForm, enabled: value })}
                   />
                   <FormField
-                    label="Twilio Auth Token"
-                    name="twilio_auth_token"
-                    type="password"
-                    value={smsForm.twilio_auth_token}
-                    onChange={(e) => setSmsForm({ ...smsForm, twilio_auth_token: e.target.value })}
-                    placeholder={settings?.sms?.twilio_auth_token_set ? 'Leave blank to keep existing token' : ''}
+                    label="Provider"
+                    name="provider"
+                    type="select"
+                    value={smsForm.provider}
+                    onChange={(e) => setSmsForm({ ...smsForm, provider: e.target.value })}
+                    options={[
+                      { value: 'console', label: 'Console (log only)' },
+                      { value: 'twilio', label: 'Twilio' },
+                      { value: 'ontech', label: 'Ontech (Zambia)' },
+                    ]}
                   />
-                  <FormField
-                    label="From number"
-                    name="twilio_from"
-                    value={smsForm.twilio_from}
-                    onChange={(e) => setSmsForm({ ...smsForm, twilio_from: e.target.value })}
-                  />
-                </>
-              )}
 
-              {smsForm.provider === 'ontech' && (
-                <>
-                  <FormField
-                    label="API base URL"
-                    name="base_url"
-                    value={smsForm.base_url}
-                    onChange={(e) => setSmsForm({ ...smsForm, base_url: e.target.value })}
-                  />
-                  <FormField
-                    label="Access ID / API key"
-                    name="access_id"
-                    value={smsForm.access_id}
-                    onChange={(e) => setSmsForm({ ...smsForm, access_id: e.target.value })}
-                  />
-                  <FormField
-                    label="Sender ID"
-                    name="sender_id"
-                    value={smsForm.sender_id}
-                    onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
-                  />
-                </>
-              )}
+                  {smsForm.provider === 'twilio' && (
+                    <>
+                      <FormField
+                        label="Twilio Account SID"
+                        name="twilio_account_sid"
+                        value={smsForm.twilio_account_sid}
+                        onChange={(e) => setSmsForm({ ...smsForm, twilio_account_sid: e.target.value })}
+                      />
+                      <FormField
+                        label="Twilio Auth Token"
+                        name="twilio_auth_token"
+                        type="password"
+                        value={smsForm.twilio_auth_token}
+                        onChange={(e) => setSmsForm({ ...smsForm, twilio_auth_token: e.target.value })}
+                        placeholder={settings?.sms?.twilio_auth_token_set ? 'Leave blank to keep existing token' : ''}
+                      />
+                      <FormField
+                        label="From number"
+                        name="twilio_from"
+                        value={smsForm.twilio_from}
+                        onChange={(e) => setSmsForm({ ...smsForm, twilio_from: e.target.value })}
+                      />
+                    </>
+                  )}
 
-              <LoadingButton type="submit" loading={savingSms}>
-                Save SMS settings
-              </LoadingButton>
-            </form>
+                  {smsForm.provider === 'ontech' && (
+                    <>
+                      <FormField
+                        label="API base URL"
+                        name="base_url"
+                        value={smsForm.base_url}
+                        onChange={(e) => setSmsForm({ ...smsForm, base_url: e.target.value })}
+                      />
+                      <FormField
+                        label="Access ID / API key"
+                        name="access_id"
+                        value={smsForm.access_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, access_id: e.target.value })}
+                      />
+                      <FormField
+                        label="Sender ID"
+                        name="sender_id"
+                        value={smsForm.sender_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
+                      />
+                    </>
+                  )}
 
-            <TabSection title="Send test SMS" subtitle="Requires a phone number when using Twilio or Ontech">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <FormField
-                  label="Phone number"
-                  name="test_sms_phone"
-                  value={testSmsPhone}
-                  onChange={(e) => setTestSmsPhone(e.target.value)}
-                  placeholder="971234567"
-                />
-                <LoadingButton type="button" loading={testingSms} onClick={runSmsTest}>
-                  Send test
-                </LoadingButton>
-              </div>
-            </TabSection>
+                  <div className="flex justify-end border-t border-gray-100 pt-4">
+                    <LoadingButton type="submit" loading={savingSms}>
+                      Save SMS settings
+                    </LoadingButton>
+                  </div>
+                </form>
+              </SettingsFormBlock>
+
+              <SettingsFormBlock title="Send test SMS" subtitle="Requires a phone number for Twilio or Ontech">
+                <div className="space-y-4">
+                  <FormField
+                    label="Phone number"
+                    name="test_sms_phone"
+                    value={testSmsPhone}
+                    onChange={(e) => setTestSmsPhone(e.target.value)}
+                    placeholder="971234567"
+                  />
+                  <LoadingButton type="button" loading={testingSms} onClick={runSmsTest} className="w-full sm:w-auto">
+                    Send test
+                  </LoadingButton>
+                </div>
+              </SettingsFormBlock>
+            </div>
           </div>
         )}
 
-        {tab === 'health' && isPlatform && (
+        {tab === 'health' && hasPermission('platform.health') && (
           <div>
             <TabPanelHeader
               title="System Health"
@@ -851,6 +1066,7 @@ export default function AdminSettingsPage() {
             <PlatformHealthPanel />
           </div>
         )}
+        </div>
       </SettingsCard>
     </div>
   );

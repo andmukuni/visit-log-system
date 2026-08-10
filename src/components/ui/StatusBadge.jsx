@@ -1,5 +1,5 @@
 import {
-  CheckCircle2, Clock, XCircle, AlertCircle, CircleDot, LogIn, LogOut, Shield,
+  CheckCircle2, Clock, XCircle, AlertCircle, CircleDot, LogIn, LogOut, Shield, ShieldCheck,
 } from 'lucide-react';
 
 const colorMap = {
@@ -23,6 +23,7 @@ const colorMap = {
   waived: { bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/20', icon: CheckCircle2 },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/20', icon: CheckCircle2 },
   expected: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
+  arrived_at_gate: { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-600/20', icon: ShieldCheck },
   pre_registered: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
   pending_approval: { bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/20', icon: Clock },
   checked_in: { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/20', icon: LogIn },
@@ -53,6 +54,7 @@ const labelMap = {
   closed: 'Closed',
   free: 'Free',
   expected: 'Expected',
+  arrived_at_gate: 'At gate',
   approved: 'Approved',
   pending_approval: 'Pending approval',
 };
@@ -72,7 +74,7 @@ export default function StatusBadge({ status, size = 'sm' }) {
   const displayLabel = formatStatusLabel(status, normalized);
 
   const sizeClasses = {
-    sm: 'text-sm px-2 py-0.5 gap-1',
+    sm: 'text-xs px-2 py-0.5 gap-1',
     md: 'text-sm px-2.5 py-1 gap-1.5',
   };
 
@@ -80,7 +82,7 @@ export default function StatusBadge({ status, size = 'sm' }) {
     <span
       className={`inline-flex items-center rounded-full font-medium ring-1 ring-inset ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
     >
-      <Icon size={size === 'sm' ? 14 : 16} aria-hidden="true" />
+      <Icon size={size === 'sm' ? 12 : 14} aria-hidden="true" />
       {displayLabel}
     </span>
   );

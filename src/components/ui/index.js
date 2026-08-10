@@ -25,6 +25,7 @@ export { default as AppShell } from './AppShell';
 export { default as NavIcon } from './NavIcon';
 export * from './PageActions';
 export { default as PageLoader } from './PageLoader';
+export { default as PhoneInput } from './PhoneInput';
 export { default as TopProgressBar } from './TopProgressBar';
 
 export { ToastProvider, useToast, toast } from '../../context/ToastContext';

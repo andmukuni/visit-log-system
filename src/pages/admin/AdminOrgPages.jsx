@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader, Card, DataTable, Spinner } from '../../components/ui';
 import { visitorApi } from '../../utils/visitorApi';
+import { useOrganisationPrerequisite } from '../../hooks/useOrganisationPrerequisite';
+import OrganisationRequiredBanner from '../../components/admin/OrganisationRequiredBanner';
 
-function AdminListPage({ title, subtitle, fetchFn, columns, breadcrumbs }) {
+function AdminListPage({ title, subtitle, fetchFn, columns, breadcrumbs, requiresOrganisation = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { hasOrganisation, hasActiveOrganisation, loading: orgLoading } = useOrganisationPrerequisite();
+  const canManageStructure = hasOrganisation && hasActiveOrganisation;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -22,14 +26,34 @@ function AdminListPage({ title, subtitle, fetchFn, columns, breadcrumbs }) {
     load();
   }, [load]);
 
+  const showOrgGate = requiresOrganisation && !orgLoading && !canManageStructure;
+
   return (
-    <div>
-      <PageHeader title={title} subtitle={subtitle} breadcrumbs={breadcrumbs} />
+    <div className="flex flex-col gap-2.5 sm:gap-3">
+      <PageHeader
+        title={title}
+        subtitle={
+          requiresOrganisation
+            ? `${subtitle} Belong to an organisation — cannot exist without one.`
+            : subtitle
+        }
+        breadcrumbs={breadcrumbs}
+      />
+      {showOrgGate && <OrganisationRequiredBanner entityLabel={title} />}
       {loading ? (
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card>
-          <DataTable columns={columns} data={rows} emptyTitle={`No ${title.toLowerCase()} found`} />
+          <DataTable
+            columns={columns}
+            data={rows}
+            emptyTitle={showOrgGate ? 'No organisation yet' : `No ${title.toLowerCase()} found`}
+            emptyDescription={
+              showOrgGate
+                ? `Create an organisation first. ${title} cannot exist without an organisation.`
+                : undefined
+            }
+          />
         </Card>
       )}
     </div>
@@ -39,9 +63,10 @@ function AdminListPage({ title, subtitle, fetchFn, columns, breadcrumbs }) {
 const PAGE_CONFIG = {
   sites: {
     title: 'Sites & Branches',
-    subtitle: 'Offices, facilities and branches',
+    subtitle: 'Offices, facilities and branches.',
     fetchFn: () => visitorApi.getSites(),
     breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Sites' }],
+    requiresOrganisation: true,
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'code', label: 'Code' },
@@ -51,9 +76,10 @@ const PAGE_CONFIG = {
   },
   stations: {
     title: 'Stations & Gates',
-    subtitle: 'Reception desks and entry points',
+    subtitle: 'Reception desks and entry points.',
     fetchFn: () => visitorApi.getStations(),
     breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Stations' }],
+    requiresOrganisation: true,
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'site_name', label: 'Site' },
@@ -63,23 +89,44 @@ const PAGE_CONFIG = {
   },
   departments: {
     title: 'Departments',
-    subtitle: 'Organisational departments',
+    subtitle: 'Organisational departments.',
     fetchFn: () => visitorApi.getDepartments(),
     breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Departments' }],
+    requiresOrganisation: true,
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'code', label: 'Code' },
+      { key: 'office_count', label: 'Offices' },
+    ],
+  },
+  offices: {
+    title: 'Offices',
+    subtitle: 'Office numbers mapped to building, department and organisation.',
+    fetchFn: () => visitorApi.getOffices(),
+    breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Offices' }],
+    requiresOrganisation: true,
+    columns: [
+      { key: 'office_number', label: 'Office #' },
+      { key: 'name', label: 'Name' },
+      { key: 'department_name', label: 'Department' },
+      { key: 'building_name', label: 'Building' },
+      { key: 'site_name', label: 'Site' },
+      { key: 'status', label: 'Status' },
     ],
   },
   hosts: {
     title: 'Employees & Hosts',
-    subtitle: 'People who may receive visitors',
+    subtitle: 'Employees linked to department and site/branch.',
     fetchFn: () => visitorApi.getHosts(),
     breadcrumbs: [{ label: 'Admin', to: '/admin' }, { label: 'Hosts' }],
+    requiresOrganisation: true,
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'email', label: 'Email' },
       { key: 'department_name', label: 'Department' },
+      { key: 'site_name', label: 'Site / Branch' },
+      { key: 'office_number', label: 'Office #' },
+      { key: 'organisation_name', label: 'Organisation' },
       { key: 'status', label: 'Status' },
     ],
   },
@@ -116,16 +163,16 @@ export default function AdminOrgPages({ page = 'sites' }) {
   return <AdminListPage {...config} />;
 }
 
-export function AdminSitesPage() {
-  return <AdminOrgPages page="sites" />;
-}
-
 export function AdminStationsPage() {
   return <AdminOrgPages page="stations" />;
 }
 
 export function AdminDepartmentsPage() {
   return <AdminOrgPages page="departments" />;
+}
+
+export function AdminOfficesPage() {
+  return <AdminOrgPages page="offices" />;
 }
 
 export function AdminHostsPage() {

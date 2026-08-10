@@ -5,6 +5,7 @@ import {
   Bell,
   Bold,
   BriefcaseBusiness,
+  CalendarDays,
   HelpCircle,
   Italic,
   Link2,
@@ -13,9 +14,10 @@ import {
   MapPin,
   RemoveFormatting,
   Underline,
+  Users,
   X,
 } from 'lucide-react';
-import { LoadingButton } from '../ui';
+import { LoadingButton, SegmentedControl } from '../ui';
 import { useToast } from '../../context/ToastContext';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
@@ -39,7 +41,10 @@ import {
   toTimeInputValue,
 } from './calendarUtils';
 
-const GCAL_BLUE = '#1a73e8';
+const INPUT =
+  'w-full rounded-xl border border-navy-200 bg-navy-50 text-navy-900 placeholder:text-navy-400 transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500 px-3 py-2.5 text-sm';
+const SELECT =
+  'rounded-xl border border-navy-200 bg-navy-50 text-navy-900 transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500 px-3 py-2.5 text-sm';
 
 function SchedulePill({ label, value, type = 'text', onChange, ariaLabel, min }) {
   const inputRef = useRef(null);
@@ -64,7 +69,7 @@ function SchedulePill({ label, value, type = 'text', onChange, ariaLabel, min })
       <button
         type="button"
         onClick={openPicker}
-        className="inline-flex min-h-[36px] items-center rounded-md bg-[#f1f3f4] px-3 py-2 text-sm text-gray-800 transition-colors hover:bg-[#e8eaed]"
+        className="inline-flex min-h-[40px] items-center rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm font-medium text-navy-800 shadow-sm transition-colors hover:border-navy-300 hover:bg-navy-50"
       >
         {label}
       </button>
@@ -82,51 +87,43 @@ function SchedulePill({ label, value, type = 'text', onChange, ariaLabel, min })
   );
 }
 
+function FormSection({ title, subtitle, children }) {
+  return (
+    <section className="rounded-2xl border border-navy-100 bg-white p-4 sm:p-5">
+      {(title || subtitle) && (
+        <div className="mb-4 border-b border-navy-100 pb-3">
+          {title ? <h3 className="text-sm font-semibold text-navy-900">{title}</h3> : null}
+          {subtitle ? <p className="mt-0.5 text-xs text-navy-500">{subtitle}</p> : null}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
 function FieldRow({ icon: Icon, children, iconClassName = 'mt-2.5' }) {
   return (
-    <div className="flex items-start gap-5 border-b border-transparent py-1.5">
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center text-gray-500 ${iconClassName}`}>
-        <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+    <div className="flex items-start gap-4 py-2">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-navy-200 bg-navy-50 text-cyan-700 ${iconClassName}`}
+      >
+        <Icon size={18} strokeWidth={2} aria-hidden="true" />
       </span>
-      <div className="min-w-0 flex-1 pb-3">{children}</div>
+      <div className="min-w-0 flex-1 pb-1">{children}</div>
     </div>
   );
 }
 
-function GrayInput({ className = '', ...props }) {
+function NavySelect({ className = '', children, ...props }) {
   return (
-    <input
-      className={`w-full rounded-md border-0 bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30 ${className}`}
-      {...props}
-    />
-  );
-}
-
-function GraySelect({ className = '', children, ...props }) {
-  return (
-    <select
-      className={`rounded-md border-0 bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30 ${className}`}
-      {...props}
-    >
+    <select className={`${SELECT} ${className}`} {...props}>
       {children}
     </select>
   );
 }
 
-function TabButton({ active, children, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-        active
-          ? 'border-[#1a73e8] text-[#1a73e8]'
-          : 'border-transparent text-gray-600 hover:text-gray-800'
-      }`}
-    >
-      {children}
-    </button>
-  );
+function NavyInput({ className = '', ...props }) {
+  return <input className={`${INPUT} ${className}`} {...props} />;
 }
 
 export default function ExecutiveAppointmentModal({
@@ -258,25 +255,37 @@ export default function ExecutiveAppointmentModal({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#eceff1] py-10 sm:py-14 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-navy-950/45 px-3 py-6 backdrop-blur-[2px] sm:px-6 sm:py-10 animate-in fade-in duration-200">
       <form
         onSubmit={handleSubmit}
-        className="flex min-h-[calc(100vh-5rem)] w-full flex-col bg-white"
+        className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-navy-100 bg-white shadow-xl shadow-navy-950/20"
       >
-        {/* Header + title + schedule */}
-        <div className="shrink-0 border-b border-gray-200">
-          <div className="mx-auto w-full max-w-[920px] px-5 pb-5 pt-5 sm:px-8 sm:pt-6">
-          <div className="flex items-start gap-4">
+        <div className="shrink-0 border-b border-navy-100 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
+          <div className="flex items-start gap-3 sm:gap-4">
             <button
               type="button"
               onClick={onClose}
-              className="mt-1 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
+              className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-navy-200 bg-navy-50 text-navy-600 transition-colors hover:bg-navy-100 hover:text-navy-900"
               aria-label="Close appointment editor"
             >
-              <X size={22} />
+              <X size={18} />
             </button>
 
             <div className="min-w-0 flex-1">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-navy-200 bg-navy-50 text-cyan-700 shadow-sm">
+                  <CalendarDays size={22} strokeWidth={2} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-cyan-700">
+                    Executive appointment
+                  </p>
+                  <p className="truncate text-sm text-navy-500">
+                    {executive?.name ? `Scheduling for ${executive.name}` : 'Schedule a visitor appointment'}
+                  </p>
+                </div>
+              </div>
+
               <input
                 autoFocus
                 value={form.title}
@@ -286,83 +295,101 @@ export default function ExecutiveAppointmentModal({
                   onDraftChange?.({ ...draft, title });
                 }}
                 placeholder="Add title"
-                className="w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-[26px] leading-tight text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                style={{ borderColor: GCAL_BLUE }}
+                className="w-full rounded-xl border border-navy-200 bg-navy-50 px-3 py-3 text-lg font-semibold text-navy-900 placeholder:text-navy-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
 
-              <div className="mt-5 space-y-3">
-                {!form.allDay ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SchedulePill
-                      label={formatShortDate(startAt)}
-                      value={toDateInputValue(startAt)}
-                      type="date"
-                      min={todayMinDate}
-                      onChange={(event) => handleStartDate(event.target.value)}
-                      ariaLabel="Start date"
-                    />
-                    <SchedulePill
-                      label={formatTime12Compact(startAt)}
-                      value={toTimeInputValue(startAt)}
-                      type="time"
-                      onChange={(event) => handleStartTime(event.target.value)}
-                      ariaLabel="Start time"
-                    />
-                    <span className="px-1 text-sm text-gray-600">to</span>
-                    <SchedulePill
-                      label={formatTime12Compact(endAt)}
-                      value={toTimeInputValue(endAt)}
-                      type="time"
-                      onChange={(event) => handleEndTime(event.target.value)}
-                      ariaLabel="End time"
-                    />
-                    {!sameDay && (
+              <div className="mt-4 rounded-2xl border border-navy-100 bg-navy-50/70 p-3 sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
+                      {form.allDay ? 'Date' : 'Starts'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
                       <SchedulePill
-                        label={formatShortDate(endAt)}
-                        value={toDateInputValue(endAt)}
+                        label={formatShortDate(startAt)}
+                        value={toDateInputValue(startAt)}
                         type="date"
                         min={todayMinDate}
-                        onChange={(event) => handleEndDate(event.target.value)}
-                        ariaLabel="End date"
+                        onChange={(event) => handleStartDate(event.target.value)}
+                        ariaLabel={form.allDay ? 'Date' : 'Start date'}
                       />
-                    )}
-                    <span className="text-sm text-gray-500" title={Intl.DateTimeFormat().resolvedOptions().timeZone}>
-                      {timezoneLabel}
-                    </span>
+                      {!form.allDay && (
+                        <SchedulePill
+                          label={formatTime12Compact(startAt)}
+                          value={toTimeInputValue(startAt)}
+                          type="time"
+                          onChange={(event) => handleStartTime(event.target.value)}
+                          ariaLabel="Start time"
+                        />
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SchedulePill
-                      label={formatShortDate(startAt)}
-                      value={toDateInputValue(startAt)}
-                      type="date"
-                      min={todayMinDate}
-                      onChange={(event) => handleStartDate(event.target.value)}
-                      ariaLabel="Date"
-                    />
-                  </div>
-                )}
 
-                <div className="flex flex-wrap items-center gap-5 text-sm text-gray-700">
-                  <label className="inline-flex items-center gap-2">
+                  {!form.allDay && (
+                    <>
+                      <div className="hidden pb-2 text-sm font-semibold text-navy-300 sm:block" aria-hidden="true">
+                        →
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
+                          Ends
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <SchedulePill
+                            label={formatTime12Compact(endAt)}
+                            value={toTimeInputValue(endAt)}
+                            type="time"
+                            onChange={(event) => handleEndTime(event.target.value)}
+                            ariaLabel="End time"
+                          />
+                          {!sameDay && (
+                            <SchedulePill
+                              label={formatShortDate(endAt)}
+                              value={toDateInputValue(endAt)}
+                              type="date"
+                              min={todayMinDate}
+                              onChange={(event) => handleEndDate(event.target.value)}
+                              ariaLabel="End date"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div
+                    className="inline-flex h-10 shrink-0 items-center self-start rounded-xl border border-navy-200 bg-white px-3 text-xs font-semibold text-navy-500 sm:self-end"
+                    title={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  >
+                    {timezoneLabel}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-3 border-t border-navy-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="inline-flex items-center gap-2.5 text-sm font-medium text-navy-700">
                     <input
                       type="checkbox"
                       checked={form.allDay}
                       onChange={(event) => handleAllDayChange(event.target.checked)}
-                      className="rounded border-gray-300"
+                      className="h-4 w-4 rounded border-navy-300 text-cyan-600 focus:ring-cyan-500"
                     />
                     All day
                   </label>
-                  <GraySelect
-                    value={form.repeat || 'none'}
-                    onChange={(event) => setForm((prev) => ({ ...prev, repeat: event.target.value }))}
-                    className="min-w-[10rem]"
-                  >
-                    <option value="none">Does not repeat</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </GraySelect>
+                  <div className="flex items-center gap-2">
+                    <span className="hidden text-xs font-semibold uppercase tracking-wider text-navy-400 sm:inline">
+                      Repeat
+                    </span>
+                    <NavySelect
+                      value={form.repeat || 'none'}
+                      onChange={(event) => setForm((prev) => ({ ...prev, repeat: event.target.value }))}
+                      className="min-w-[11rem] bg-white"
+                    >
+                      <option value="none">Does not repeat</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </NavySelect>
+                  </div>
                 </div>
               </div>
             </div>
@@ -372,190 +399,209 @@ export default function ExecutiveAppointmentModal({
               loading={saving}
               loadingLabel="Saving"
               variant="primary"
-              className="mt-1 shrink-0 rounded-full px-7 py-2.5 text-sm font-medium shadow-none hover:opacity-95"
-              style={{ backgroundColor: GCAL_BLUE }}
+              className="mt-0.5 shrink-0 border-navy-800 bg-navy-800 px-5 hover:bg-navy-700"
             >
               Save
             </LoadingButton>
           </div>
-          </div>
         </div>
 
-          {/* Main two-column body */}
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-            <div className="mx-auto flex w-full max-w-[920px] flex-col gap-0 px-5 py-6 sm:px-8 lg:flex-row lg:gap-10">
-            {/* Left — event details */}
-            <div className="min-w-0 flex-1">
-              <div className="mb-5 flex gap-6 border-b border-gray-200">
-                <TabButton active={activeTab === 'details'} onClick={() => setActiveTab('details')}>
-                  Event details
-                </TabButton>
-                <TabButton active={activeTab === 'find-time'} onClick={() => setActiveTab('find-time')}>
-                  Find a time
-                </TabButton>
-              </div>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-navy-50/60">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:gap-6">
+            <div className="min-w-0 flex-1 space-y-5">
+              <SegmentedControl
+                fullWidth
+                size="md"
+                variant="kioskSoft"
+                value={activeTab}
+                onChange={setActiveTab}
+                options={[
+                  { value: 'details', label: 'Event details', icon: BriefcaseBusiness },
+                  { value: 'find-time', label: 'Find a time', icon: CalendarDays },
+                ]}
+              />
 
               {activeTab === 'details' ? (
-                <div className="space-y-0">
-                  <FieldRow icon={MapPin}>
-                    <p className="rounded-md bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800">
-                      {resolvedSiteLabel}
-                    </p>
-                  </FieldRow>
+                <FormSection
+                  title="Appointment details"
+                  subtitle="Location, reminders, and visit notes"
+                >
+                  <div className="space-y-1">
+                    <FieldRow icon={MapPin} iconClassName="mt-0">
+                      <p className={`${INPUT} font-medium`}>{resolvedSiteLabel}</p>
+                    </FieldRow>
 
-                  <FieldRow icon={Bell}>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <GraySelect className="w-auto min-w-[7rem]">
-                          <option>Notification</option>
-                        </GraySelect>
-                        <GraySelect
-                          value={form.notifyMinutes ?? 30}
-                          onChange={(event) => setForm((prev) => ({
-                            ...prev,
-                            notifyMinutes: Number(event.target.value),
-                          }))}
-                          className="w-auto min-w-[4rem]"
-                        >
-                          <option value={10}>10</option>
-                          <option value={30}>30</option>
-                          <option value={60}>60</option>
-                          <option value={1440}>1440</option>
-                        </GraySelect>
-                        <GraySelect className="w-auto min-w-[6rem]">
-                          <option>minutes</option>
-                          <option>hours</option>
-                          <option>days</option>
-                        </GraySelect>
+                    <FieldRow icon={Bell}>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <NavySelect className="w-auto min-w-[8rem]">
+                            <option>Notification</option>
+                          </NavySelect>
+                          <NavySelect
+                            value={form.notifyMinutes ?? 30}
+                            onChange={(event) => setForm((prev) => ({
+                              ...prev,
+                              notifyMinutes: Number(event.target.value),
+                            }))}
+                            className="w-auto min-w-[4.5rem]"
+                          >
+                            <option value={10}>10</option>
+                            <option value={30}>30</option>
+                            <option value={60}>60</option>
+                            <option value={1440}>1440</option>
+                          </NavySelect>
+                          <NavySelect className="w-auto min-w-[6.5rem]">
+                            <option>minutes</option>
+                            <option>hours</option>
+                            <option>days</option>
+                          </NavySelect>
+                          <button
+                            type="button"
+                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-navy-200 bg-white text-navy-500 hover:bg-navy-50"
+                            aria-label="Remove notification"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          className="rounded-full p-1 text-gray-500 hover:bg-gray-100"
-                          aria-label="Remove notification"
+                          className="text-sm font-semibold text-cyan-700 hover:text-cyan-800 hover:underline"
                         >
-                          <X size={16} />
+                          Add notification
                         </button>
                       </div>
-                      <button type="button" className="text-sm font-medium text-[#1a73e8] hover:underline">
-                        Add notification
-                      </button>
-                    </div>
-                  </FieldRow>
+                    </FieldRow>
 
-                  <FieldRow icon={BriefcaseBusiness}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <GraySelect className="w-auto min-w-[6rem]">
-                        <option>Busy</option>
-                        <option>Free</option>
-                      </GraySelect>
-                      <GraySelect className="w-auto min-w-[10rem]">
-                        <option>Default visibility</option>
-                        <option>Public</option>
-                        <option>Private</option>
-                      </GraySelect>
-                      <GraySelect
-                        value={form.categoryId}
-                        onChange={(event) => setForm((prev) => ({ ...prev, categoryId: event.target.value }))}
-                        className="min-w-[10rem] flex-1"
-                      >
-                        <option value="">Standard visitor</option>
-                        {(referenceData?.categories || []).map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </GraySelect>
-                      <button type="button" className="text-gray-500" aria-label="Visibility help">
-                        <HelpCircle size={18} />
-                      </button>
-                    </div>
-                  </FieldRow>
-
-                  <FieldRow icon={AlignLeft} iconClassName="mt-3">
-                    <div className="overflow-hidden rounded-md border border-gray-200 bg-[#f1f3f4]">
-                      <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-white px-2 py-1.5">
-                        {[Bold, Italic, Underline, List, ListOrdered, Link2, RemoveFormatting].map((Icon, index) => (
-                          <button
-                            key={Icon.displayName || index}
-                            type="button"
-                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100"
-                            aria-hidden="true"
-                            tabIndex={-1}
-                          >
-                            <Icon size={16} />
-                          </button>
-                        ))}
+                    <FieldRow icon={BriefcaseBusiness}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <NavySelect className="w-auto min-w-[6.5rem]">
+                          <option>Busy</option>
+                          <option>Free</option>
+                        </NavySelect>
+                        <NavySelect className="w-auto min-w-[10rem]">
+                          <option>Default visibility</option>
+                          <option>Public</option>
+                          <option>Private</option>
+                        </NavySelect>
+                        <NavySelect
+                          value={form.categoryId}
+                          onChange={(event) => setForm((prev) => ({ ...prev, categoryId: event.target.value }))}
+                          className="min-w-[10rem] flex-1"
+                        >
+                          <option value="">Standard visitor</option>
+                          {(referenceData?.categories || []).map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </NavySelect>
+                        <button type="button" className="text-navy-400 hover:text-navy-600" aria-label="Visibility help">
+                          <HelpCircle size={18} />
+                        </button>
                       </div>
-                      <textarea
-                        value={form.purpose}
-                        onChange={(event) => setForm((prev) => ({ ...prev, purpose: event.target.value }))}
-                        placeholder="Add description"
-                        rows={6}
-                        className="w-full resize-y border-0 bg-[#f1f3f4] px-3 py-3 text-sm text-gray-800 placeholder:text-gray-500 focus:bg-white focus:outline-none"
-                      />
-                    </div>
-                  </FieldRow>
-                </div>
+                    </FieldRow>
+
+                    <FieldRow icon={AlignLeft} iconClassName="mt-1">
+                      <div className="overflow-hidden rounded-xl border border-navy-200 bg-navy-50">
+                        <div className="flex flex-wrap items-center gap-1 border-b border-navy-100 bg-white px-2 py-1.5">
+                          {[Bold, Italic, Underline, List, ListOrdered, Link2, RemoveFormatting].map((Icon, index) => (
+                            <button
+                              key={Icon.displayName || index}
+                              type="button"
+                              className="rounded-lg p-1.5 text-navy-500 hover:bg-navy-50 hover:text-navy-800"
+                              aria-hidden="true"
+                              tabIndex={-1}
+                            >
+                              <Icon size={16} />
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={form.purpose}
+                          onChange={(event) => setForm((prev) => ({ ...prev, purpose: event.target.value }))}
+                          placeholder="Add description"
+                          rows={6}
+                          className="w-full resize-y border-0 bg-navy-50 px-3 py-3 text-sm text-navy-900 placeholder:text-navy-400 focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                    </FieldRow>
+                  </div>
+                </FormSection>
               ) : (
-                <ExecutiveFindTimePanel
-                  draft={draft}
-                  appointments={appointments}
-                  onDraftChange={onDraftChange}
-                  onScheduleRejected={(message) => toast.error(message)}
-                />
+                <FormSection title="Find a time" subtitle="Pick an open slot on the calendar">
+                  <ExecutiveFindTimePanel
+                    draft={draft}
+                    appointments={appointments}
+                    onDraftChange={onDraftChange}
+                    onScheduleRejected={(message) => toast.error(message)}
+                  />
+                </FormSection>
               )}
             </div>
 
-            {/* Right — guests */}
-            <aside className="w-full shrink-0 lg:w-[280px]">
-              <div className="mb-4 border-b-2 border-[#1a73e8] pb-2">
-                <h3 className="text-sm font-medium text-[#1a73e8]">Guests</h3>
-              </div>
-
-              <ExecutiveContactAutocomplete
-                value={form.visitorName}
-                onChange={(visitorName) => setForm((prev) => ({ ...prev, visitorName }))}
-                onSelectContact={handleContactSelect}
-                placeholder="Add guests"
-                required
-                inputClassName="w-full rounded-md border-0 bg-[#f1f3f4] px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30"
-              />
-
-              <div className="mt-3 space-y-2">
-                <GrayInput
-                  type="email"
-                  value={form.email || ''}
-                  onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-                  placeholder="Email"
-                />
-                <GrayInput
-                  value={form.phone}
-                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-                  placeholder="Phone"
-                />
-                <GrayInput
-                  value={form.company}
-                  onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
-                  placeholder="Company / organization"
-                />
-              </div>
-
-              <div className="mt-6">
-                <p className="text-sm font-medium text-gray-800">Guest permissions</p>
-                <div className="mt-3 space-y-2.5 text-sm text-gray-700">
-                  <label className="flex items-center gap-2.5">
-                    <input type="checkbox" disabled className="rounded border-gray-300" />
-                    Modify event
-                  </label>
-                  <label className="flex items-center gap-2.5">
-                    <input type="checkbox" defaultChecked disabled className="rounded border-gray-300 text-[#1a73e8]" />
-                    Invite others
-                  </label>
-                  <label className="flex items-center gap-2.5">
-                    <input type="checkbox" defaultChecked disabled className="rounded border-gray-300 text-[#1a73e8]" />
-                    See guest list
-                  </label>
+            <aside className="w-full shrink-0 lg:w-[300px]">
+              <FormSection title="Guests" subtitle="Visitor contact details">
+                <div className="mb-1 flex items-center gap-2 text-cyan-700">
+                  <Users size={16} aria-hidden="true" />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Primary guest</span>
                 </div>
-              </div>
+
+                <ExecutiveContactAutocomplete
+                  value={form.visitorName}
+                  onChange={(visitorName) => setForm((prev) => ({ ...prev, visitorName }))}
+                  onSelectContact={handleContactSelect}
+                  placeholder="Add guests"
+                  required
+                  inputClassName={INPUT}
+                />
+
+                <div className="mt-3 space-y-2.5">
+                  <NavyInput
+                    type="email"
+                    value={form.email || ''}
+                    onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                    placeholder="Email"
+                  />
+                  <NavyInput
+                    value={form.phone}
+                    onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                    placeholder="Phone"
+                  />
+                  <NavyInput
+                    value={form.company}
+                    onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
+                    placeholder="Company / organization"
+                  />
+                </div>
+
+                <div className="mt-5 border-t border-navy-100 pt-4">
+                  <p className="text-sm font-semibold text-navy-900">Guest permissions</p>
+                  <div className="mt-3 space-y-2.5 text-sm text-navy-700">
+                    <label className="flex items-center gap-2.5">
+                      <input type="checkbox" disabled className="h-4 w-4 rounded border-navy-300" />
+                      Modify event
+                    </label>
+                    <label className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        disabled
+                        className="h-4 w-4 rounded border-navy-300 text-cyan-600"
+                      />
+                      Invite others
+                    </label>
+                    <label className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        disabled
+                        className="h-4 w-4 rounded border-navy-300 text-cyan-600"
+                      />
+                      See guest list
+                    </label>
+                  </div>
+                </div>
+              </FormSection>
             </aside>
           </div>
         </div>
