@@ -86,12 +86,14 @@ export async function loadReceptionistRow(pool, id) {
     `SELECT r.*,
             o.name AS organisation_name,
             s.name AS site_name,
-            st.name AS station_name,
+            z.name AS zone_name,
+            b.name AS building_name,
             d.name AS department_name
      FROM receptionists r
      LEFT JOIN organisations o ON o.id = r.organisation_id
      LEFT JOIN sites s ON s.id = r.site_id
-     LEFT JOIN stations st ON st.id = r.station_id
+     LEFT JOIN zones z ON z.id = r.zone_id
+     LEFT JOIN buildings b ON b.id = z.building_id
      LEFT JOIN departments d ON d.id = r.department_id
      WHERE r.id = ?
      LIMIT 1`,

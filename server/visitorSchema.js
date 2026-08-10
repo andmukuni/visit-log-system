@@ -197,6 +197,7 @@ export async function ensureVisitorSchema() {
       id VARCHAR(90) PRIMARY KEY,
       organisation_id VARCHAR(90) NOT NULL,
       site_id VARCHAR(90),
+      zone_id VARCHAR(90),
       station_id VARCHAR(90),
       department_id VARCHAR(90),
       user_id VARCHAR(90),
@@ -207,10 +208,16 @@ export async function ensureVisitorSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_receptionists_org (organisation_id),
       INDEX idx_receptionists_site (site_id),
+      INDEX idx_receptionists_zone (zone_id),
       INDEX idx_receptionists_station (station_id),
       INDEX idx_receptionists_user (user_id)
     )
   `);
+  // Additive only — existing receptionist rows stay intact.
+  await ensureColumn(pool, 'receptionists', 'zone_id', 'ADD COLUMN zone_id VARCHAR(90) NULL');
+  if (getDbDriver() === 'postgres') {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_receptionists_zone ON receptionists (zone_id)');
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS security_guards (

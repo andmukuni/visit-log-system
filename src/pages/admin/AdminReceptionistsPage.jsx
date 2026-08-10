@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   ConciergeBell,
-  DoorOpen,
   Eye,
+  Map,
   MapPin,
   Network,
   Plus,
@@ -35,7 +35,7 @@ const emptyForm = () => ({
   email: '',
   phone: '',
   siteId: '',
-  stationId: '',
+  zoneId: '',
   departmentId: '',
   status: 'active',
   password: '',
@@ -60,7 +60,7 @@ export default function AdminReceptionistsPage() {
   const [allRows, setAllRows] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
-  const [stations, setStations] = useState([]);
+  const [zones, setZones] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -85,16 +85,16 @@ export default function AdminReceptionistsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, deptRows, siteRows, stationRows] = await Promise.all([
+      const [rows, deptRows, siteRows, zoneRows] = await Promise.all([
         visitorApi.getReceptionists(),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
-        visitorApi.getStations(),
+        visitorApi.getZones(),
       ]);
       setAllRows(Array.isArray(rows) ? rows : []);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
-      setStations(Array.isArray(stationRows) ? stationRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
       setKpis(rows?.stats || { total: rows?.length || 0 });
     } catch (err) {
       setAllRows([]);
@@ -117,7 +117,7 @@ export default function AdminReceptionistsPage() {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter((row) =>
-      [row.name, row.email, row.organisation_name, row.site_name, row.station_name, row.department_name]
+      [row.name, row.email, row.organisation_name, row.site_name, row.zone_name, row.department_name]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
@@ -143,17 +143,17 @@ export default function AdminReceptionistsPage() {
     [sites, form.organisationId],
   );
 
-  const stationOptions = useMemo(() => {
-    const list = stations.filter((st) => {
-      if (form.organisationId && st.organisation_id && st.organisation_id !== form.organisationId) return false;
-      if (form.siteId && st.site_id && st.site_id !== form.siteId) return false;
-      return st.status !== 'inactive';
+  const zoneOptions = useMemo(() => {
+    const list = zones.filter((z) => {
+      if (form.organisationId && z.organisation_id && z.organisation_id !== form.organisationId) return false;
+      if (form.siteId && z.site_id && z.site_id !== form.siteId) return false;
+      return true;
     });
-    return [
-      { value: '', label: 'No station (optional)' },
-      ...list.map((st) => ({ value: st.id, label: st.name })),
-    ];
-  }, [stations, form.organisationId, form.siteId]);
+    return list.map((z) => ({
+      value: z.id,
+      label: z.building_name ? `${z.name} · ${z.building_name}` : z.name,
+    }));
+  }, [zones, form.organisationId, form.siteId]);
 
   const departmentOptions = useMemo(() => [
     { value: '', label: 'No department (optional)' },
@@ -163,7 +163,8 @@ export default function AdminReceptionistsPage() {
   ], [departments, form.organisationId]);
 
   const prerequisitesReady = orgOptions.length > 0
-    && sites.some((s) => s.status !== 'inactive');
+    && sites.some((s) => s.status !== 'inactive')
+    && zones.length > 0;
 
   const openCreate = () => {
     if (!canManageStructure) {
@@ -180,11 +181,18 @@ export default function AdminReceptionistsPage() {
       toast.error('Create a site/branch first.');
       return;
     }
+    if (!zones.length) {
+      toast.error('Create a zone first.');
+      return;
+    }
+    const defaultSiteId = siteForOrg[0].id;
+    const zoneForSite = zones.find((z) => z.site_id === defaultSiteId) || zones[0];
     setEditing(null);
     setForm({
       ...emptyForm(),
       organisationId: defaultOrgId,
-      siteId: siteForOrg[0].id,
+      siteId: zoneForSite?.site_id || defaultSiteId,
+      zoneId: zoneForSite?.id || '',
     });
     setModalOpen(true);
   };
@@ -197,7 +205,7 @@ export default function AdminReceptionistsPage() {
       email: row.email || '',
       phone: row.phone || '',
       siteId: row.site_id || '',
-      stationId: row.station_id || '',
+      zoneId: row.zone_id || '',
       departmentId: row.department_id || '',
       status: row.status || 'active',
       password: '',
@@ -218,6 +226,10 @@ export default function AdminReceptionistsPage() {
       toast.error('Site / branch is required.');
       return;
     }
+    if (!form.zoneId) {
+      toast.error('Zone is required.');
+      return;
+    }
     if (!form.email.trim()) {
       toast.error('Email is required for receptionist login.');
       return;
@@ -229,7 +241,7 @@ export default function AdminReceptionistsPage() {
         email: form.email,
         phone: form.phone,
         siteId: form.siteId,
-        stationId: form.stationId || null,
+        zoneId: form.zoneId,
         departmentId: form.departmentId || null,
         status: form.status,
         password: form.password || undefined,
@@ -282,7 +294,7 @@ export default function AdminReceptionistsPage() {
     },
     { key: 'organisation_name', label: 'Organisation' },
     { key: 'site_name', label: 'Site / Branch' },
-    { key: 'station_name', label: 'Station' },
+    { key: 'zone_name', label: 'Zone' },
     {
       key: 'status',
       label: 'Status',
@@ -322,7 +334,7 @@ export default function AdminReceptionistsPage() {
     <div className="flex flex-col gap-2.5 sm:gap-3">
       <PageHeader
         title="Receptionists"
-        subtitle="Organisation → Site + Station → Receptionist. Creates Reception portal login access."
+        subtitle="Organisation → Site + Zone → Receptionist. Creates Reception portal login access."
         breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Receptionists' }]}
         actions={(
           <button
@@ -347,7 +359,7 @@ export default function AdminReceptionistsPage() {
         {[
           { key: 'total', label: 'Receptionists', icon: ConciergeBell },
           { key: 'active', label: 'Active', icon: ConciergeBell },
-          { key: 'with_station', label: 'With station', icon: DoorOpen },
+          { key: 'with_zone', label: 'With zone', icon: Map },
           { key: 'with_login', label: 'With login', icon: Building2 },
         ].map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
@@ -372,7 +384,7 @@ export default function AdminReceptionistsPage() {
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search name, email, organisation, site, station..."
+                  placeholder="Search name, email, organisation, site, zone..."
                   className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
                 />
               </label>
@@ -388,7 +400,9 @@ export default function AdminReceptionistsPage() {
                   ? 'Create an Organisation first.'
                   : !sites.some((s) => s.status !== 'inactive')
                     ? 'Create a Site / Branch first.'
-                    : 'Add a receptionist under an organisation and site.'
+                    : !zones.length
+                      ? 'Create a Zone under a Building first.'
+                      : 'Add a receptionist under an organisation, site and zone.'
               }
               onRowClick={setSelected}
               activeRowId={selected?.id}
@@ -421,7 +435,7 @@ export default function AdminReceptionistsPage() {
                 </p>
                 <p className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><span className="font-semibold">{selected.organisation_name || '—'}</span></p>
                 <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><DoorOpen size={14} className="text-gray-400" /><span className="font-semibold">{selected.station_name || 'No station'}</span></p>
+                <p className="flex items-center gap-2"><Map size={14} className="text-gray-400" /><span className="font-semibold">{selected.zone_name || 'No zone'}</span></p>
                 <p className="flex items-center gap-2"><Network size={14} className="text-gray-400" /><span className="font-semibold">{selected.department_name || '—'}</span></p>
               </div>
               <div className="mt-auto space-y-2 border-t border-gray-200 p-3">
@@ -449,7 +463,7 @@ export default function AdminReceptionistsPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title={editing ? 'Edit Receptionist' : 'New Receptionist'}
-        subtitle="Organisation → Site + Station → Receptionist (Reception portal access)"
+        subtitle="Organisation → Site + Zone → Receptionist (Reception portal access)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -473,11 +487,14 @@ export default function AdminReceptionistsPage() {
             onChange={(e) => {
               const organisationId = e.target.value;
               const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === organisationId);
+              const nextSiteId = siteForOrg[0]?.id || '';
+              const nextZone = zones.find((z) => z.site_id === nextSiteId && z.organisation_id === organisationId)
+                || zones.find((z) => z.organisation_id === organisationId);
               setForm((prev) => ({
                 ...prev,
                 organisationId,
-                siteId: siteForOrg[0]?.id || '',
-                stationId: '',
+                siteId: nextZone?.site_id || nextSiteId,
+                zoneId: nextZone?.id || '',
                 departmentId: '',
               }));
             }}
@@ -514,17 +531,34 @@ export default function AdminReceptionistsPage() {
             type="select"
             required
             value={form.siteId}
-            onChange={(e) => setForm((prev) => ({ ...prev, siteId: e.target.value, stationId: '' }))}
+            onChange={(e) => {
+              const siteId = e.target.value;
+              const nextZone = zones.find((z) => z.site_id === siteId);
+              setForm((prev) => ({
+                ...prev,
+                siteId,
+                zoneId: nextZone?.id || '',
+              }));
+            }}
             options={siteOptions}
           />
           <FormField
-            label="Station / Gate"
-            name="stationId"
+            label="Zone"
+            name="zoneId"
             type="select"
-            value={form.stationId}
-            onChange={(e) => setForm((prev) => ({ ...prev, stationId: e.target.value }))}
-            options={stationOptions}
-            helpText="Optional. Desk station for scoped reception operations."
+            required
+            value={form.zoneId}
+            onChange={(e) => {
+              const zoneId = e.target.value;
+              const zone = zones.find((z) => z.id === zoneId);
+              setForm((prev) => ({
+                ...prev,
+                zoneId,
+                siteId: zone?.site_id || prev.siteId,
+              }));
+            }}
+            options={zoneOptions}
+            helpText="Required. Reception desk zone inside the selected site."
           />
           <FormField
             label="Department"

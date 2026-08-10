@@ -25,6 +25,7 @@ import {
   assertStationPlacement,
   assertOfficePlacement,
   assertEmployeePlacement,
+  loadZoneInOrg,
 } from '../orgStructureService.js';
 import {
   markHostUnavailableForVisit,
@@ -3129,7 +3130,7 @@ export function createOrgAdminRouter() {
     }
   });
 
-  // Receptionist → Organisation + Site + Station (portal login with main_reception)
+  // Receptionist → Organisation + Site + Zone (portal login with main_reception)
   router.get('/receptionists', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -3139,12 +3140,14 @@ export function createOrgAdminRouter() {
         SELECT r.*,
                o.name AS organisation_name,
                s.name AS site_name,
-               st.name AS station_name,
+               z.name AS zone_name,
+               b.name AS building_name,
                d.name AS department_name
         FROM receptionists r
         LEFT JOIN organisations o ON o.id = r.organisation_id
         LEFT JOIN sites s ON s.id = r.site_id
-        LEFT JOIN stations st ON st.id = r.station_id
+        LEFT JOIN zones z ON z.id = r.zone_id
+        LEFT JOIN buildings b ON b.id = z.building_id
         LEFT JOIN departments d ON d.id = r.department_id
       `;
       const [rows] = orgId
@@ -3154,7 +3157,7 @@ export function createOrgAdminRouter() {
       const stats = {
         total: rows.length,
         active: rows.filter((row) => row.status === 'active').length,
-        with_station: rows.filter((row) => row.station_id).length,
+        with_zone: rows.filter((row) => row.zone_id).length,
         with_login: rows.filter((row) => row.user_id).length,
       };
 
@@ -3171,7 +3174,7 @@ export function createOrgAdminRouter() {
       const bodyOrgId = String(req.body?.organisationId || req.body?.organisation_id || '').trim() || null;
       const orgId = bodyOrgId || scope?.organisation_id || null;
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
-      const stationId = String(req.body?.stationId || req.body?.station_id || '').trim() || null;
+      const zoneId = String(req.body?.zoneId || req.body?.zone_id || '').trim() || null;
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim() || null;
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase() || null;
@@ -3185,6 +3188,7 @@ export function createOrgAdminRouter() {
         return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
       }
       if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
+      if (!zoneId) return res.status(400).json({ ok: false, message: 'Zone is required.' });
       if (!email) return res.status(400).json({ ok: false, message: 'Email is required for receptionist login.' });
 
       const placement = await assertStationPlacement(pool, { organisationId: orgId, siteId });
@@ -3192,21 +3196,12 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
-      if (stationId) {
-        const [[station]] = await pool.query(
-          `SELECT st.id, st.site_id
-           FROM stations st
-           INNER JOIN sites s ON s.id = st.site_id
-           WHERE st.id = ? AND s.organisation_id = ?
-           LIMIT 1`,
-          [stationId, orgId],
-        );
-        if (!station) {
-          return res.status(400).json({ ok: false, message: 'Station not found in this organisation.' });
-        }
-        if (station.site_id && station.site_id !== siteId) {
-          return res.status(400).json({ ok: false, message: 'Station must belong to the selected site.' });
-        }
+      const zone = await loadZoneInOrg(pool, zoneId, orgId);
+      if (!zone) {
+        return res.status(400).json({ ok: false, message: 'Zone not found in this organisation.' });
+      }
+      if (zone.site_id && zone.site_id !== siteId) {
+        return res.status(400).json({ ok: false, message: 'Zone must belong to the selected site.' });
       }
 
       const [[emailTaken]] = await pool.query(
@@ -3223,7 +3218,7 @@ export function createOrgAdminRouter() {
         phone,
         organisationId: orgId,
         siteId,
-        stationId,
+        stationId: null,
         departmentId,
         password,
         active: status === 'active',
@@ -3232,9 +3227,9 @@ export function createOrgAdminRouter() {
       const id = generateId('rcp');
       await pool.query(
         `INSERT INTO receptionists
-           (id, organisation_id, site_id, station_id, department_id, user_id, name, email, phone, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, siteId, stationId, departmentId, linkedUserId, name, email, phone, status],
+           (id, organisation_id, site_id, zone_id, station_id, department_id, user_id, name, email, phone, status)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, siteId, zoneId, departmentId, linkedUserId, name, email, phone, status],
       );
 
       const row = await loadReceptionistRow(pool, id);
@@ -3260,9 +3255,9 @@ export function createOrgAdminRouter() {
       const siteId = req.body?.siteId != null || req.body?.site_id != null
         ? String(req.body.siteId || req.body.site_id || '').trim()
         : existing.site_id;
-      const stationId = req.body?.stationId != null || req.body?.station_id != null
-        ? String(req.body.stationId || req.body.station_id || '').trim() || null
-        : existing.station_id;
+      const zoneId = req.body?.zoneId != null || req.body?.zone_id != null
+        ? String(req.body.zoneId || req.body.zone_id || '').trim() || null
+        : existing.zone_id || null;
       const departmentId = req.body?.departmentId != null || req.body?.department_id != null
         ? String(req.body.departmentId || req.body.department_id || '').trim() || null
         : existing.department_id;
@@ -3278,6 +3273,7 @@ export function createOrgAdminRouter() {
 
       if (!name) return res.status(400).json({ ok: false, message: 'Receptionist name is required.' });
       if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
+      if (!zoneId) return res.status(400).json({ ok: false, message: 'Zone is required.' });
       if (!email) return res.status(400).json({ ok: false, message: 'Email is required for receptionist login.' });
 
       const placement = await assertStationPlacement(pool, {
@@ -3288,21 +3284,12 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
-      if (stationId) {
-        const [[station]] = await pool.query(
-          `SELECT st.id, st.site_id
-           FROM stations st
-           INNER JOIN sites s ON s.id = st.site_id
-           WHERE st.id = ? AND s.organisation_id = ?
-           LIMIT 1`,
-          [stationId, existing.organisation_id],
-        );
-        if (!station) {
-          return res.status(400).json({ ok: false, message: 'Station not found in this organisation.' });
-        }
-        if (station.site_id && station.site_id !== siteId) {
-          return res.status(400).json({ ok: false, message: 'Station must belong to the selected site.' });
-        }
+      const zone = await loadZoneInOrg(pool, zoneId, existing.organisation_id);
+      if (!zone) {
+        return res.status(400).json({ ok: false, message: 'Zone not found in this organisation.' });
+      }
+      if (zone.site_id && zone.site_id !== siteId) {
+        return res.status(400).json({ ok: false, message: 'Zone must belong to the selected site.' });
       }
 
       const linkedUserId = await syncReceptionistPortalUser(pool, {
@@ -3312,7 +3299,7 @@ export function createOrgAdminRouter() {
         phone,
         organisationId: existing.organisation_id,
         siteId,
-        stationId,
+        stationId: null,
         departmentId,
         password,
         active: status === 'active',
@@ -3320,9 +3307,9 @@ export function createOrgAdminRouter() {
 
       await pool.query(
         `UPDATE receptionists
-         SET site_id = ?, station_id = ?, department_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?
+         SET site_id = ?, zone_id = ?, station_id = NULL, department_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?
          WHERE id = ?`,
-        [siteId, stationId, departmentId, linkedUserId, name, email, phone, status, receptionistId],
+        [siteId, zoneId, departmentId, linkedUserId, name, email, phone, status, receptionistId],
       );
 
       const row = await loadReceptionistRow(pool, receptionistId);
