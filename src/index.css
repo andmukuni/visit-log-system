@@ -76,12 +76,14 @@ html[data-portal='executive'] {
   --panel-width: 17rem;
 }
 
+.portal-host main > div,
 .portal-executive main > div {
   padding-top: 0.75rem;
   padding-bottom: 1rem;
 }
 
 @media (min-width: 640px) {
+  .portal-host main > div,
   .portal-executive main > div {
     padding-top: 1rem;
     padding-bottom: 1.25rem;
@@ -89,6 +91,7 @@ html[data-portal='executive'] {
 }
 
 @media (min-width: 1024px) {
+  .portal-host main > div,
   .portal-executive main > div {
     padding-left: 1.25rem;
     padding-right: 1.25rem;

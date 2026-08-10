@@ -1,5 +1,5 @@
 import { Suspense, lazy, Component, useEffect } from 'react';
-import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import PortalLayout from './layouts/PortalLayout';
@@ -75,7 +75,6 @@ const ExecutiveAppointmentsPage = lazy(() => import('./pages/executive/Executive
 const ExecutiveVisitorsPage = lazy(() => import('./pages/executive/ExecutiveVisitorsPage'));
 const ExecutiveContactsPage = lazy(() => import('./pages/executive/ExecutiveContactsPage'));
 const ExecutiveVisitDetailPage = lazy(() => import('./pages/executive/ExecutiveVisitDetailPage'));
-const ExecutiveNotificationsPage = lazy(() => import('./pages/executive/ExecutiveNotificationsPage'));
 
 const ComplianceExportLogsPage = lazy(() => import('./pages/compliance/ComplianceExportLogsPage'));
 const ComplianceReportsPage = lazy(() => import('./pages/compliance/ComplianceReportsPage'));
@@ -182,7 +181,7 @@ function ExecutiveOnlyManagementRedirect({ children }) {
   const { permissions } = useAuth();
   const perms = permissions || [];
   if (isExecutiveOnlyUser(perms)) {
-    return <Navigate to="/executive" replace />;
+    return <Navigate to="/host" replace />;
   }
   return children;
 }
@@ -197,8 +196,9 @@ function ProtectedManagementPortal() {
   );
 }
 
-function ExecutivePortalLayout() {
-  return <PortalLayout key="executive" portalId="executive" title={`${APP_NAME_SHORT} Executive`} />;
+function RedirectToHostRegisterVisit() {
+  const { id } = useParams();
+  return <Navigate to={`/host/register/${id}`} replace />;
 }
 
 function CompliancePortalLayout() {
@@ -222,7 +222,7 @@ function AppRoot() {
   useEffect(() => {
     if (!permissions?.length) return;
     if (isExecutiveOnlyUser(permissions) && location.pathname.startsWith('/management')) {
-      navigate('/executive', { replace: true });
+      navigate('/host', { replace: true });
     }
   }, [permissions, location.pathname, navigate]);
 
@@ -402,29 +402,30 @@ export const router = createBrowserRouter([
         path: 'host',
         element: <ProtectedRoute><HostPortalLayout /></ProtectedRoute>,
         children: [
-          { index: true, element: <HostDashboardPage /> },
+          { index: true, element: <ExecutiveDashboardPage /> },
+          { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
           { path: 'invite', element: <HostInvitePage /> },
           { path: 'visitors', element: <HostVisitorsPage /> },
           { path: 'visitors/:id', element: <HostVisitDetailPage /> },
+          { path: 'register', element: <ExecutiveVisitorsPage /> },
+          { path: 'register/:id', element: <ExecutiveVisitDetailPage /> },
           { path: 'approvals', element: <HostApprovalsPage /> },
           { path: 'on-site', element: <HostOnSitePage /> },
+          { path: 'contacts', element: <ExecutiveContactsPage /> },
           { path: 'notifications', element: <HostNotificationsPage /> },
+          { path: 'overview', element: <HostDashboardPage /> },
           { path: '*', element: <PlaceholderPage title="Host" portalLabel="Host" /> },
         ],
       },
 
-      {
-        path: 'executive',
-        element: <ProtectedRoute><ExecutivePortalLayout /></ProtectedRoute>,
-        children: [
-          { index: true, element: <ExecutiveDashboardPage /> },
-          { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
-          { path: 'visitors', element: <ExecutiveVisitorsPage /> },
-          { path: 'contacts', element: <ExecutiveContactsPage /> },
-          { path: 'visitors/:id', element: <ExecutiveVisitDetailPage /> },
-          { path: 'notifications', element: <ExecutiveNotificationsPage /> },
-        ],
-      },
+      // Former executive portal — keep bookmarks working via Host portal.
+      { path: 'executive', element: <Navigate to="/host" replace /> },
+      { path: 'executive/appointments', element: <Navigate to="/host/appointments" replace /> },
+      { path: 'executive/visitors', element: <Navigate to="/host/register" replace /> },
+      { path: 'executive/visitors/:id', element: <RedirectToHostRegisterVisit /> },
+      { path: 'executive/contacts', element: <Navigate to="/host/contacts" replace /> },
+      { path: 'executive/notifications', element: <Navigate to="/host/notifications" replace /> },
+      { path: 'executive/*', element: <Navigate to="/host" replace /> },
 
       {
         path: 'management',

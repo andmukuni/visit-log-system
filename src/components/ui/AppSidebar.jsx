@@ -186,7 +186,7 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
     navRevision,
     portalId,
   } = useSidebarNav();
-  const executiveTheme = portalId === 'executive';
+  const executiveTheme = portalId === 'host' || portalId === 'executive';
   const [badgeCounts, setBadgeCounts] = useState({});
 
   useEffect(() => {

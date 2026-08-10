@@ -37,6 +37,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
   const { user } = useAuth();
   const { content, collapsed } = useAnalyticsPanel();
   const { header: pageHeader } = usePageHeaderState();
+  const compactChrome = portalId === 'host' || portalId === 'executive';
   const shellBreadcrumbs = pageHeader.breadcrumbs?.length
     ? pageHeader.breadcrumbs
     : getShellBreadcrumbs();
@@ -68,7 +69,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
 
       <div className={`flex h-screen min-h-0 flex-col overflow-hidden ${isKiosk ? '' : 'md:ml-[var(--sidebar-width)]'}`}>
         <header className={`z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between border-b bg-navy-50 ${
-          isKiosk ? 'border-gray-200 bg-white px-4 sm:px-6' : `border-navy-100 ${portalId === 'executive' ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'}`
+          isKiosk ? 'border-gray-200 bg-white px-4 sm:px-6' : `border-navy-100 ${compactChrome ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'}`
         }`}
         >
           {isKiosk ? (
@@ -97,16 +98,16 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             </>
           ) : (
             <>
-          <div className={`flex min-w-0 flex-1 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
+          <div className={`flex min-w-0 flex-1 items-center ${compactChrome ? 'gap-2' : 'gap-3'}`}>
             <button
               type="button"
               onClick={onOpenSidebar}
               className={`md:hidden rounded-lg text-navy-500 transition-colors hover:bg-navy-100 hover:text-navy-700 ${
-                portalId === 'executive' ? 'p-1.5' : 'p-2'
+                compactChrome ? 'p-1.5' : 'p-2'
               }`}
               aria-label="Open menu"
             >
-              <Menu size={portalId === 'executive' ? 18 : 20} />
+              <Menu size={compactChrome ? 18 : 20} />
             </button>
             {shellBreadcrumbs.length > 0 ? (
               <Breadcrumbs items={shellBreadcrumbs} variant="shell" className="min-w-0 flex-1" />
@@ -115,20 +116,20 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
                 title={pageHeader.title}
                 subtitle={pageHeader.subtitle}
                 iconKey={pageHeader.iconKey}
-                compact={portalId === 'executive'}
+                compact={compactChrome}
               />
             ) : (
               <div className="hidden md:block">
-                <p className={`text-navy-400 ${portalId === 'executive' ? 'text-xs' : 'text-sm'}`}>
+                <p className={`text-navy-400 ${compactChrome ? 'text-xs' : 'text-sm'}`}>
                   Welcome back,{' '}
                   <span className="font-medium text-navy-700">{user?.name?.split(' ')[0] || 'there'}</span>
                 </p>
               </div>
             )}
           </div>
-          <div className={`flex shrink-0 items-center ${portalId === 'executive' ? 'gap-2' : 'gap-3'}`}>
-            <PortalSwitcherMenu compact={portalId === 'executive'} />
-            <AdminUserMenu compact={portalId === 'executive'} />
+          <div className={`flex shrink-0 items-center ${compactChrome ? 'gap-2' : 'gap-3'}`}>
+            <PortalSwitcherMenu compact={compactChrome} />
+            <AdminUserMenu compact={compactChrome} />
           </div>
             </>
           )}
@@ -170,7 +171,7 @@ function ShellBody({ portalId, title }) {
   useEffect(() => {
     if (!permissions.length) return;
     if (isExecutiveOnlyUser(permissions) && portalId === 'management') {
-      navigate('/executive', { replace: true });
+      navigate('/host', { replace: true });
       return;
     }
     if (!canAccessPortal(portalId, hasPermission, permissions)) {
@@ -179,8 +180,8 @@ function ShellBody({ portalId, title }) {
   }, [portalId, permissions, hasPermission, navigate]);
 
   useEffect(() => {
-    if (portalId === 'executive') {
-      document.documentElement.dataset.portal = 'executive';
+    if (portalId === 'host' || portalId === 'executive') {
+      document.documentElement.dataset.portal = 'host';
     } else {
       delete document.documentElement.dataset.portal;
     }

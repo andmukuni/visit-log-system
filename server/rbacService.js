@@ -174,6 +174,14 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/station/gate-entry/vehicle')) return 'station.vehicles.register';
   if (path.includes('/station/gate-entry')) return 'station.visitors.register';
 
+  if (path.includes('/reception/dashboard')) return 'reception.dashboard';
+  if (path.includes('/reception/reference-data')) return 'reception.dashboard';
+  if (path.includes('/reception/calendar')) return 'reception.calendar';
+  if (path.includes('/reception/host-availability')) return 'reception.hosts.availability';
+  if (path.includes('/reception/host-queue')) return 'reception.host.queue';
+  if (path.includes('/reception/queue-host') || path.includes('/reception/in-meeting')) return 'reception.host.queue';
+  if (path.includes('/reception/request-approval')) return 'reception.approvals.track';
+
   if (path.includes('/host/dashboard')) return 'host.dashboard';
   if (path.includes('/host/reference-data') || path.includes('/host/invite')) return 'host.invite';
   if (path.includes('/host/approvals')) return 'host.approvals';
@@ -269,4 +277,34 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/dashboard/stats')) return 'admin.dashboard';
 
   return 'admin.dashboard';
+}
+
+/** Acceptable permissions for shared /admin/visits routes (station + reception). */
+export function resolveVisitRoutePermissions(req) {
+  const path = String(req.path || '').replace(/^\/api/, '');
+  const method = String(req.method || '').toUpperCase();
+
+  if (path.includes('/check-in')) {
+    return ['station.visitors.checkin', 'reception.visitors.checkin'];
+  }
+  if (path.includes('/check-out')) {
+    return ['station.visitors.checkout'];
+  }
+  if (path.includes('/approve') || path.includes('/reject')) {
+    return ['host.approvals', 'security.approvals', 'station.visitors.view'];
+  }
+  if (path.includes('/waiting') || path.includes('/in-meeting')) {
+    return ['reception.host.queue', 'station.visitors.checkin', 'station.visitors.register'];
+  }
+  if (method === 'GET') {
+    return [
+      'station.visitors.view',
+      'reception.visitors.view',
+      'host.visitors',
+      'security.visitors',
+      'admin.visitors',
+      'executive.visits',
+    ];
+  }
+  return ['station.visitors.register', 'reception.visitors.register'];
 }

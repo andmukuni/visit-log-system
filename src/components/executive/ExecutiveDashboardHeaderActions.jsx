@@ -23,7 +23,7 @@ export default function ExecutiveDashboardHeaderActions({
         </button>
       ) : null}
       <Link
-        to="/executive/notifications"
+        to="/host/notifications"
         className="relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-navy-600 transition-colors hover:bg-gray-50 hover:text-navy-900"
         aria-label={`Notifications, ${unreadCount > 9 ? '9+' : unreadCount} unread`}
       >

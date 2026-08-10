@@ -43,8 +43,8 @@ export default function ExecutiveVisitDetailPage() {
         title={visit?.full_name || 'Visit details'}
         subtitle={visit ? `Pass code: ${visit.pass_code || '—'}` : ''}
         breadcrumbs={[
-          { label: 'Executive', to: '/executive' },
-          { label: 'My Visitors', to: '/executive/visitors' },
+          { label: 'Host', to: '/host' },
+          { label: 'Visitor Register', to: '/host/register' },
           { label: 'Details' },
         ]}
       />
@@ -55,7 +55,7 @@ export default function ExecutiveVisitDetailPage() {
         <Card title="Error">
           <p className="text-sm text-red-600">{error}</p>
           <div className="mt-2">
-            <BackAction to="/executive/visitors" label="Back" />
+            <BackAction to="/host/register" label="Back" />
           </div>
         </Card>
       )}

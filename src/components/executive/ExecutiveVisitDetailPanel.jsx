@@ -118,7 +118,7 @@ export default function ExecutiveVisitDetailPanel({ visit, open, onClose }) {
 
         <div className="shrink-0 border-t border-gray-200 px-4 py-3 sm:px-6">
           <Link
-            to={`/executive/visitors/${detail.id}`}
+            to={`/host/register/${detail.id}`}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
           >
             <ExternalLink size={16} aria-hidden="true" />

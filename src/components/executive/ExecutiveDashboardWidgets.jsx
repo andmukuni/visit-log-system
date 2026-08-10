@@ -179,13 +179,13 @@ const QUICK_ACTIONS = [
     key: 'visitors',
     label: 'View Visitors',
     icon: Users,
-    to: '/executive/visitors',
+    to: '/host/register',
   },
   {
     key: 'requests',
     label: 'Appointment Requests',
     icon: ClipboardList,
-    to: '/executive/appointments',
+    to: '/host/appointments',
     badgeKey: 'pendingApprovals',
   },
 ];

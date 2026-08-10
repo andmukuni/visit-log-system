@@ -51,7 +51,7 @@ export function ExecutiveVisitorsDetailActions({ visit, className = '' }) {
   return (
     <div className={`flex shrink-0 gap-2 px-4 py-2 sm:gap-3 sm:px-5 sm:py-2.5 ${className}`}>
       <Link
-        to={`/executive/visitors/${visit.id}`}
+        to={`/host/register/${visit.id}`}
         className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
       >
         <ExternalLink size={16} aria-hidden="true" />

@@ -47,7 +47,7 @@ export default function ExecutiveContactsPage() {
       <PageHeader
         title="My Contacts"
         subtitle="Saved guest details for quick appointment scheduling"
-        breadcrumbs={[{ label: 'Executive', to: '/executive' }, { label: 'My Contacts' }]}
+        breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'My Contacts' }]}
       />
 
       <Card>

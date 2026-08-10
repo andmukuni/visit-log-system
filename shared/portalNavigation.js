@@ -31,23 +31,23 @@ export const PORTALS = {
     routePrefix: '/security',
     navSections: { primary: 'Operations', system: 'Monitoring & Reports' },
   },
+  reception: {
+    id: 'reception',
+    label: 'Reception Access Portal',
+    routePrefix: '/reception',
+    navSections: { primary: 'Reception Desk', system: 'Tracking' },
+  },
   station: {
     id: 'station',
     label: 'Station Portal',
     routePrefix: '/station',
-    navSections: { primary: 'Reception Desk', system: 'Safety & Tracking' },
+    navSections: { primary: 'Gate Operations', system: 'Safety & Tracking' },
   },
   host: {
     id: 'host',
     label: 'Host Portal',
     routePrefix: '/host',
-    navSections: { primary: 'My Visitors' },
-  },
-  executive: {
-    id: 'executive',
-    label: 'Executive Portal',
-    routePrefix: '/executive',
-    navSections: { primary: '' },
+    navSections: { primary: 'My schedule', system: 'More' },
   },
   management: {
     id: 'management',
@@ -113,6 +113,18 @@ export const PORTAL_NAVIGATION = {
     { key: 'reports', name: 'Security Reports', to: '/security/reports', permission: 'security.reports', section: 'system' },
     { key: 'audit', name: 'Activity Audit', to: '/security/audit', permission: 'security.audit', section: 'system' },
   ],
+  reception: [
+    { key: 'dashboard', name: 'Dashboard', to: '/reception', permission: 'reception.dashboard', end: true, section: 'primary' },
+    { key: 'calendar', name: 'Calendar', to: '/reception/calendar', permission: 'reception.calendar', section: 'primary', isPrimaryRoute: true },
+    { key: 'check-in', name: 'Check-in Desk', to: '/reception/check-in', permission: 'reception.visitors.checkin', section: 'primary' },
+    { key: 'register', name: 'Register Visitor', to: '/reception/register', permission: 'reception.visitors.register', section: 'primary' },
+    { key: 'approvals', name: 'Pending Approvals', to: '/reception/approvals', permission: 'reception.approvals.track', section: 'primary' },
+    { key: 'host-queue', name: 'Host Queue', to: '/reception/host-queue', permission: 'reception.host.queue', section: 'primary' },
+    { key: 'hosts', name: 'Host Availability', to: '/reception/hosts', permission: 'reception.hosts.availability', section: 'primary' },
+    { key: 'visitor-logs', name: 'Visitor Logs', to: '/reception/visitors', permission: 'reception.visitors.view', section: 'primary' },
+    { key: 'badges', name: 'Badge Desk', to: '/reception/badges', permission: 'reception.badges', section: 'system' },
+    { key: 'occupancy', name: 'On-site Visitors', to: '/reception/occupancy', permission: 'reception.occupancy', section: 'system' },
+  ],
   station: [
     { key: 'dashboard', name: 'Dashboard', to: '/station', permission: 'station.dashboard', end: true, section: 'primary' },
     { key: 'gate-entry', name: 'Gate Checkin / Checkout', to: '/station/gate-entry', permissions: ['station.visitors.register', 'station.visitors.checkin'], section: 'primary' },
@@ -128,23 +140,21 @@ export const PORTAL_NAVIGATION = {
     { key: 'emergency', name: 'Emergency List', to: '/station/emergency', permission: 'station.emergency', section: 'system' },
     { key: 'activity', name: 'My Activity', to: '/station/activity', permission: 'station.activity', section: 'system' },
   ],
+  // Host + former executive calendar merged into one employee portal.
   host: [
-    { key: 'dashboard', name: 'Dashboard', to: '/host', permission: 'host.dashboard', end: true, section: 'primary' },
+    { key: 'dashboard', name: 'Dashboard', to: '/host', permissions: ['executive.dashboard', 'host.dashboard'], end: true, section: 'primary', isPrimaryRoute: true },
+    { key: 'appointments', name: 'Appointments', to: '/host/appointments', permission: 'executive.calendar', section: 'primary' },
     { key: 'invite', name: 'Invite Visitor', to: '/host/invite', permission: 'host.invite', section: 'primary' },
     { key: 'my-visitors', name: 'My Visitors', to: '/host/visitors', permission: 'host.visitors', section: 'primary' },
+    { key: 'register', name: 'Visitor Register', to: '/host/register', permission: 'executive.visits', section: 'primary' },
     { key: 'approvals', name: 'Approval Requests', to: '/host/approvals', permission: 'host.approvals', section: 'primary' },
     { key: 'on-site', name: 'Visitors On-site', to: '/host/on-site', permission: 'host.onsite', section: 'primary' },
-    { key: 'recurring', name: 'Recurring Visits', to: '/host/recurring', permission: 'host.recurring', section: 'primary' },
-    { key: 'groups', name: 'Group Visits', to: '/host/groups', permission: 'host.groups', section: 'primary' },
-    { key: 'delegates', name: 'My Delegates', to: '/host/delegates', permission: 'host.delegates', section: 'primary' },
-    { key: 'notifications', name: 'Notifications', to: '/host/notifications', permission: 'host.notifications', section: 'primary' },
-    { key: 'profile', name: 'My Profile', to: '/host/profile', permission: 'host.profile', section: 'primary' },
-  ],
-  executive: [
-    { key: 'dashboard', name: 'Dashboard', to: '/executive', permission: 'executive.dashboard', end: true, section: 'primary', isPrimaryRoute: true },
-    { key: 'appointments', name: 'Appointments', to: '/executive/appointments', permission: 'executive.calendar', section: 'primary' },
-    { key: 'register', name: 'Visitor Register', to: '/executive/visitors', permission: 'executive.visits', section: 'primary' },
-    { key: 'notifications', name: 'Notifications', to: '/executive/notifications', permission: 'host.notifications', section: 'primary', badgeKey: 'notifications' },
+    { key: 'contacts', name: 'My Contacts', to: '/host/contacts', permission: 'executive.contacts', section: 'primary' },
+    { key: 'notifications', name: 'Notifications', to: '/host/notifications', permission: 'host.notifications', section: 'primary', badgeKey: 'notifications' },
+    { key: 'recurring', name: 'Recurring Visits', to: '/host/recurring', permission: 'host.recurring', section: 'system' },
+    { key: 'groups', name: 'Group Visits', to: '/host/groups', permission: 'host.groups', section: 'system' },
+    { key: 'delegates', name: 'My Delegates', to: '/host/delegates', permission: 'host.delegates', section: 'system' },
+    { key: 'profile', name: 'My Profile', to: '/host/profile', permission: 'host.profile', section: 'system' },
   ],
   management: [
     { key: 'dashboard', name: 'Executive Dashboard', to: '/management', permission: 'management.dashboard', end: true, section: 'primary' },
@@ -189,10 +199,10 @@ export const PORTAL_NAVIGATION = {
 /** Portal priority for default redirect after login */
 export const PORTAL_PRIORITY = [
   'admin',
-  'executive',
-  'security',
-  'station',
   'host',
+  'security',
+  'reception',
+  'station',
   'management',
   'compliance',
   'emergency',
@@ -226,19 +236,26 @@ export function groupNavItems(items) {
   return { primary, organisation, system, settings };
 }
 
-/** CEO/DCEO users scoped to the personal executive portal only. */
+/** CEO/DCEO (and similar) scoped to the personal host/calendar portal only. */
 export function isExecutiveOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
-  return has('executive.dashboard') && !has('management.dashboard') && !has('host.dashboard');
+  return has('executive.dashboard') && !has('management.dashboard') && !has('admin.dashboard');
 }
 
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
   if (isExecutiveOnlyUser(permissions)) {
-    return 'executive';
+    return 'host';
   }
 
-  if (permissionMatches(permissions, 'executive.dashboard')) {
-    return 'executive';
+  if (
+    permissionMatches(permissions, 'executive.dashboard')
+    || permissionMatches(permissions, 'host.dashboard')
+  ) {
+    return 'host';
+  }
+
+  if (permissionMatches(permissions, 'reception.dashboard')) {
+    return 'reception';
   }
 
   for (const portalId of PORTAL_PRIORITY) {
@@ -281,24 +298,37 @@ export function resolvePortalRoute(permissions = []) {
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
-/** Default home route after sign-in — calendar-first for employees with executive access. */
+/** Default home route after sign-in — calendar dashboard for host/executive users. */
 export function resolveDefaultHomeRoute(permissions = []) {
-  if (permissionMatches(permissions, 'executive.dashboard')) {
-    return PORTALS.executive.routePrefix;
+  if (
+    permissionMatches(permissions, 'executive.dashboard')
+    || permissionMatches(permissions, 'host.dashboard')
+  ) {
+    return PORTALS.host.routePrefix;
+  }
+  if (permissionMatches(permissions, 'reception.calendar')) {
+    return `${PORTALS.reception.routePrefix}/calendar`;
+  }
+  if (permissionMatches(permissions, 'reception.dashboard')) {
+    return PORTALS.reception.routePrefix;
   }
   return resolvePortalRoute(permissions);
 }
 
-/** Prefer the user's primary portal; never send executive-only users to /management. */
+/** Prefer the user's primary portal; never send host-calendar users to /management. */
 export function resolveLoginRedirect(fromPath = '', permissions = []) {
   const homeRoute = resolveDefaultHomeRoute(permissions);
   const from = String(fromPath || '').trim();
 
-  if (permissionMatches(permissions, 'executive.dashboard')) {
+  // Calendar/host users always land on the merged host dashboard after sign-in.
+  if (
+    permissionMatches(permissions, 'executive.dashboard')
+    || permissionMatches(permissions, 'host.dashboard')
+  ) {
     return homeRoute;
   }
 
-  if (!from || from === '/' || from === '/login' || from.startsWith('/admin/login') || from.startsWith('/platform')) {
+  if (!from || from === '/' || from === '/login' || from.startsWith('/admin/login') || from.startsWith('/platform') || from.startsWith('/executive')) {
     return homeRoute;
   }
   if (isExecutiveOnlyUser(permissions) && from.startsWith('/management')) {
@@ -308,11 +338,18 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
 }
 
 export function canAccessPortal(portalId, hasPermission, permissions = []) {
-  if (isExecutiveOnlyUser(permissions) && portalId !== 'executive') {
+  if (isExecutiveOnlyUser(permissions) && portalId !== 'host') {
     return false;
   }
-  if (portalId === 'executive') {
-    return ['executive.dashboard', 'executive.calendar', 'executive.visits'].some((perm) => hasPermission(perm));
+  if (portalId === 'host') {
+    return [
+      'executive.dashboard',
+      'executive.calendar',
+      'executive.visits',
+      'host.dashboard',
+      'host.invite',
+      'host.visitors',
+    ].some((perm) => hasPermission(perm));
   }
   return getVisibleNavItems(portalId, hasPermission).length > 0;
 }
@@ -324,7 +361,6 @@ export function getAccessiblePortals(hasPermission, permissions = []) {
   }
 
   return PORTAL_PRIORITY.filter((portalId) => {
-    if (portalId === 'executive') return false;
     const items = getVisibleNavItems(portalId, hasPermission);
     return items.length > 0;
   }).map((portalId) => ({

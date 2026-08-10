@@ -213,7 +213,7 @@ export default function ExecutiveAppointmentDetailPanel({
           <div className="flex shrink-0 items-center gap-1">
             {appointment.visit_id && (
               <Link
-                to={`/executive/visitors/${appointment.visit_id}`}
+                to={`/host/register/${appointment.visit_id}`}
                 className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                 aria-label="Open full visit page"
                 title="Open full page"

@@ -4,6 +4,19 @@
 
 export const RBAC_SUPER_ADMIN_SLUG = 'super_admin';
 
+const RECEPTION_PERMISSIONS = [
+  { key: 'reception.dashboard', name: 'View reception dashboard', group: 'Reception' },
+  { key: 'reception.calendar', name: 'View expected visitors calendar', group: 'Reception' },
+  { key: 'reception.visitors.register', name: 'Register walk-in visitors', group: 'Reception' },
+  { key: 'reception.visitors.view', name: 'View visitor records', group: 'Reception' },
+  { key: 'reception.visitors.checkin', name: 'Check visitors in at reception', group: 'Reception' },
+  { key: 'reception.approvals.track', name: 'Track pending approval requests', group: 'Reception' },
+  { key: 'reception.host.queue', name: 'Queue visitors to host', group: 'Reception' },
+  { key: 'reception.hosts.availability', name: 'View host availability', group: 'Reception' },
+  { key: 'reception.badges', name: 'Badge desk at reception', group: 'Reception' },
+  { key: 'reception.occupancy', name: 'View reception occupancy', group: 'Reception' },
+];
+
 const STATION_PERMISSIONS = [
   { key: 'station.dashboard', name: 'View station dashboard', group: 'Station' },
   { key: 'station.visitors.register', name: 'Register visitors', group: 'Station' },
@@ -131,10 +144,11 @@ export const EXECUTIVE_PORTAL_KEYS = [
   'host.notifications',
 ];
 
-/** Personal calendar access for employees who also use the host portal. */
+/** Calendar + scheduling access for employees on the merged host portal. */
 export const EMPLOYEE_CALENDAR_KEYS = [
   'executive.dashboard',
   'executive.calendar',
+  'executive.appointments',
   'executive.visits',
 ];
 
@@ -160,6 +174,7 @@ export const ADMIN_PERMISSIONS = [
   ...PLATFORM_PERMISSIONS,
   ...ADMIN_PORTAL_PERMISSIONS,
   ...SECURITY_PERMISSIONS,
+  ...RECEPTION_PERMISSIONS,
   ...STATION_PERMISSIONS,
   ...HOST_PERMISSIONS,
   ...MANAGEMENT_PERMISSIONS,
@@ -169,6 +184,8 @@ export const ADMIN_PERMISSIONS = [
 ];
 
 export const ALL_PERMISSION_KEYS = ADMIN_PERMISSIONS.map((p) => p.key);
+
+export const RECEPTION_KEYS = RECEPTION_PERMISSIONS.map((p) => p.key);
 
 const STATION_KEYS = STATION_PERMISSIONS.map((p) => p.key);
 const ADMIN_KEYS = ADMIN_PORTAL_PERMISSIONS.map((p) => p.key);
@@ -256,14 +273,14 @@ export const DEFAULT_ADMIN_ROLES = [
     name: 'Main Reception',
     description: 'Reception desk check-in and visitor pass issuance.',
     is_system: true,
-    permissions: STATION_KEYS,
+    permissions: RECEPTION_KEYS,
   },
   {
     slug: 'executive_reception',
     name: 'Executive Reception',
     description: 'Executive reception with full VIP/VVIP contact access.',
     is_system: true,
-    permissions: [...STATION_KEYS, ...EXECUTIVE_KEYS],
+    permissions: [...RECEPTION_KEYS, ...EXECUTIVE_KEYS],
   },
   {
     slug: 'ceo_secretary',
@@ -282,16 +299,16 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: 'ceo',
     name: 'CEO',
-    description: 'Personal executive dashboard, calendar and visitor visibility.',
+    description: 'Host portal calendar, VIP visitors, and personal visitor management.',
     is_system: true,
-    permissions: EXECUTIVE_PORTAL_KEYS,
+    permissions: [...new Set([...EXECUTIVE_PORTAL_KEYS, ...HOST_KEYS])],
   },
   {
     slug: 'dceo',
     name: 'DCEO',
-    description: 'Personal executive dashboard, calendar and visitor visibility.',
+    description: 'Host portal calendar, VIP visitors, and personal visitor management.',
     is_system: true,
-    permissions: EXECUTIVE_PORTAL_KEYS,
+    permissions: [...new Set([...EXECUTIVE_PORTAL_KEYS, ...HOST_KEYS])],
   },
 ];
 
