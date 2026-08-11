@@ -134,7 +134,7 @@ export default function ReceptionCheckInPage() {
     setQueuing(true);
     try {
       await receptionApi.queueToHost(queueVisit.id, payload);
-      toast.success('Visitor queued — host notified.');
+      toast.success('Visitor sent to host for approval.');
       setLastCheckedInId(null);
       setQueueVisit(null);
       setReadyToQueue((prev) => prev.filter((row) => row.id !== queueVisit.id));

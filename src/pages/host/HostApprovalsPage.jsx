@@ -29,11 +29,15 @@ export default function HostApprovalsPage() {
     load();
   }, [load]);
 
-  const approve = async (id) => {
-    setActing(id);
+  const approve = async (row) => {
+    setActing(row.id);
     try {
-      await hostApi.approveVisit(id);
-      toast.success('Visit approved. The visitor may now check in at reception.');
+      await hostApi.approveVisit(row.id);
+      toast.success(
+        row.checked_in_at
+          ? 'Visitor accepted and added to your timeline.'
+          : 'Visit approved. The visitor may now check in at reception.',
+      );
       load();
     } catch (err) {
       toast.error(err.message);
@@ -66,6 +70,11 @@ export default function HostApprovalsPage() {
     { key: 'company', label: 'Company' },
     { key: 'purpose', label: 'Purpose' },
     {
+      key: 'source',
+      label: 'Source',
+      render: (_, row) => (row.checked_in_at ? 'Reception queue' : 'Invite / booking'),
+    },
+    {
       key: 'status',
       label: 'Status',
       render: (_, row) => <StatusBadge status={row.status} />,
@@ -86,7 +95,7 @@ export default function HostApprovalsPage() {
             iconOnly
             loading={acting === row.id}
             aria-label="Approve"
-            onClick={() => approve(row.id)}
+            onClick={() => approve(row)}
           />
           <IconButton
             icon={X}
@@ -105,7 +114,7 @@ export default function HostApprovalsPage() {
     <div>
       <PageHeader
         title="Approval Requests"
-        subtitle="Approve or reject visitors coming to see you"
+        subtitle="Reception queues and invite requests waiting for your decision"
         breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'Approvals' }]}
       />
 

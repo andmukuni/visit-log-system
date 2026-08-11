@@ -91,8 +91,10 @@ describe('host occupied lifecycle', () => {
     assert.equal(canTransition('in_meeting', 'checked_out'), true);
   });
 
-  it('blocks queue-host when visit is not checked in', () => {
-    assert.equal(canTransition('pending_approval', 'waiting'), false);
+  it('queues checked-in visitors to host approvals, then waiting on accept', () => {
+    assert.equal(canTransition('reception_check_in', 'pending_approval'), true);
+    assert.equal(canTransition('checked_in', 'pending_approval'), true);
+    assert.equal(canTransition('pending_approval', 'waiting'), true);
     assert.equal(canTransition('expected', 'waiting'), false);
   });
 });

@@ -33,6 +33,8 @@ describe('visit state transitions', () => {
     assert.ok(VISIT_TRANSITIONS.approved.includes('reception_check_in'));
     assert.ok(VISIT_TRANSITIONS.expected.includes('arrived_at_gate'));
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('rejected'));
+    assert.ok(VISIT_TRANSITIONS.pending_approval.includes('waiting'));
+    assert.ok(VISIT_TRANSITIONS.reception_check_in.includes('pending_approval'));
   });
 });
 

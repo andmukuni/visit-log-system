@@ -127,7 +127,7 @@ export default function ReceptionHostQueuePage() {
             columns={columns}
             data={visits}
             emptyTitle="Queue is empty"
-            emptyDescription="Checked-in visitors waiting for their host will appear here."
+            emptyDescription="Visitors sent to a host for approval, or accepted and waiting, appear here."
           />
         </Card>
       )}

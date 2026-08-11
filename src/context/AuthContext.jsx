@@ -12,7 +12,7 @@ import { permissionMatches } from '../../shared/rbacPermissions.js';
 
 const AuthContext = createContext();
 const API_BASE = getApiBase();
-const ADMIN_IDLE_TIMEOUT_MINUTES = Math.max(1, Number(import.meta.env.VITE_ADMIN_IDLE_TIMEOUT_MINUTES || 30));
+const ADMIN_IDLE_TIMEOUT_MINUTES = Math.max(1, Number(import.meta.env.VITE_ADMIN_IDLE_TIMEOUT_MINUTES || 5));
 const ADMIN_IDLE_TIMEOUT_MS = ADMIN_IDLE_TIMEOUT_MINUTES * 60 * 1000;
 
 function getStoredSession() {

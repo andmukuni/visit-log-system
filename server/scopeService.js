@@ -184,13 +184,15 @@ export async function loadVisitScoped(pool, visitId, scope, { elevated = false }
 
 export const VISIT_TRANSITIONS = {
   pre_registered: ['pending_approval', 'approved', 'expected', 'cancelled'],
-  pending_approval: ['approved', 'expected', 'rejected', 'cancelled'],
+  // Host can approve pre-arrival (approved/expected) or accept a reception-queued visitor (waiting).
+  pending_approval: ['approved', 'expected', 'waiting', 'rejected', 'cancelled'],
   approved: ['expected', 'arrived_at_gate', 'checked_in', 'reception_check_in', 'cancelled', 'expired'],
-  expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'cancelled', 'expired'],
+  expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'queue', 'expired'],
   arrived_at_gate: ['entered_premises', 'reception_check_in', 'checked_out', 'cancelled'],
-  entered_premises: ['reception_check_in', 'checked_in', 'checked_out', 'cancelled'],
-  reception_check_in: ['waiting', 'in_meeting', 'checked_in', 'checked_out'],
-  checked_in: ['waiting', 'in_meeting', 'checked_out', 'overdue', 'completed'],
+  entered_premises: ['reception_check_in', 'checked_in', 'checked_out', 'queue'],
+  // Desk queue sends the visitor to the host approvals list first.
+  reception_check_in: ['pending_approval', 'waiting', 'in_meeting', 'checked_in', 'checked_out'],
+  checked_in: ['pending_approval', 'waiting', 'in_meeting', 'checked_out', 'overdue', 'completed'],
   waiting: ['in_meeting', 'checked_out'],
   in_meeting: ['checked_out'],
   overdue: ['checked_out', 'completed'],

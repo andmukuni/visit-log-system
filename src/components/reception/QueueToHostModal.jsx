@@ -116,10 +116,6 @@ export default function QueueToHostModal({
   };
 
   const handleConfirm = () => {
-    if (destinationType === 'host' && !hostId) {
-      setError('Select a host to queue to.');
-      return;
-    }
     if (destinationType === 'office' && !officeId) {
       setError('Select an office to queue to.');
       return;
@@ -128,21 +124,14 @@ export default function QueueToHostModal({
       setError('Select a department to queue to.');
       return;
     }
-
-    const payload = {};
-    if (destinationType === 'host') {
-      payload.hostId = hostId;
-      if (departmentId) payload.departmentId = departmentId;
-      if (officeId) payload.officeId = officeId;
-    } else if (destinationType === 'office') {
-      payload.officeId = officeId;
-      if (departmentId) payload.departmentId = departmentId;
-      if (hostId) payload.hostId = hostId;
-    } else {
-      payload.departmentId = departmentId;
-      if (hostId) payload.hostId = hostId;
-      if (officeId) payload.officeId = officeId;
+    if (!hostId) {
+      setError('Select a host so the request appears on their approvals list.');
+      return;
     }
+
+    const payload = { hostId };
+    if (departmentId) payload.departmentId = departmentId;
+    if (officeId) payload.officeId = officeId;
 
     onConfirm?.(payload);
   };
@@ -192,7 +181,7 @@ export default function QueueToHostModal({
             onChange={handleDepartmentChange}
             options={departmentOptions}
             required={destinationType === 'department'}
-            helpText={destinationType === 'department' ? 'Visitor will be queued to this department.' : 'Optional filter'}
+            helpText={destinationType === 'department' ? 'Filter hosts in this department.' : 'Optional filter'}
           />
         )}
 
@@ -207,7 +196,7 @@ export default function QueueToHostModal({
             required={destinationType === 'office'}
             helpText={
               destinationType === 'office'
-                ? 'Visitor will be queued to this office (host assigned when available).'
+                ? 'Filter hosts in this office.'
                 : 'Optional filter'
             }
           />
@@ -221,12 +210,8 @@ export default function QueueToHostModal({
             value={hostId}
             onChange={handleHostChange}
             options={hostOptions}
-            required={destinationType === 'host'}
-            helpText={
-              destinationType === 'host'
-                ? 'Host will be notified that the visitor is waiting.'
-                : 'Optional — leave blank to use the first available host in the selection'
-            }
+            required
+            helpText="Sent to this host’s Approvals queue as pending."
           />
         )}
 

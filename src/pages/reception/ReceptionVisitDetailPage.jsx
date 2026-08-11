@@ -94,7 +94,7 @@ export default function ReceptionVisitDetailPage() {
     setQueuing(true);
     try {
       await receptionApi.queueToHost(visitForModal.id, payload);
-      toast.success('Visitor queued — host notified.');
+      toast.success('Visitor sent to host for approval.');
       setQueueOpen(false);
       setReloadKey((value) => value + 1);
       navigate('/reception/host-queue');

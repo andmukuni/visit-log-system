@@ -437,8 +437,8 @@ export function createReceptionRouter() {
 
       const includeReady = String(req.query.includeReady || '1') === '1';
       const statuses = includeReady
-        ? ['waiting', 'reception_check_in', 'checked_in']
-        : ['waiting'];
+        ? ['waiting', 'pending_approval', 'reception_check_in', 'checked_in']
+        : ['waiting', 'pending_approval'];
 
       const { sql: siteSql, params: siteParams } = siteFilterClause(scope);
       const placeholders = statuses.map(() => '?').join(', ');
@@ -615,10 +615,10 @@ export function createReceptionRouter() {
       }
 
       const visit = loaded.visit;
-      if (!canTransition(visit.status, 'waiting')) {
+      if (!canTransition(visit.status, 'pending_approval')) {
         return res.status(400).json({
           ok: false,
-          message: `Cannot transition from ${visit.status} to waiting.`,
+          message: `Cannot queue from ${visit.status}. Check the visitor in at the desk first.`,
         });
       }
 
@@ -682,17 +682,17 @@ export function createReceptionRouter() {
         nextOfficeId = nextOfficeId || host.office_id || null;
       }
 
-      if (!nextHostId && !nextDepartmentId && !nextOfficeId) {
+      if (!nextHostId) {
         return res.status(400).json({
           ok: false,
-          message: 'Could not resolve a host, office, or department for this queue.',
+          message: 'Select a host so the request appears on their approvals list.',
         });
       }
 
       await pool.query(
         `UPDATE visits
-         SET status = 'waiting',
-             host_id = COALESCE(?, host_id),
+         SET status = 'pending_approval',
+             host_id = ?,
              department_id = COALESCE(?, department_id),
              office_id = COALESCE(?, office_id),
              updated_at = NOW()
@@ -702,7 +702,7 @@ export function createReceptionRouter() {
 
       await writeVisitEvent(pool, {
         visitId,
-        eventType: 'waiting',
+        eventType: 'pending_approval',
         actorUserId: userId,
         stationId: scopeResult.scope?.station_id,
         details: {
@@ -713,11 +713,11 @@ export function createReceptionRouter() {
         },
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'waiting', actorUserId: userId });
+      await notifyVisitEvent(pool, { visitId, eventType: 'pending_approval', actorUserId: userId });
 
       res.json({
         ok: true,
-        message: 'Visitor queued to host.',
+        message: 'Visitor sent to host for approval.',
         data: {
           hostId: nextHostId,
           departmentId: nextDepartmentId,
