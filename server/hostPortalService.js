@@ -92,7 +92,12 @@ export async function resolveHostPortalRole(pool, userId) {
      FROM user_admin_roles uar
      INNER JOIN admin_roles ar ON ar.id = uar.role_id
      WHERE uar.user_id = ? AND ar.slug IN (${placeholders})
-     ORDER BY FIELD(ar.slug, 'ceo', 'dceo', 'host')
+     ORDER BY CASE ar.slug
+       WHEN 'ceo' THEN 1
+       WHEN 'dceo' THEN 2
+       WHEN 'host' THEN 3
+       ELSE 4
+     END
      LIMIT 1`,
     [userId, ...HOST_PORTAL_ROLE_SLUGS],
   );

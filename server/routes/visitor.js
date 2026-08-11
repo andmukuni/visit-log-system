@@ -2972,7 +2972,12 @@ export function createOrgAdminRouter() {
                  INNER JOIN admin_roles ar ON ar.id = uar.role_id
                  WHERE uar.user_id = h.user_id
                    AND ar.slug IN ('ceo', 'dceo', 'host')
-                 ORDER BY FIELD(ar.slug, 'ceo', 'dceo', 'host')
+                 ORDER BY CASE ar.slug
+                   WHEN 'ceo' THEN 1
+                   WHEN 'dceo' THEN 2
+                   WHEN 'host' THEN 3
+                   ELSE 4
+                 END
                  LIMIT 1
                ) AS portal_role
         FROM hosts h
