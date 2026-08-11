@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
   CheckCircle,
@@ -52,6 +52,7 @@ function formatEventType(type) {
 }
 
 export default function ReceptionDashboardPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -254,6 +255,10 @@ export default function ReceptionDashboardPage() {
               data={data.checkInAppointments || []}
               emptyTitle="No check-in appointments today"
               emptyDescription="Scheduled visits for today across all hosts will appear here."
+              onRowClick={(row) => {
+                const visitId = row.id || row.visit_id;
+                if (visitId) navigate(`/reception/visitors/${visitId}`);
+              }}
             />
           </Card>
 
@@ -272,6 +277,9 @@ export default function ReceptionDashboardPage() {
               data={data.recentActivity || []}
               emptyTitle="No activity yet"
               emptyDescription="Check-ins, approvals, and host queue events will appear here."
+              onRowClick={(row) => {
+                if (row.visit_id) navigate(`/reception/visitors/${row.visit_id}`);
+              }}
             />
           </Card>
         </>

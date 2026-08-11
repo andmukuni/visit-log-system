@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityExceptionsPage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +51,13 @@ export default function SecurityExceptionsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${visits.length} exception${visits.length === 1 ? '' : 's'}`}>
-          <DataTable columns={columns} data={visits} emptyTitle="No exceptions" emptyDescription="No exception visits in scope." />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No exceptions"
+            emptyDescription="No exception visits in scope."
+            onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

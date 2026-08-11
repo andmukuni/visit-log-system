@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityApprovalsPage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +53,13 @@ export default function SecurityApprovalsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${visits.length} pending`}>
-          <DataTable columns={columns} data={visits} emptyTitle="Queue clear" emptyDescription="No visits awaiting approval." />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="Queue clear"
+            emptyDescription="No visits awaiting approval."
+            onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

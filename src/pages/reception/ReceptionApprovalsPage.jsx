@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { BellRing, Eye } from 'lucide-react';
 import {
   PageHeader,
@@ -17,6 +17,7 @@ import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
 
 export default function ReceptionApprovalsPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +115,7 @@ export default function ReceptionApprovalsPage() {
             data={visits}
             emptyTitle="No pending approvals"
             emptyDescription="Walk-ins awaiting host approval will appear here."
+            onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
           />
         </Card>
       )}

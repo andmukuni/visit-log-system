@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityOccupancyPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +50,13 @@ export default function SecurityOccupancyPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${rows.length} visitor${rows.length === 1 ? '' : 's'} inside`}>
-          <DataTable columns={columns} data={rows} emptyTitle="No one on site" emptyDescription="All visitors have checked out." />
+          <DataTable
+            columns={columns}
+            data={rows}
+            emptyTitle="No one on site"
+            emptyDescription="All visitors have checked out."
+            onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

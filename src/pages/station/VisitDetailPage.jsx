@@ -4,7 +4,17 @@ import { visitorApi } from '../../utils/visitorApi';
 
 export default function VisitDetailPage({ portalPrefix = '/station' }) {
   const { id } = useParams();
-  const portalLabel = portalPrefix === '/reception' ? 'Reception' : 'Station';
+  const portalLabel = portalPrefix === '/reception'
+    ? 'Reception'
+    : portalPrefix === '/security'
+      ? 'Security'
+      : portalPrefix === '/emergency'
+        ? 'Emergency'
+        : 'Station';
+  const listPath = portalPrefix === '/emergency'
+    ? `${portalPrefix}/occupancy`
+    : `${portalPrefix}/visitors`;
+  const listLabel = portalPrefix === '/emergency' ? 'Occupancy' : 'Visitor logs';
 
   return (
     <VisitorDetailView
@@ -12,11 +22,11 @@ export default function VisitDetailPage({ portalPrefix = '/station' }) {
       fetchVisit={visitorApi.getVisit}
       breadcrumbs={[
         { label: portalLabel, to: portalPrefix },
-        { label: 'Visitor logs', to: `${portalPrefix}/visitors` },
+        { label: listLabel, to: listPath },
         { label: 'Details' },
       ]}
-      backTo={`${portalPrefix}/visitors`}
-      backLabel="Back to logs"
+      backTo={listPath}
+      backLabel={portalPrefix === '/emergency' ? 'Back to occupancy' : 'Back to logs'}
     />
   );
 }

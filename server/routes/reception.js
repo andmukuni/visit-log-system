@@ -197,7 +197,8 @@ export function createReceptionRouter() {
       }
 
       const [recentActivity] = await pool.query(
-        `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
+        `SELECT ve.id, ve.visit_id, ve.event_type, ve.created_at,
+                v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id

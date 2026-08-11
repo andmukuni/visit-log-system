@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, Spinner } from '../../components/ui';
 import { emergencyApi } from '../../utils/visitorApi';
 
@@ -9,6 +9,7 @@ const STATUS_LABELS = {
 };
 
 export default function EmergencyUnresolvedPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [rollCallId, setRollCallId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,16 @@ export default function EmergencyUnresolvedPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${rows.length} unresolved`}>
-          <DataTable columns={columns} data={rows} emptyTitle="All accounted for" emptyDescription="No unresolved persons in the active roll call." />
+          <DataTable
+            columns={columns}
+            data={rows}
+            emptyTitle="All accounted for"
+            emptyDescription="No unresolved persons in the active roll call."
+            onRowClick={(row) => {
+              if (rollCallId) navigate(`/emergency/roll-call/${rollCallId}`);
+              else if (row.visit_id) navigate(`/emergency/visitors/${row.visit_id}`);
+            }}
+          />
         </Card>
       )}
     </div>

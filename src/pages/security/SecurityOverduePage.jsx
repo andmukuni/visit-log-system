@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityOverduePage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +52,12 @@ export default function SecurityOverduePage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${visits.length} overdue`}>
-          <DataTable columns={columns} data={visits} emptyTitle="No overdue visits" />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No overdue visits"
+            onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

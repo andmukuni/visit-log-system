@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Users, ClipboardList, Clock3, Building2 } from 'lucide-react';
 import {
   PageHeader,
@@ -15,6 +16,7 @@ import { visitorApi } from '../../utils/visitorApi';
 import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminDashboardPage() {
+  const navigate = useNavigate();
   const {
     queryParams,
     label: orgFilterLabel,
@@ -178,6 +180,7 @@ export default function AdminDashboardPage() {
               data={data.recentVisits || []}
               emptyTitle="No visits yet"
               emptyDescription="Visitor records will appear here as they are registered."
+              onRowClick={(row) => navigate(`/admin/log-book/${row.id}`)}
             />
           </Card>
         </>

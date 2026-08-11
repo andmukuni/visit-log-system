@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle,
@@ -49,6 +49,7 @@ function formatEventType(type) {
 }
 
 export default function StationDashboardPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -225,6 +226,9 @@ export default function StationDashboardPage() {
               data={data.recentActivity || []}
               emptyTitle="No activity yet"
               emptyDescription="Gate check-ins, approvals, and check-outs will appear here."
+              onRowClick={(row) => {
+                if (row.visit_id) navigate(`/station/visitors/${row.visit_id}`);
+              }}
             />
           </Card>
         </>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LogOut, Search } from 'lucide-react';
 import {
   PageHeader,
@@ -13,6 +14,7 @@ import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function CheckOutPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -107,7 +109,13 @@ export default function CheckOutPage() {
       </Card>
 
       <Card title="Currently checked in">
-        <DataTable columns={columns} data={results} emptyTitle="Search for a visitor" emptyDescription="Find a checked-in visitor to process their exit." />
+        <DataTable
+          columns={columns}
+          data={results}
+          emptyTitle="Search for a visitor"
+          emptyDescription="Find a checked-in visitor to process their exit."
+          onRowClick={(row) => navigate(`/station/visitors/${row.id}`)}
+        />
       </Card>
     </div>
   );

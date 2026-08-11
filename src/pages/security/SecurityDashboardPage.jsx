@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Clock, AlertTriangle, ShieldAlert, UserCheck, Shield, UserPlus, CheckCircle, LogIn, LogOut, XCircle } from 'lucide-react';
 import {
   PageHeader,
@@ -35,6 +36,7 @@ function formatEventType(type) {
 }
 
 export default function SecurityDashboardPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -184,6 +186,9 @@ export default function SecurityDashboardPage() {
               data={data.recentActivity || []}
               emptyTitle="No activity yet"
               emptyDescription="Visitor check-ins, approvals, and security events will appear here."
+              onRowClick={(row) => {
+                if (row.visit_id) navigate(`/security/visitors/${row.visit_id}`);
+              }}
             />
           </Card>
         </>

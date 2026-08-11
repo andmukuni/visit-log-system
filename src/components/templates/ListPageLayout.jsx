@@ -27,6 +27,7 @@ export default function ListPageLayout({
   drawerContent,
   drawerFooter,
   onSelectionChange,
+  onRowClick,
   bulkActions,
   className = '',
 }) {
@@ -64,7 +65,7 @@ export default function ListPageLayout({
         emptyAction={emptyAction}
         selectable
         onSelectionChange={handleSelectionChange}
-        onRowClick={drawerContent ? undefined : undefined}
+        onRowClick={onRowClick}
       />
 
       {bulkBar}

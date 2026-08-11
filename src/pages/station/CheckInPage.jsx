@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LogIn, Search } from 'lucide-react';
 import {
   PageHeader,
@@ -13,6 +14,7 @@ import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function CheckInPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -122,7 +124,13 @@ export default function CheckInPage() {
       )}
 
       <Card title="Approved visitors">
-        <DataTable columns={columns} data={results} emptyTitle="Search for a visitor" emptyDescription="Enter a name, phone number, badge or pass code above." />
+        <DataTable
+          columns={columns}
+          data={results}
+          emptyTitle="Search for a visitor"
+          emptyDescription="Enter a name, phone number, badge or pass code above."
+          onRowClick={(row) => navigate(`/station/visitors/${row.id}`)}
+        />
       </Card>
     </div>
   );

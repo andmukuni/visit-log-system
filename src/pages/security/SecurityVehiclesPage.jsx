@@ -1,5 +1,6 @@
 import { Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   PageHeader,
   Card,
@@ -15,6 +16,7 @@ import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityVehiclesPage() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [vehicles, setVehicles] = useState([]);
@@ -113,6 +115,9 @@ export default function SecurityVehiclesPage() {
             toolbar={{
               placeholder: 'Filter results…',
               searchKeys: ['plate_number', 'driver_name', 'make', 'organisation_name'],
+            }}
+            onRowClick={(row) => {
+              if (row.visit_id) navigate(`/security/visitors/${row.visit_id}`);
             }}
           />
         </Card>

@@ -1,11 +1,12 @@
 import { Eye } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, FormField, DataTable, StatusBadge, Spinner, IconButton } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
 
 export default function HostVisitorsPage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -93,7 +94,13 @@ export default function HostVisitorsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card>
-          <DataTable columns={columns} data={visits} emptyTitle="No visitors yet" emptyDescription="Invite a visitor to get started." />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No visitors yet"
+            emptyDescription="Invite a visitor to get started."
+            onRowClick={(row) => navigate(`/host/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

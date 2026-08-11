@@ -121,7 +121,12 @@ export default function RollCallListPage({
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title="Roll call history">
-          <DataTable columns={columns} data={data.rollCalls} emptyTitle="No roll calls yet" />
+          <DataTable
+            columns={columns}
+            data={data.rollCalls}
+            emptyTitle="No roll calls yet"
+            onRowClick={(row) => navigate(`${detailPathPrefix}/${row.id}`)}
+          />
         </Card>
       )}
     </div>

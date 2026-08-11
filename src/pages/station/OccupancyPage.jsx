@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   PageHeader,
   Card,
@@ -16,6 +17,7 @@ export default function OccupancyPage({
   subtitle = 'Visitors currently on site',
   fetchOccupancy = () => visitorApi.getOccupancy(),
 }) {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,7 +68,13 @@ export default function OccupancyPage({
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${rows.length} visitor${rows.length === 1 ? '' : 's'} inside`}>
-          <DataTable columns={columns} data={rows} emptyTitle="No one on site" emptyDescription="All visitors have checked out." />
+          <DataTable
+            columns={columns}
+            data={rows}
+            emptyTitle="No one on site"
+            emptyDescription="All visitors have checked out."
+            onRowClick={(row) => navigate(`${portalPrefix}/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

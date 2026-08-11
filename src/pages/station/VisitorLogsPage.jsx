@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import {
   PageHeader,
@@ -27,6 +27,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function VisitorLogsPage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -109,7 +110,12 @@ export default function VisitorLogsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${visits.length} visit${visits.length === 1 ? '' : 's'}`}>
-          <DataTable columns={columns} data={visits} emptyTitle="No visits found" />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No visits found"
+            onRowClick={(row) => navigate(`/station/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

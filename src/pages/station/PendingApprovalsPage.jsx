@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   PageHeader,
   Card,
@@ -34,6 +35,7 @@ const VARIANTS = {
 
 export default function PendingApprovalsPage({ variant = 'pending' }) {
   const config = VARIANTS[variant] || VARIANTS.pending;
+  const navigate = useNavigate();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -147,6 +149,7 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
                 ? 'Executive calendar appointments and pre-registered visitors will appear here when they are expected at the gate.'
                 : undefined
             }
+            onRowClick={(row) => navigate(`/station/visitors/${row.id}`)}
           />
         </Card>
       )}

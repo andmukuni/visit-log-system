@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   PageHeader,
   Card,
@@ -15,6 +16,7 @@ import { visitorApi } from '../../utils/visitorApi';
 import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 
 export default function AdminVehiclesPage() {
+  const navigate = useNavigate();
   const { queryParams, organisationId } = useAdminOrganisation();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,9 @@ export default function AdminVehiclesPage() {
             toolbar={{
               placeholder: 'Search plate, driver, make, organisation…',
               searchKeys: ['plate_number', 'driver_name', 'make', 'organisation_name', 'vehicle_type'],
+            }}
+            onRowClick={(row) => {
+              if (row.visit_id) navigate(`/admin/log-book/${row.visit_id}`);
             }}
           />
         </Card>

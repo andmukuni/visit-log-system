@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import {
   PageHeader,
@@ -46,6 +46,7 @@ function HostAvailabilityBadge({ availability }) {
 }
 
 export default function ReceptionHostQueuePage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -128,6 +129,7 @@ export default function ReceptionHostQueuePage() {
             data={visits}
             emptyTitle="Queue is empty"
             emptyDescription="Visitors sent to a host for approval, or accepted and waiting, appear here."
+            onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
           />
         </Card>
       )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import {
   PageHeader,
@@ -16,6 +17,7 @@ import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function VehicleLogsPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,14 @@ export default function VehicleLogsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title="Vehicles">
-          <DataTable columns={columns} data={vehicles} emptyTitle="No vehicles recorded" />
+          <DataTable
+            columns={columns}
+            data={vehicles}
+            emptyTitle="No vehicles recorded"
+            onRowClick={(row) => {
+              if (row.visit_id) navigate(`/station/visitors/${row.visit_id}`);
+            }}
+          />
         </Card>
       )}
     </div>

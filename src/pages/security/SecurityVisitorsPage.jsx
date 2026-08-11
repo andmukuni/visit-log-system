@@ -1,10 +1,12 @@
 import { Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner, FormField, LoadingButton } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { securityApi } from '../../utils/visitorApi';
 
 export default function SecurityVisitorsPage() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +90,7 @@ export default function SecurityVisitorsPage() {
               placeholder: 'Filter results…',
               searchKeys: ['full_name', 'phone', 'company', 'host_name', 'organisation_name', 'site_name'],
             }}
+            onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
           />
         </Card>
       )}

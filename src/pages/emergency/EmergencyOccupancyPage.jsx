@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { emergencyApi } from '../../utils/visitorApi';
 
 export default function EmergencyOccupancyPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +50,12 @@ export default function EmergencyOccupancyPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${rows.length} on site`}>
-          <DataTable columns={columns} data={rows} emptyTitle="No one on site" />
+          <DataTable
+            columns={columns}
+            data={rows}
+            emptyTitle="No one on site"
+            onRowClick={(row) => navigate(`/emergency/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

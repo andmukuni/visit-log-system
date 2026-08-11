@@ -1,11 +1,13 @@
 import { Check, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner, LoadingButton, IconButton, Modal, FormField, CancelAction } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
 
 export default function HostApprovalsPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +124,13 @@ export default function HostApprovalsPage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card>
-          <DataTable columns={columns} data={visits} emptyTitle="No pending approvals" emptyDescription="All caught up!" />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No pending approvals"
+            emptyDescription="All caught up!"
+            onRowClick={(row) => navigate(`/host/visitors/${row.id}`)}
+          />
         </Card>
       )}
 

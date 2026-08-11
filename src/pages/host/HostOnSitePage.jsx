@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader, Card, DataTable, StatusBadge, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
 
 export default function HostOnSitePage() {
+  const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +57,12 @@ export default function HostOnSitePage() {
         <div className="flex justify-center py-12"><Spinner size={28} /></div>
       ) : (
         <Card title={`${visits.length} visitor${visits.length === 1 ? '' : 's'} on site`}>
-          <DataTable columns={columns} data={visits} emptyTitle="No visitors on site" />
+          <DataTable
+            columns={columns}
+            data={visits}
+            emptyTitle="No visitors on site"
+            onRowClick={(row) => navigate(`/host/visitors/${row.id}`)}
+          />
         </Card>
       )}
     </div>

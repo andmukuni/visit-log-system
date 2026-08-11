@@ -179,7 +179,8 @@ export function createStationRouter() {
       }
 
       const [recentActivity] = await pool.query(
-        `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
+        `SELECT ve.id, ve.visit_id, ve.event_type, ve.created_at,
+                v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
@@ -3941,6 +3942,7 @@ export function createOrgAdminRouter() {
                o.name AS organisation_name,
                (SELECT COUNT(*) FROM visits vis WHERE vis.visitor_id = v.id) AS visit_count,
                (SELECT MAX(vis.created_at) FROM visits vis WHERE vis.visitor_id = v.id) AS last_visit_at,
+               (SELECT vis.id FROM visits vis WHERE vis.visitor_id = v.id ORDER BY vis.created_at DESC LIMIT 1) AS last_visit_id,
                COALESCE((
                  SELECT LOWER(COALESCE(vc.classification, 'standard'))
                  FROM visits vis2
@@ -3998,7 +4000,7 @@ export function createOrgAdminRouter() {
       const status = String(req.query.status || '').trim();
 
       let sql = `
-        SELECT veh.id, veh.plate_number, veh.vehicle_type, veh.make, veh.colour,
+        SELECT veh.id, veh.visit_id, veh.plate_number, veh.vehicle_type, veh.make, veh.colour,
                veh.driver_name, veh.status, veh.entered_at, veh.exited_at, veh.created_at,
                o.name AS organisation_name
         FROM vehicles veh

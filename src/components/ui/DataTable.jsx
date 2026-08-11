@@ -126,6 +126,16 @@ function TableToolbar({ value, onChange, placeholder = 'Search…' }) {
 
 export { TablePagination };
 
+const ACTION_COLUMN_KEYS = new Set(['actions', 'action', 'view']);
+
+function isInteractiveClickTarget(target) {
+  return Boolean(
+    target?.closest?.(
+      'a, button, input, select, textarea, label, [role="button"], [data-row-click-ignore="true"]',
+    ),
+  );
+}
+
 export default function DataTable({
   columns = [],
   data = [],
@@ -340,7 +350,10 @@ export default function DataTable({
                   className={`border-b border-gray-100 transition-colors ${
                     onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
                   } ${isSelected || isActive ? 'bg-cyan-50/40' : ''} ${getRowClassName?.(row) ?? ''}`}
-                  onClick={() => onRowClick?.(row)}
+                  onClick={(e) => {
+                    if (!onRowClick || isInteractiveClickTarget(e.target)) return;
+                    onRowClick(row);
+                  }}
                 >
                   {selectable && (
                     <td className={`px-3 ${tableSize.td}`} onClick={(e) => e.stopPropagation()}>
@@ -357,7 +370,7 @@ export default function DataTable({
                     <td
                       key={col.key || colIdx}
                       className={`px-3 ${tableSize.td} align-middle ${col.align === 'right' ? 'text-right' : ''} ${col.className || ''}`}
-                      onClick={col.key === 'actions' ? (e) => e.stopPropagation() : undefined}
+                      onClick={ACTION_COLUMN_KEYS.has(col.key) ? (e) => e.stopPropagation() : undefined}
                     >
                       {getCellValue(row, col)}
                     </td>
@@ -375,7 +388,10 @@ export default function DataTable({
           return (
             <article
               key={rowId}
-              onClick={() => onRowClick?.(row)}
+              onClick={(e) => {
+                if (!onRowClick || isInteractiveClickTarget(e.target)) return;
+                onRowClick(row);
+              }}
               className={`p-4 ${onRowClick ? 'cursor-pointer active:bg-gray-50 transition-colors' : ''}`}
             >
               <div className="space-y-2">
