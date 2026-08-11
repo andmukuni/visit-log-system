@@ -13,7 +13,12 @@ import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/Analyti
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
 import { SidebarProvider } from '../../context/SidebarContext';
 import AdminOrganisationSelect from '../admin/AdminOrganisationSelect';
-import { canAccessPortal, isExecutiveOnlyUser, resolveDefaultHomeRoute } from '../../../shared/portalNavigation.js';
+import {
+  canAccessPortal,
+  isExecutiveOnlyUser,
+  isHostOnlyUser,
+  resolveDefaultHomeRoute,
+} from '../../../shared/portalNavigation.js';
 
 function PortalOutletLoader() {
   return (
@@ -193,7 +198,7 @@ function ShellBody({ portalId, title }) {
   const { permissions, hasPermission } = useAuth();
   useEffect(() => {
     if (!permissions.length) return;
-    if (isExecutiveOnlyUser(permissions) && portalId === 'management') {
+    if ((isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) && portalId === 'management') {
       navigate('/host', { replace: true });
       return;
     }

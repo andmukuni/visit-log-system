@@ -8,7 +8,11 @@ import TopProgressBar from './components/ui/TopProgressBar';
 import { useAuth } from './context/AuthContext';
 import { purgeInvalidAuthState } from './utils/authHeaders';
 import { APP_NAME_SHORT } from '../shared/branding.js';
-import { isExecutiveOnlyUser } from '../shared/portalNavigation.js';
+import {
+  isExecutiveOnlyUser,
+  isHostOnlyUser,
+  isReceptionOnlyUser,
+} from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
@@ -269,8 +273,15 @@ function AppRoot() {
 
   useEffect(() => {
     if (!permissions?.length) return;
-    if (isExecutiveOnlyUser(permissions) && location.pathname.startsWith('/management')) {
+    if (
+      (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions))
+      && (location.pathname.startsWith('/management') || location.pathname.startsWith('/reception'))
+    ) {
       navigate('/host', { replace: true });
+      return;
+    }
+    if (isReceptionOnlyUser(permissions) && location.pathname.startsWith('/host')) {
+      navigate('/reception', { replace: true });
     }
   }, [permissions, location.pathname, navigate]);
 

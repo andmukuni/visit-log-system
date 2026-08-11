@@ -19,6 +19,7 @@ import { createAppointmentForVisit, upsertVisitorContactDetails } from '../acces
 import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
 import { applyVisitListMasking } from '../visitResponseService.js';
 import { normalizeHostAvailability } from '../hostAvailability.js';
+import { resolveHostZoneId } from '../receptionistService.js';
 
 function normalizeNrc(value) {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
@@ -396,10 +397,11 @@ export function createHostRouter() {
 
       // Host-created visits that skip approval are already confirmed expected arrivals.
       const alreadyConfirmed = status === 'expected' || status === 'approved';
+      const visitZoneId = await resolveHostZoneId(pool, ctx.host.id);
 
       await pool.query(
-        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, confidential_notes, approved_at, privacy_ack_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${alreadyConfirmed ? 'NOW()' : 'NULL'}, ${alreadyConfirmed ? 'NOW()' : 'NULL'})`,
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, confidential_notes, approved_at, privacy_ack_at, zone_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${alreadyConfirmed ? 'NOW()' : 'NULL'}, ${alreadyConfirmed ? 'NOW()' : 'NULL'}, ?)`,
         [
           visitId,
           ctx.scope.organisation_id,
@@ -414,6 +416,7 @@ export function createHostRouter() {
           inviteToken,
           userId,
           confidentialNotes?.trim() || null,
+          visitZoneId,
         ],
       );
 
@@ -520,14 +523,16 @@ export function createHostRouter() {
         [visit.visitor_id],
       );
 
+      const approveZoneId = await resolveHostZoneId(pool, ctx.host.id);
       await pool.query(
         `UPDATE visits
          SET status = ?,
              host_id = COALESCE(?, host_id),
+             zone_id = COALESCE(zone_id, ?),
              approved_at = NOW(),
              updated_at = NOW()
          WHERE id = ?`,
-        [nextStatus, ctx.host.id, visitId],
+        [nextStatus, ctx.host.id, approveZoneId, visitId],
       );
 
       await pool.query(

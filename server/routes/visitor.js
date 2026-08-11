@@ -29,6 +29,10 @@ import {
   loadZoneInOrg,
 } from '../orgStructureService.js';
 import {
+  resolveHostZoneId,
+  resolveReceptionZoneContext,
+} from '../receptionistService.js';
+import {
   markHostUnavailableForVisit,
   normalizeHostAvailability,
   refreshHostAvailabilityAfterVisit,
@@ -1213,6 +1217,24 @@ export function createVisitsRouter() {
         return res.status(400).json({ ok: false, message: 'Visit is not ready for check-in.' });
       }
 
+      // Receptionists may only check in visits for hosts in their assigned zones.
+      const receptionZone = await resolveReceptionZoneContext(pool, userId);
+      if (receptionZone.isReceptionist) {
+        if (!receptionZone.zoneIds.length) {
+          return res.status(403).json({
+            ok: false,
+            message: 'No zones are assigned to this receptionist. Contact your administrator.',
+          });
+        }
+        const visitZoneId = visit.zone_id || await resolveHostZoneId(pool, visit.host_id);
+        if (!visitZoneId || !receptionZone.zoneIds.includes(String(visitZoneId))) {
+          return res.status(403).json({
+            ok: false,
+            message: 'This visit belongs to another zone and cannot be checked in at your desk.',
+          });
+        }
+      }
+
       const [[visitor]] = await pool.query('SELECT full_name, phone, email FROM visitors WHERE id = ?', [visit.visitor_id]);
       const watchlistMatches = await findWatchlistMatches(pool, visit.organisation_id, {
         fullName: visitor?.full_name,
@@ -1263,9 +1285,21 @@ export function createVisitsRouter() {
         );
       }
 
+      const stampedZoneId = visit.zone_id
+        || await resolveHostZoneId(conn, visit.host_id)
+        || receptionZone.zoneIds[0]
+        || null;
+
       await conn.query(
-        `UPDATE visits SET status = 'reception_check_in', checked_in_at = NOW(), badge_number = ?, station_id = COALESCE(?, station_id), updated_at = NOW() WHERE id = ?`,
-        [assignedBadge || visit.badge_number, scope?.station_id, visitId],
+        `UPDATE visits
+         SET status = 'reception_check_in',
+             checked_in_at = NOW(),
+             badge_number = ?,
+             station_id = COALESCE(?, station_id),
+             zone_id = COALESCE(zone_id, ?),
+             updated_at = NOW()
+         WHERE id = ?`,
+        [assignedBadge || visit.badge_number, scope?.station_id, stampedZoneId, visitId],
       );
 
       await conn.commit();

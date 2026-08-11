@@ -6,16 +6,22 @@ import {
   permissionMatches,
 } from '../shared/rbacPermissions.js';
 import {
+  canAccessPortal,
+  getAccessiblePortals,
   isExecutiveOnlyUser,
+  isHostOnlyUser,
+  isReceptionOnlyUser,
   resolveDefaultHomeRoute,
   resolveLoginRedirect,
   resolvePrimaryPortal,
 } from '../shared/portalNavigation.js';
+import { RECEPTION_KEYS } from '../shared/rbacPermissions.js';
 
 const hostRole = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'host');
 const hostEmployee = hostRole?.permissions || [];
 const ceoRole = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'ceo');
 const ceoPerms = ceoRole?.permissions || [];
+const receptionPerms = RECEPTION_KEYS;
 
 function hasPermissionFactory(permissions = []) {
   return (key) => permissionMatches(permissions, key);
@@ -51,5 +57,14 @@ describe('portal login routing', () => {
     const adminPerms = ['admin.dashboard', 'admin.visitors'];
     assert.equal(resolveLoginRedirect('/admin/visitors', adminPerms), '/admin/visitors');
     assert.equal(resolveLoginRedirect('/login', adminPerms), '/admin');
+  });
+
+  it('keeps host and reception portals fully isolated', () => {
+    assert.equal(isHostOnlyUser(hostEmployee), true);
+    assert.equal(isReceptionOnlyUser(receptionPerms), true);
+    assert.equal(canAccessPortal('reception', hasPermissionFactory(hostEmployee), hostEmployee), false);
+    assert.equal(canAccessPortal('host', hasPermissionFactory(receptionPerms), receptionPerms), false);
+    assert.deepEqual(getAccessiblePortals(hasPermissionFactory(hostEmployee), hostEmployee), []);
+    assert.deepEqual(getAccessiblePortals(hasPermissionFactory(receptionPerms), receptionPerms), []);
   });
 });

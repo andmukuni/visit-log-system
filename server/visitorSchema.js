@@ -459,6 +459,12 @@ export async function ensureVisitorSchema() {
   await ensureColumn(pool, 'visits', 'check_in_signature', 'ADD COLUMN check_in_signature MEDIUMTEXT NULL');
   await ensureColumn(pool, 'visits', 'appointment_id', 'ADD COLUMN appointment_id VARCHAR(90) NULL');
   await ensureColumn(pool, 'visits', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
+  await ensureColumn(pool, 'visits', 'zone_id', 'ADD COLUMN zone_id VARCHAR(90) NULL');
+  try {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_visits_zone ON visits (zone_id)');
+  } catch {
+    // Index may already exist on MySQL variants without IF NOT EXISTS.
+  }
 }
 
 export async function seedVisitorData() {

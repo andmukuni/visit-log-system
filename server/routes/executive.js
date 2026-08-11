@@ -9,6 +9,7 @@ import {
 import { generateInviteToken } from '../platformSchema.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
+import { resolveHostZoneId } from '../receptionistService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertHostContact, upsertVisitorContactDetails } from '../accessSchema.js';
 
@@ -551,10 +552,11 @@ export function createExecutiveRouter() {
       const passCode = generatePassCode();
       const inviteToken = generateInviteToken();
       const meetingTitle = title?.trim() || purpose?.trim() || `Meeting with ${visitorName.trim()}`;
+      const visitZoneId = await resolveHostZoneId(pool, ctx.host.id);
 
       await pool.query(
-        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at, privacy_ack_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at, privacy_ack_at, zone_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
         [
           visitId,
           ctx.scope.organisation_id,
@@ -568,6 +570,7 @@ export function createExecutiveRouter() {
           passCode,
           inviteToken,
           userId,
+          visitZoneId,
         ],
       );
 

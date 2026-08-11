@@ -12,6 +12,10 @@ import {
 } from '../shared/rbacPermissions.js';
 import { resolveVisitRoutePermissions } from '../server/rbacService.js';
 import { resolveDefaultHomeRoute, PORTALS } from '../shared/portalNavigation.js';
+import {
+  hostZoneFilterClause,
+  visitZoneFilterClause,
+} from '../server/receptionistService.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
 
@@ -121,5 +125,25 @@ describe('reception visit action labels', () => {
       receptionActionHref(getReceptionVisitAction('expected'), 'vis-1'),
       '/reception/check-in?visit=vis-1',
     );
+  });
+});
+
+describe('reception zone filters', () => {
+  it('denies all rows when zoneIds is null or empty (strict isolation)', () => {
+    assert.match(visitZoneFilterClause(null).sql, /1=0/);
+    assert.match(visitZoneFilterClause([]).sql, /1=0/);
+    assert.match(hostZoneFilterClause(null).sql, /1=0/);
+  });
+
+  it('scopes visits and hosts to the receptionist zone set', () => {
+    const zones = ['zone-a', 'zone-b'];
+    const visit = visitZoneFilterClause(zones);
+    const host = hostZoneFilterClause(zones, 'ofc');
+    assert.match(visit.sql, /vis\.zone_id IN/);
+    assert.match(visit.sql, /ofc\.zone_id IN/);
+    assert.match(visit.sql, /vis_ofc\.zone_id IN/);
+    assert.deepEqual(visit.params, [...zones, ...zones, ...zones]);
+    assert.match(host.sql, /ofc\.zone_id IN \(\?, \?\)/);
+    assert.deepEqual(host.params, zones);
   });
 });

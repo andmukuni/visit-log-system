@@ -235,9 +235,37 @@ export function isExecutiveOnlyUser(permissions = []) {
   return has('executive.dashboard') && !has('management.dashboard') && !has('admin.dashboard');
 }
 
+/** Reception desk users — cannot switch into host or other portals. */
+export function isReceptionOnlyUser(permissions = []) {
+  const has = (key) => permissionMatches(permissions, key);
+  return has('reception.dashboard')
+    && !has('host.dashboard')
+    && !has('executive.dashboard')
+    && !has('admin.dashboard')
+    && !has('management.dashboard')
+    && !has('security.dashboard')
+    && !has('platform.dashboard');
+}
+
+/** Host / employee calendar users — cannot switch into reception. */
+export function isHostOnlyUser(permissions = []) {
+  const has = (key) => permissionMatches(permissions, key);
+  const hasHostPortal = has('host.dashboard') || has('executive.dashboard');
+  return hasHostPortal
+    && !has('reception.dashboard')
+    && !has('admin.dashboard')
+    && !has('management.dashboard')
+    && !has('security.dashboard')
+    && !has('platform.dashboard');
+}
+
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
-  if (isExecutiveOnlyUser(permissions)) {
+  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
     return 'host';
+  }
+
+  if (isReceptionOnlyUser(permissions)) {
+    return 'reception';
   }
 
   if (
@@ -331,7 +359,10 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
 }
 
 export function canAccessPortal(portalId, hasPermission, permissions = []) {
-  if (isExecutiveOnlyUser(permissions) && portalId !== 'host') {
+  if ((isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) && portalId !== 'host') {
+    return false;
+  }
+  if (isReceptionOnlyUser(permissions) && portalId !== 'reception') {
     return false;
   }
   if (portalId === 'host') {
@@ -349,7 +380,8 @@ export function canAccessPortal(portalId, hasPermission, permissions = []) {
 
 /** Portals the signed-in user can access (for sidebar switcher). */
 export function getAccessiblePortals(hasPermission, permissions = []) {
-  if (isExecutiveOnlyUser(permissions)) {
+  // Host-only and reception-only users stay locked to their portal (no switcher).
+  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isReceptionOnlyUser(permissions)) {
     return [];
   }
 

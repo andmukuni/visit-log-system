@@ -148,6 +148,170 @@ export async function loadReceptionistZones(pool, receptionistId) {
   return rows;
 }
 
+/**
+ * Resolve zone IDs for the logged-in receptionist (multi-zone + legacy zone_id).
+ * @returns {{ isReceptionist: boolean, receptionistId: string|null, zoneIds: string[] }}
+ */
+export async function resolveReceptionZoneContext(pool, userId) {
+  const uid = String(userId || '').trim();
+  if (!uid) {
+    return { isReceptionist: false, receptionistId: null, zoneIds: [] };
+  }
+
+  const [[receptionist]] = await pool.query(
+    `SELECT id, zone_id FROM receptionists
+     WHERE user_id = ? AND status = 'active'
+     LIMIT 1`,
+    [uid],
+  );
+  if (!receptionist) {
+    return { isReceptionist: false, receptionistId: null, zoneIds: [] };
+  }
+
+  const assigned = await loadReceptionistZones(pool, receptionist.id);
+  let zoneIds = assigned.map((zone) => String(zone.id));
+  if (!zoneIds.length && receptionist.zone_id) {
+    zoneIds = [String(receptionist.zone_id)];
+  }
+
+  return {
+    isReceptionist: true,
+    receptionistId: receptionist.id,
+    zoneIds,
+  };
+}
+
+/** Reception APIs require a linked receptionist with at least one zone. */
+export async function requireReceptionZoneContext(pool, userId) {
+  const ctx = await resolveReceptionZoneContext(pool, userId);
+  if (!ctx.isReceptionist) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'Reception access requires a linked receptionist profile. Contact your administrator.',
+    };
+  }
+  if (!ctx.zoneIds.length) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'No zones are assigned to this receptionist. Contact your administrator.',
+    };
+  }
+  return { ok: true, ...ctx };
+}
+
+export async function resolveHostZoneId(pool, hostId) {
+  const id = String(hostId || '').trim();
+  if (!id) return null;
+  const [[row]] = await pool.query(
+    `SELECT ofc.zone_id
+     FROM hosts h
+     LEFT JOIN offices ofc ON ofc.id = h.office_id
+     WHERE h.id = ?
+     LIMIT 1`,
+    [id],
+  );
+  return row?.zone_id ? String(row.zone_id) : null;
+}
+
+/**
+ * Visit visibility for a receptionist zone set — strict isolation.
+ * Matches visit.zone_id, host office zone, or visit office zone.
+ * Params order: [...zoneIds, ...zoneIds, ...zoneIds]
+ */
+export function visitZoneFilterClause(zoneIds, {
+  hostOfficeAlias = 'ofc',
+  visitOfficeAlias = 'vis_ofc',
+  visitAlias = 'vis',
+} = {}) {
+  if (!Array.isArray(zoneIds) || !zoneIds.length) {
+    return { sql: ' AND 1=0', params: [] };
+  }
+
+  const placeholders = zoneIds.map(() => '?').join(', ');
+  return {
+    sql: ` AND (
+      ${visitAlias}.zone_id IN (${placeholders})
+      OR ${hostOfficeAlias}.zone_id IN (${placeholders})
+      OR ${visitOfficeAlias}.zone_id IN (${placeholders})
+    )`,
+    params: [...zoneIds, ...zoneIds, ...zoneIds],
+  };
+}
+
+/** Host list filter — host must have an office in one of the receptionist zones. */
+export function hostZoneFilterClause(zoneIds, officeAlias = 'ofc') {
+  if (!Array.isArray(zoneIds) || !zoneIds.length) {
+    return { sql: ' AND 1=0', params: [] };
+  }
+  const placeholders = zoneIds.map(() => '?').join(', ');
+  return {
+    sql: ` AND ${officeAlias}.zone_id IN (${placeholders})`,
+    params: [...zoneIds],
+  };
+}
+
+/** Office list filter by zone. */
+export function officeZoneFilterClause(zoneIds, alias = 'ofc') {
+  return hostZoneFilterClause(zoneIds, alias);
+}
+
+export async function assertTargetInReceptionZones(pool, {
+  hostId = null,
+  officeId = null,
+  organisationId,
+  zoneIds,
+}) {
+  if (!Array.isArray(zoneIds) || !zoneIds.length) {
+    return { ok: false, status: 403, message: 'No zones are assigned to this receptionist.' };
+  }
+
+  const zoneSet = new Set(zoneIds.map(String));
+
+  if (officeId) {
+    const [[office]] = await pool.query(
+      `SELECT id, zone_id FROM offices
+       WHERE id = ? AND organisation_id = ? AND status = 'active'
+       LIMIT 1`,
+      [officeId, organisationId],
+    );
+    if (!office) {
+      return { ok: false, status: 400, message: 'Selected office was not found.' };
+    }
+    if (!office.zone_id || !zoneSet.has(String(office.zone_id))) {
+      return {
+        ok: false,
+        status: 403,
+        message: 'You can only queue visitors to offices in your zone.',
+      };
+    }
+  }
+
+  if (hostId) {
+    const [[host]] = await pool.query(
+      `SELECT h.id, ofc.zone_id
+       FROM hosts h
+       LEFT JOIN offices ofc ON ofc.id = h.office_id
+       WHERE h.id = ? AND h.organisation_id = ? AND h.status = 'active'
+       LIMIT 1`,
+      [hostId, organisationId],
+    );
+    if (!host) {
+      return { ok: false, status: 400, message: 'Selected host was not found.' };
+    }
+    if (!host.zone_id || !zoneSet.has(String(host.zone_id))) {
+      return {
+        ok: false,
+        status: 403,
+        message: 'You can only queue visitors to hosts in your zone.',
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
 export async function attachReceptionistZones(pool, rows = []) {
   if (!rows.length) return rows;
   const ids = rows.map((row) => row.id).filter(Boolean);

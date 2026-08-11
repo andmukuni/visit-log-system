@@ -7,6 +7,11 @@ import { VISIT_SELECT_FIELDS, VISIT_JOINS, formatVisitResponse } from './visitRe
 import { permissionsFromRequest } from './classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from './accessSchema.js';
 import { lookupNrc, getDojahIntegrationStatus, isDojahUnavailableError } from './services/dojahService.js';
+import {
+  assertTargetInReceptionZones,
+  requireReceptionZoneContext,
+  resolveHostZoneId,
+} from './receptionistService.js';
 
 function validateSignature(checkInSignature) {
   const signature = String(checkInSignature || '').trim();
@@ -47,6 +52,11 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     return { ok: false, status: scopeResult.status, message: scopeResult.message };
   }
 
+  const zoneReq = await requireReceptionZoneContext(pool, userId);
+  if (!zoneReq.ok) {
+    return { ok: false, status: zoneReq.status, message: zoneReq.message };
+  }
+
   const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
   if (!placement.ok) {
     return { ok: false, status: placement.status, message: placement.message };
@@ -66,6 +76,19 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     dojahOverride,
     checkInSignature,
   } = body;
+
+  if (hostId) {
+    const zoneCheck = await assertTargetInReceptionZones(pool, {
+      hostId,
+      organisationId,
+      zoneIds: zoneReq.zoneIds,
+    });
+    if (!zoneCheck.ok) {
+      return { ok: false, status: zoneCheck.status, message: zoneCheck.message };
+    }
+  }
+
+  const visitZoneId = (hostId ? await resolveHostZoneId(pool, hostId) : null) || zoneReq.zoneIds[0];
 
   let resolvedFullName = fullName?.trim() || '';
   const usingDojahOverride = Boolean(dojahOverride);
@@ -165,8 +188,8 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
   const passCode = generatePassCode();
 
   await pool.query(
-    `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, category_id, purpose, status, pass_code, check_in_signature, checked_in_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reception_check_in', ?, ?, NOW(), ?)`,
+    `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, category_id, purpose, status, pass_code, check_in_signature, checked_in_at, created_by, zone_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reception_check_in', ?, ?, NOW(), ?, ?)`,
     [
       visitId,
       organisationId,
@@ -179,6 +202,7 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
       passCode,
       signatureResult.signature,
       userId,
+      visitZoneId,
     ],
   );
 
@@ -253,6 +277,11 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
     return { ok: false, status: scopeResult.status, message: scopeResult.message };
   }
 
+  const zoneReq = await requireReceptionZoneContext(pool, userId);
+  if (!zoneReq.ok) {
+    return { ok: false, status: zoneReq.status, message: zoneReq.message };
+  }
+
   const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
   if (!placement.ok) {
     return { ok: false, status: placement.status, message: placement.message };
@@ -284,6 +313,18 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
   const signatureResult = validateSignature(checkInSignature);
   if (!signatureResult.ok) return signatureResult;
 
+  if (hostId) {
+    const zoneCheck = await assertTargetInReceptionZones(pool, {
+      hostId,
+      organisationId,
+      zoneIds: zoneReq.zoneIds,
+    });
+    if (!zoneCheck.ok) {
+      return { ok: false, status: zoneCheck.status, message: zoneCheck.message };
+    }
+  }
+
+  const visitZoneId = (hostId ? await resolveHostZoneId(pool, hostId) : null) || zoneReq.zoneIds[0];
   const plate = plateNumber.trim().toUpperCase();
   let visitId = null;
 
@@ -327,8 +368,8 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
     visitId = generateId('visit');
     const passCode = generatePassCode();
     await pool.query(
-      `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, purpose, status, pass_code, check_in_signature, checked_in_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'reception_check_in', ?, ?, NOW(), ?)`,
+      `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, purpose, status, pass_code, check_in_signature, checked_in_at, created_by, zone_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'reception_check_in', ?, ?, NOW(), ?, ?)`,
       [
         visitId,
         organisationId,
@@ -340,6 +381,7 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
         passCode,
         signatureResult.signature,
         userId,
+        visitZoneId,
       ],
     );
 
