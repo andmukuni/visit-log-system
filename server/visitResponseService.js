@@ -9,6 +9,7 @@ const VISIT_SELECT_FIELDS = `
   h.title AS host_title,
   ofc.office_number AS host_office_number,
   ofc.name AS host_office_name,
+  p.name AS host_position_name,
   vc.name AS category_name,
   vc.slug AS category_slug,
   COALESCE(vc.classification, 'standard') AS classification
@@ -19,6 +20,7 @@ const VISIT_JOINS = `
   LEFT JOIN visitor_contact_details vcd ON vcd.visitor_id = v.id
   LEFT JOIN hosts h ON h.id = vis.host_id
   LEFT JOIN offices ofc ON ofc.id = h.office_id
+  LEFT JOIN positions p ON p.id = h.position_id
   LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
 `;
 
