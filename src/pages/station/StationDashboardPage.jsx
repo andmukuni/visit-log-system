@@ -165,8 +165,8 @@ export default function StationDashboardPage() {
             lineChart={{
               title: 'Visitor activity',
               data: data.weeklyTrend,
-              trend: data.eventTrend,
-              emptyLabel: 'No visitor events this week yet.',
+              trend: data.visitTrend ?? data.eventTrend,
+              emptyLabel: 'No visitor activity this week yet.',
             }}
             donutChart={{
               title: 'Recent month',

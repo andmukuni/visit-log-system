@@ -39,11 +39,18 @@ export function getSmsConfig() {
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     from: process.env.TWILIO_FROM_NUMBER || '',
   };
+  const ontech = {
+    email: process.env.ONTECH_EMAIL || '',
+    password: process.env.ONTECH_PASSWORD || '',
+    senderId: process.env.ONTECH_SENDER_ID || '',
+    baseUrl: process.env.ONTECH_BASE_URL || 'https://bulksms.ontech.co.zm/api',
+  };
 
   const configured = provider === 'console'
-    || (provider === 'twilio' && Boolean(twilio.accountSid && twilio.authToken && twilio.from));
+    || (provider === 'twilio' && Boolean(twilio.accountSid && twilio.authToken && twilio.from))
+    || (provider === 'ontech' && Boolean(ontech.email && ontech.password));
 
-  return { provider, twilio, configured };
+  return { provider, twilio, ontech, configured };
 }
 
 export function getDeliveryConfig() {

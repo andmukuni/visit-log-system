@@ -674,7 +674,7 @@ export function createPlatformRouter() {
 
       const deliveryStats = await getDeliveryStats(pool);
       const email = getEmailProviderStatus();
-      const sms = getSmsProviderStatus();
+      const sms = await getSmsProviderStatus();
       const [[totalNotifications]] = await pool.query(`SELECT COUNT(*) AS count FROM notifications`);
 
       res.json({

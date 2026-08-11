@@ -151,10 +151,10 @@ export default function SecurityDashboardPage() {
           <DashboardOverviewLayout
             metricsSection={metricsSection}
             lineChart={{
-              title: 'Security activity',
+              title: 'Visitor activity',
               data: data.weeklyTrend,
-              trend: data?.eventTrend,
-              emptyLabel: 'No security events this week yet.',
+              trend: data?.visitTrend ?? data?.eventTrend,
+              emptyLabel: 'No visitor activity this week yet.',
             }}
             donutChart={{
               title: 'Recent month',

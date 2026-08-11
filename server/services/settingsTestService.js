@@ -6,6 +6,7 @@ import {
   isSmsConfigured,
   resolveSmtpPass,
 } from './adminSettingsService.js';
+import { sendOntechSms, normalizeZmPhone } from '../adapters/ontechSmsClient.js';
 import { APP_NAME, SMS_SENDER_PREFIX } from '../../shared/branding.js';
 
 function formatSmtpError(error) {
@@ -71,23 +72,7 @@ export async function sendTestEmail(to) {
 }
 
 async function sendOntechTestSms(config, { phone, message }) {
-  const baseUrl = String(config.base_url || 'https://bulksms.ontech.co.zm/smsservice').trim().replace(/\/$/, '');
-  const url = new URL(`${baseUrl}/httpapi`);
-  url.searchParams.set('api_key', String(config.access_id || '').trim());
-  url.searchParams.set('phone', phone);
-  url.searchParams.set('msg', message);
-  url.searchParams.set('sender_id', String(config.sender_id || '').trim());
-
-  const res = await fetch(url.toString());
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body?.message || body?.error || `Ontech SMS API returned HTTP ${res.status}.`);
-  }
-  const status = Number(body?.status);
-  if (Number.isFinite(status) && status !== 100) {
-    throw new Error(body?.message || `Ontech SMS failed (status ${status}).`);
-  }
-  return { provider: 'ontech', messageId: body?.message_id || `ontech-${Date.now()}` };
+  return sendOntechSms(config, { phone, message });
 }
 
 async function sendTwilioTestSms(config, { phone, message }) {
@@ -153,8 +138,9 @@ export async function testSmsConnection({ phone, message } = {}) {
     throw err;
   }
 
+  const deliveredTo = provider === 'ontech' ? normalizeZmPhone(testPhone) : testPhone;
   return {
-    message: `Test SMS sent via ${result.provider} to ${testPhone}.`,
+    message: `Test SMS sent via ${result.provider} to ${deliveredTo}.`,
     provider: result.provider,
     messageId: result.messageId,
   };

@@ -21,7 +21,7 @@ import {
   canTransitionVehicle,
 } from '../accessSchema.js';
 import { lookupNrc, getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
-import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend, fetchWeeklySecurityEvents, fetchSecurityEventsByType, fetchSecurityEventsTodayYesterday } from '../dashboardStats.js';
+import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend, fetchSecurityEventsByType, siteScopeFromId, ON_SITE_VISIT_STATUSES } from '../dashboardStats.js';
 import {
   assertStationPlacement,
   assertOfficePlacement,
@@ -37,12 +37,6 @@ import { loadReceptionistRow, syncReceptionistPortalUser, parseReceptionistZoneI
 import { loadSecurityGuardRow, syncSecurityGuardPortalUser } from '../securityGuardService.js';
 import { sendHostPasswordResetEmail, syncHostPortalUser } from '../hostPortalService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
-
-function todayStart() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function hasPlatformWideAccess(claims = {}) {
   const perms = claims.permissions || [];
@@ -121,7 +115,6 @@ export function createStationRouter() {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
       const orgId = scope?.organisation_id;
-      const siteId = scope?.site_id;
 
       if (!orgId) {
         return res.json({
@@ -132,78 +125,86 @@ export function createStationRouter() {
             currentlyInside: 0,
             pendingApprovals: 0,
             overdueVisits: 0,
+            deniedRejected: 0,
+            visitTrend: 0,
+            weeklyTrend: [],
+            eventsByType: [],
             recentActivity: [],
             scope: null,
           },
         });
       }
 
-      const start = todayStart();
-      const params = [orgId];
-      let siteFilter = '';
+      const siteId = scope.site_id;
+      const { sql: siteSql, params: siteParams } = siteScopeFromId(siteId);
+      const baseParams = [orgId, ...siteParams];
+      const chartSiteSql = siteId ? ' AND vis.site_id = ?' : '';
+      const chartSiteParams = siteId ? [siteId] : [];
+
+      const countVisits = async (extra = '', extraParams = []) => {
+        const [[row]] = await pool.query(
+          `SELECT COUNT(*) AS count FROM visits vis
+           WHERE vis.organisation_id = ?${siteSql}${extra}`,
+          [...baseParams, ...extraParams],
+        );
+        return Number(row?.count || 0);
+      };
+
+      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
+      const visitorsTodayQuery = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const eventsByType = await fetchSecurityEventsByType(pool, orgId, chartSiteSql, chartSiteParams);
+
+      let vehiclesSql = `
+        SELECT COUNT(*) AS count
+        FROM vehicles veh
+        INNER JOIN visits vis ON vis.id = veh.visit_id
+        WHERE vis.organisation_id = ?
+          AND DATE(veh.created_at) = CURDATE()
+      `;
+      const vehicleParams = [orgId];
       if (siteId) {
-        siteFilter = ' AND site_id = ?';
-        params.push(siteId);
+        vehiclesSql += ' AND vis.site_id = ?';
+        vehicleParams.push(siteId);
       }
+      const [[vehiclesToday]] = await pool.query(vehiclesSql, vehicleParams);
 
-      const [[visitorsToday]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?${siteFilter} AND created_at >= ?`,
-        [...params, start],
-      );
-
-      const [[vehiclesToday]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM vehicles WHERE organisation_id = ? AND created_at >= ?`,
-        [orgId, start],
-      );
-
-      const [[currentlyInside]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?${siteFilter} AND status = 'checked_in'`,
-        params,
-      );
-
-      const [[pendingApprovals]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?${siteFilter} AND status IN ('pending_approval', 'pre_registered')`,
-        params,
-      );
-
-      const [[overdueVisits]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?${siteFilter} AND status = 'overdue'`,
-        params,
-      );
-
-      const [[deniedRejected]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE organisation_id = ?${siteFilter} AND status IN ('rejected', 'denied') AND created_at >= ?`,
-        [...params, start],
-      );
-
-      const siteSql = siteId ? ' AND vis.site_id = ?' : '';
-      const siteParams = siteId ? [siteId] : [];
-      const weeklyEvents = await fetchWeeklySecurityEvents(pool, orgId, siteSql, siteParams);
-      const { eventTrend } = await fetchSecurityEventsTodayYesterday(pool, orgId, siteSql, siteParams);
-      const eventsByType = await fetchSecurityEventsByType(pool, orgId, siteSql, siteParams);
+      const recentParams = [orgId];
+      let recentSiteFilter = '';
+      if (siteId) {
+        recentSiteFilter = ' AND vis.site_id = ?';
+        recentParams.push(siteId);
+      }
 
       const [recentActivity] = await pool.query(
         `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
-         WHERE vis.organisation_id = ?${siteFilter.replace('site_id', 'vis.site_id')}
+         WHERE vis.organisation_id = ?${recentSiteFilter}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
-        params,
+        recentParams,
       );
 
       res.json({
         ok: true,
         data: {
-          visitorsToday: Number(visitorsToday?.count || 0),
+          visitorsToday: visitorsTodayQuery.visitsToday,
           vehiclesToday: Number(vehiclesToday?.count || 0),
-          currentlyInside: Number(currentlyInside?.count || 0),
-          pendingApprovals: Number(pendingApprovals?.count || 0),
-          overdueVisits: Number(overdueVisits?.count || 0),
-          deniedRejected: Number(deniedRejected?.count || 0),
-          eventTrend,
-          weeklyTrend: buildWeeklyTrend(weeklyEvents),
+          currentlyInside: await countVisits(
+            ` AND vis.status IN (${onSitePlaceholders})`,
+            ON_SITE_VISIT_STATUSES,
+          ),
+          pendingApprovals: await countVisits(` AND vis.status IN ('pending_approval', 'pre_registered')`),
+          overdueVisits: await countVisits(` AND vis.status = 'overdue'`),
+          deniedRejected: await countVisits(
+            ` AND vis.status IN ('rejected', 'denied') AND DATE(vis.created_at) = CURDATE()`,
+          ),
+          visitTrend: visitorsTodayQuery.visitTrend,
+          weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
           eventsByType,
           recentActivity,
           scope: {
@@ -3780,9 +3781,10 @@ export function createOrgAdminRouter() {
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId);
       const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId);
 
+      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
       const [[currentlyInside]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE status = 'checked_in'${andOrgClause}`,
-        orgParams,
+        `SELECT COUNT(*) AS count FROM visits WHERE status IN (${onSitePlaceholders})${andOrgClause}`,
+        [...ON_SITE_VISIT_STATUSES, ...orgParams],
       );
       const [[pendingApprovals]] = await pool.query(
         `SELECT COUNT(*) AS count FROM visits

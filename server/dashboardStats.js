@@ -7,6 +7,25 @@ export function calcVisitTrend(today, yesterday) {
   return Math.round(((today - yesterday) / yesterday) * 100);
 }
 
+export const ON_SITE_VISIT_STATUSES = [
+  'checked_in',
+  'reception_check_in',
+  'waiting',
+  'in_meeting',
+  'arrived_at_gate',
+  'entered_premises',
+];
+
+export function buildSiteScopeFilter(scope, { alias = 'vis' } = {}) {
+  if (!scope?.site_id) return { sql: '', params: [] };
+  return { sql: ` AND ${alias}.site_id = ?`, params: [scope.site_id] };
+}
+
+export function siteScopeFromId(siteId, { alias = 'vis' } = {}) {
+  if (!siteId) return { sql: '', params: [] };
+  return { sql: ` AND ${alias}.site_id = ?`, params: [siteId] };
+}
+
 function formatLocalIso(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

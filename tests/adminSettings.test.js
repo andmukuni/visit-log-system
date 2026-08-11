@@ -47,9 +47,17 @@ describe('admin settings defaults', () => {
     assert.equal(isSmsConfigured({
       enabled: true,
       provider: 'ontech',
-      access_id: 'key',
-      sender_id: 'Visitors Log',
+      email: 'user@example.com',
+      password: 'secret',
+      sender_id: 'VisitorsLog',
       source: 'database',
     }), true);
+    assert.equal(isSmsConfigured({
+      enabled: true,
+      provider: 'ontech',
+      email: 'user@example.com',
+      password: '',
+      source: 'database',
+    }), false);
   });
 });

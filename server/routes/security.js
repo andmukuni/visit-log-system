@@ -16,16 +16,13 @@ import { applyVisitListMasking } from '../visitResponseService.js';
 import { permissionsFromRequest } from '../classificationService.js';
 import {
   buildWeeklyTrend,
-  fetchWeeklySecurityEvents,
+  fetchWeeklyVisits,
+  fetchWeeklyWalkingVisits,
+  fetchWeeklyDriveInVisits,
+  fetchVisitsTodayYesterday,
   fetchSecurityEventsByType,
-  fetchSecurityEventsTodayYesterday,
+  ON_SITE_VISIT_STATUSES,
 } from '../dashboardStats.js';
-
-function todayStart() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function scopeSiteFilter(scope, elevated, column = 'vis.site_id') {
   if (elevated || !scope?.site_id) return { sql: '', params: [] };
@@ -82,7 +79,6 @@ export function createSecurityRouter() {
       const params = [orgId];
       const { sql: siteSql, params: siteParams } = scopeSiteFilter(scope, elevated);
       params.push(...siteParams);
-      const start = todayStart();
 
       const countVisits = async (extra = '', extraParams = []) => {
         const [[row]] = await pool.query(
@@ -91,6 +87,26 @@ export function createSecurityRouter() {
         );
         return Number(row?.count || 0);
       };
+
+      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
+      const chartSiteSql = scope.site_id && !elevated ? ' AND vis.site_id = ?' : '';
+      const chartSiteParams = scope.site_id && !elevated ? [scope.site_id] : [];
+      const { visitsToday, visitTrend } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const eventsByType = await fetchSecurityEventsByType(pool, orgId, siteSql, siteParams);
+
+      const [recentActivity] = await pool.query(
+        `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
+         FROM visit_events ve
+         INNER JOIN visits vis ON vis.id = ve.visit_id
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         WHERE vis.organisation_id = ?${siteSql}
+         ORDER BY ve.created_at DESC
+         LIMIT 10`,
+        params,
+      );
 
       const incidentParams = [orgId];
       const { sql: incidentSiteSql, params: incidentSiteParams } = scopeSiteFilter(scope, elevated, 'site_id');
@@ -109,33 +125,23 @@ export function createSecurityRouter() {
 
       const activeRollCall = await getActiveRollCall(pool, scope, { elevated });
 
-      const [recentActivity] = await pool.query(
-        `SELECT ve.id, ve.event_type, ve.created_at, v.full_name AS visitor_name, vis.status AS visit_status
-         FROM visit_events ve
-         INNER JOIN visits vis ON vis.id = ve.visit_id
-         INNER JOIN visitors v ON v.id = vis.visitor_id
-         WHERE vis.organisation_id = ?${siteSql}
-         ORDER BY ve.created_at DESC
-         LIMIT 10`,
-        params,
-      );
-
-      const weeklyEvents = await fetchWeeklySecurityEvents(pool, orgId, siteSql, siteParams);
-      const { eventsToday, eventTrend } = await fetchSecurityEventsTodayYesterday(pool, orgId, siteSql, siteParams);
-      const eventsByType = await fetchSecurityEventsByType(pool, orgId, siteSql, siteParams);
-
       res.json({
         ok: true,
         data: {
-          currentlyInside: await countVisits(` AND vis.status = 'checked_in'`),
+          visitorsToday: visitsToday,
+          currentlyInside: await countVisits(
+            ` AND vis.status IN (${onSitePlaceholders})`,
+            ON_SITE_VISIT_STATUSES,
+          ),
           pendingApprovals: await countVisits(` AND vis.status IN ('pending_approval', 'pre_registered')`),
           overdueVisits: await countVisits(` AND vis.status = 'overdue'`),
-          exceptionsToday: await countVisits(` AND vis.status IN ('rejected', 'denied') AND vis.created_at >= ?`, [start]),
+          exceptionsToday: await countVisits(
+            ` AND vis.status IN ('rejected', 'denied') AND DATE(vis.created_at) = CURDATE()`,
+          ),
           openIncidents: Number(openIncidents?.count || 0),
           watchlistEntries: Number(watchlistCount?.count || 0),
-          eventsToday,
-          eventTrend,
-          weeklyTrend: buildWeeklyTrend(weeklyEvents),
+          visitTrend,
+          weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
           eventsByType,
           activeRollCall: activeRollCall ? { id: activeRollCall.id, startedAt: activeRollCall.started_at } : null,
           recentActivity,

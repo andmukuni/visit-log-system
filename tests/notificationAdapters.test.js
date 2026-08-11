@@ -1,8 +1,17 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { sendEmail } from '../server/adapters/emailAdapter.js';
 import { sendSms } from '../server/adapters/smsAdapter.js';
 import { getEmailConfig, getSmsConfig } from '../server/adapters/deliveryConfig.js';
+import pool from '../server/db.js';
+
+after(async () => {
+  try {
+    await pool.end();
+  } catch {
+    // ignore if pool was never opened
+  }
+});
 
 describe('email adapter', () => {
   const original = { ...process.env };

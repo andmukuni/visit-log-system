@@ -216,6 +216,7 @@ export default function AdminSettingsPage() {
   const [testNrc, setTestNrc] = useState('');
   const [dojahLookupResult, setDojahLookupResult] = useState(null);
   const [testSmsPhone, setTestSmsPhone] = useState('');
+  const [testSmsMessage, setTestSmsMessage] = useState('');
   const [savingAccount, setSavingAccount] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -264,8 +265,9 @@ export default function AdminSettingsPage() {
         twilio_account_sid: data?.sms?.twilio_account_sid || '',
         twilio_from: data?.sms?.twilio_from || '',
         twilio_auth_token: '',
-        base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/smsservice',
-        access_id: data?.sms?.access_id || '',
+        base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/api',
+        email: data?.sms?.email || '',
+        password: '',
         sender_id: data?.sms?.sender_id || '',
       });
       setTestEmail(data?.user?.email || user?.email || '');
@@ -469,9 +471,10 @@ export default function AdminSettingsPage() {
     try {
       const payload = { ...smsForm };
       if (!payload.twilio_auth_token) delete payload.twilio_auth_token;
+      if (!payload.password) delete payload.password;
       await settingsApi.updateSms(payload);
       toast.success('SMS settings saved.');
-      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '' }));
+      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '', password: '' }));
       await load();
     } catch (err) {
       toast.error(err.message || 'Could not save SMS settings.');
@@ -483,7 +486,10 @@ export default function AdminSettingsPage() {
   const runSmsTest = async () => {
     setTestingSms(true);
     try {
-      const json = await settingsApi.testSms({ phone: testSmsPhone.trim() || undefined });
+      const json = await settingsApi.testSms({
+        phone: testSmsPhone.trim() || undefined,
+        message: testSmsMessage.trim() || undefined,
+      });
       toast.success(json.message || 'SMS test successful.');
     } catch (err) {
       toast.error(err.message || 'SMS test failed.');
@@ -958,7 +964,7 @@ export default function AdminSettingsPage() {
               configured={settings?.sms?.configured}
               enabled={smsForm.enabled}
               source={settings?.sms?.source ? `${settings.sms.source} (${settings?.sms?.provider || 'console'})` : undefined}
-              envVars="SMS_* / TWILIO_*"
+              envVars="SMS_* / ONTECH_* / TWILIO_*"
             />
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -966,7 +972,7 @@ export default function AdminSettingsPage() {
                 <form onSubmit={saveSms} className="space-y-4">
                   <ToggleRow
                     label="Enable SMS"
-                    description="Turn off to log messages without sending."
+                    description="Turn off to stop outbound SMS delivery."
                     checked={Boolean(smsForm.enabled)}
                     onChange={(value) => setSmsForm({ ...smsForm, enabled: value })}
                   />
@@ -1015,18 +1021,32 @@ export default function AdminSettingsPage() {
                         name="base_url"
                         value={smsForm.base_url}
                         onChange={(e) => setSmsForm({ ...smsForm, base_url: e.target.value })}
+                        placeholder="https://bulksms.ontech.co.zm/api"
                       />
                       <FormField
-                        label="Access ID / API key"
-                        name="access_id"
-                        value={smsForm.access_id}
-                        onChange={(e) => setSmsForm({ ...smsForm, access_id: e.target.value })}
+                        label="Ontech account email"
+                        name="email"
+                        type="email"
+                        value={smsForm.email}
+                        onChange={(e) => setSmsForm({ ...smsForm, email: e.target.value })}
+                        placeholder="you@company.com"
+                      />
+                      <FormField
+                        label="Ontech password"
+                        name="password"
+                        type="password"
+                        value={smsForm.password}
+                        onChange={(e) => setSmsForm({ ...smsForm, password: e.target.value })}
+                        placeholder={settings?.sms?.password_set ? 'Leave blank to keep existing password' : ''}
                       />
                       <FormField
                         label="Sender ID"
                         name="sender_id"
                         value={smsForm.sender_id}
                         onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
+                        placeholder="VisitorsLog"
+                        maxLength={11}
+                        helpText="Optional. Max 11 characters; must be approved on your Ontech account."
                       />
                     </>
                   )}
@@ -1039,14 +1059,22 @@ export default function AdminSettingsPage() {
                 </form>
               </SettingsFormBlock>
 
-              <SettingsFormBlock title="Send test SMS" subtitle="Requires a phone number for Twilio or Ontech">
+              <SettingsFormBlock title="Send test SMS" subtitle="Uses the saved provider settings">
                 <div className="space-y-4">
                   <FormField
                     label="Phone number"
                     name="test_sms_phone"
                     value={testSmsPhone}
                     onChange={(e) => setTestSmsPhone(e.target.value)}
-                    placeholder="971234567"
+                    placeholder="260971234567"
+                    helpText="Zambian numbers are normalized to 260…"
+                  />
+                  <FormField
+                    label="Message"
+                    name="test_sms_message"
+                    value={testSmsMessage}
+                    onChange={(e) => setTestSmsMessage(e.target.value)}
+                    placeholder="Visitors Log SMS test — connection successful."
                   />
                   <LoadingButton type="button" loading={testingSms} onClick={runSmsTest} className="w-full sm:w-auto">
                     Send test
