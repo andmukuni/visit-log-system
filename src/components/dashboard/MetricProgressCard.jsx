@@ -153,10 +153,10 @@ export default function MetricProgressCard({
           )}
         </div>
       </div>
-      {showProgress && target != null && (
+      {showProgress && target != null && target > 0 && (
         <p className={`text-xs mb-2 ${theme.meta}`}>Target {target}</p>
       )}
-      {showProgress && (
+      {showProgress && target != null && target > 0 && (
         <>
           <div className={`h-1.5 rounded-full overflow-hidden ${theme.track}`}>
             <div

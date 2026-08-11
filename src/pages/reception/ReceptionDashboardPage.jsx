@@ -23,7 +23,7 @@ import {
   StatusBadge,
   ViewAllAction,
 } from '../../components/ui';
-import { DashboardOverviewLayout, metricTarget } from '../../components/dashboard';
+import { DashboardOverviewLayout } from '../../components/dashboard';
 import { formatDateTime } from '../../utils/helpers';
 import { receptionApi } from '../../utils/visitorApi';
 
@@ -73,6 +73,8 @@ export default function ReceptionDashboardPage() {
     load();
   }, [load]);
 
+  const targets = data?.targets || {};
+
   const metricsSection = data ? {
     title: '',
     variant: 'overview',
@@ -80,28 +82,29 @@ export default function ReceptionDashboardPage() {
       {
         title: 'Expected today',
         value: data.expectedToday,
-        target: metricTarget(data.expectedToday, 5, 20),
+        target: targets.expectedToday ?? data.scheduledToday ?? null,
         accent: 'light',
         icon: CalendarDays,
       },
       {
         title: 'Pending approvals',
         value: data.pendingApprovals,
-        target: metricTarget(data.pendingApprovals),
+        showProgress: false,
         accent: 'charcoal',
         icon: Clock,
       },
       {
         title: 'On-site at desk',
         value: data.checkedInAtDesk,
-        target: metricTarget(data.checkedInAtDesk, 5, 20),
+        target: targets.checkedInAtDesk ?? data.scheduledToday ?? null,
         accent: 'light',
         icon: Users,
       },
       {
         title: 'Waiting for host',
         value: data.waitingForHost,
-        target: metricTarget(data.waitingForHost),
+        target: targets.waitingForHost ?? null,
+        showProgress: (targets.waitingForHost ?? 0) > 0,
         accent: 'charcoal',
         icon: UserCheck,
       },
@@ -184,8 +187,8 @@ export default function ReceptionDashboardPage() {
             lineChart={{
               title: 'Visitor activity',
               data: data.weeklyTrend,
-              trend: data.eventTrend,
-              emptyLabel: 'No visitor events this week yet.',
+              trend: data.visitTrend,
+              emptyLabel: 'No visits recorded this week yet.',
             }}
             donutChart={{
               title: 'Recent month',

@@ -10,8 +10,10 @@ import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
 import {
   buildWeeklyTrend,
   fetchSecurityEventsByType,
-  fetchSecurityEventsTodayYesterday,
-  fetchWeeklySecurityEvents,
+  fetchVisitsTodayYesterday,
+  fetchWeeklyVisits,
+  fetchWeeklyWalkingVisits,
+  fetchWeeklyDriveInVisits,
 } from '../dashboardStats.js';
 import { markHostUnavailableForVisit } from '../hostAvailability.js';
 
@@ -122,7 +124,9 @@ export function createReceptionRouter() {
             hostsOccupied: 0,
             checkInAppointments: [],
             weeklyTrend: [],
-            eventTrend: 0,
+            visitTrend: 0,
+            scheduledToday: 0,
+            targets: {},
             eventsByType: [],
             recentActivity: [],
             scope: null,
@@ -168,8 +172,15 @@ export function createReceptionRouter() {
 
       const checkInRows = await fetchCheckInAppointments(scope, 'walk-in');
 
-      const weeklyEvents = await fetchWeeklySecurityEvents(pool, orgId, chartSiteSql, chartSiteParams);
-      const { eventTrend } = await fetchSecurityEventsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
+      const scheduledToday = await countVisits(
+        `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+         AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()`,
+      );
+
+      const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartSiteSql, chartSiteParams);
+      const { visitTrend } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
       const eventsByType = await fetchSecurityEventsByType(pool, orgId, chartSiteSql, chartSiteParams);
 
       const recentParams = [orgId];
@@ -199,10 +210,16 @@ export function createReceptionRouter() {
           checkedInAtDesk,
           waitingForHost,
           hostsOccupied: Number(hostsOccupiedRow?.count || 0),
+          scheduledToday,
           checkInAppointments: applyVisitListMasking(checkInRows, perms),
-          eventTrend,
-          weeklyTrend: buildWeeklyTrend(weeklyEvents),
+          visitTrend,
+          weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
           eventsByType,
+          targets: {
+            expectedToday: scheduledToday,
+            checkedInAtDesk: scheduledToday,
+            waitingForHost: checkedInAtDesk > 0 ? checkedInAtDesk : null,
+          },
           recentActivity,
           scope: {
             organisationId: orgId,

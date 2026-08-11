@@ -3,19 +3,23 @@ export function calcVisitTrend(today, yesterday) {
   return Math.round(((today - yesterday) / yesterday) * 100);
 }
 
-export async function fetchVisitsTodayYesterday(pool, organisationId = null) {
+export async function fetchVisitsTodayYesterday(pool, organisationId = null, siteSql = '', siteParams = []) {
   const params = [];
   let orgFilter = '';
   if (organisationId) {
-    orgFilter = ' AND organisation_id = ?';
+    orgFilter = ' AND vis.organisation_id = ?';
     params.push(organisationId);
   }
+  params.push(...siteParams);
   const [[todayRow]] = await pool.query(
-    `SELECT COUNT(*) AS count FROM visits WHERE created_at >= CURDATE()${orgFilter}`,
+    `SELECT COUNT(*) AS count FROM visits vis
+     WHERE vis.created_at >= CURDATE()${orgFilter}${siteSql}`,
     params,
   );
   const [[yesterdayRow]] = await pool.query(
-    `SELECT COUNT(*) AS count FROM visits WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE()${orgFilter}`,
+    `SELECT COUNT(*) AS count FROM visits vis
+     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+       AND vis.created_at < CURDATE()${orgFilter}${siteSql}`,
     params,
   );
   const visitsToday = Number(todayRow?.count || 0);
@@ -23,18 +27,19 @@ export async function fetchVisitsTodayYesterday(pool, organisationId = null) {
   return { visitsToday, visitsYesterday, visitTrend: calcVisitTrend(visitsToday, visitsYesterday) };
 }
 
-export async function fetchWeeklyVisits(pool, organisationId = null) {
+export async function fetchWeeklyVisits(pool, organisationId = null, siteSql = '', siteParams = []) {
   const params = [];
   let orgFilter = '';
   if (organisationId) {
-    orgFilter = ' AND organisation_id = ?';
+    orgFilter = ' AND vis.organisation_id = ?';
     params.push(organisationId);
   }
+  params.push(...siteParams);
   const [rows] = await pool.query(
-    `SELECT DATE(created_at) AS visit_date, COUNT(*) AS count
-     FROM visits
-     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}
-     GROUP BY DATE(created_at)`,
+    `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
+     FROM visits vis
+     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
+     GROUP BY DATE(vis.created_at)`,
     params,
   );
   return mapRowsToWeeklySeries(rows);
@@ -52,17 +57,18 @@ function mapRowsToWeeklySeries(rows) {
   return weekly;
 }
 
-export async function fetchWeeklyWalkingVisits(pool, organisationId = null) {
+export async function fetchWeeklyWalkingVisits(pool, organisationId = null, siteSql = '', siteParams = []) {
   const params = [];
   let orgFilter = '';
   if (organisationId) {
     orgFilter = ' AND vis.organisation_id = ?';
     params.push(organisationId);
   }
+  params.push(...siteParams);
   const [rows] = await pool.query(
     `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
      FROM visits vis
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}
+     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
        AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)
      GROUP BY DATE(vis.created_at)`,
     params,
@@ -70,17 +76,18 @@ export async function fetchWeeklyWalkingVisits(pool, organisationId = null) {
   return mapRowsToWeeklySeries(rows);
 }
 
-export async function fetchWeeklyDriveInVisits(pool, organisationId = null) {
+export async function fetchWeeklyDriveInVisits(pool, organisationId = null, siteSql = '', siteParams = []) {
   const params = [];
   let orgFilter = '';
   if (organisationId) {
     orgFilter = ' AND vis.organisation_id = ?';
     params.push(organisationId);
   }
+  params.push(...siteParams);
   const [rows] = await pool.query(
     `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
      FROM visits vis
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}
+     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
        AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)
      GROUP BY DATE(vis.created_at)`,
     params,
