@@ -136,10 +136,11 @@ export async function syncReceptionistZones(pool, receptionistId, zoneIds = []) 
 
 export async function loadReceptionistZones(pool, receptionistId) {
   const [rows] = await pool.query(
-    `SELECT z.id, z.name, z.site_id, z.organisation_id, b.name AS building_name
+    `SELECT z.id, z.name, b.site_id, s.organisation_id, b.name AS building_name
      FROM receptionist_zones rz
      INNER JOIN zones z ON z.id = rz.zone_id
      LEFT JOIN buildings b ON b.id = z.building_id
+     LEFT JOIN sites s ON s.id = b.site_id
      WHERE rz.receptionist_id = ?
      ORDER BY z.name`,
     [receptionistId],
