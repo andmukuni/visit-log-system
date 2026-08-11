@@ -4,7 +4,7 @@ import { generateId } from '../visitorSchema.js';
 import { isSuperAdmin } from '../scopeService.js';
 import { writeAuditLog } from '../auditService.js';
 import { permissionsFromRequest } from '../classificationService.js';
-import { VISIT_SELECT_FIELDS, VISIT_JOINS, formatVisitResponse } from '../visitResponseService.js';
+import { VISIT_SELECT_FIELDS, VISIT_JOINS, formatVisitResponse, applyVisitListMasking } from '../visitResponseService.js';
 import { getEmailProviderStatus } from '../adapters/emailAdapter.js';
 import { getSmsProviderStatus } from '../adapters/smsAdapter.js';
 import { getDeliveryStats } from '../notificationService.js';
@@ -264,7 +264,8 @@ export function createPlatformRouter() {
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
-      res.json({ ok: true, data: rows });
+      const permissions = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

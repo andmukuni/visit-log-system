@@ -43,8 +43,9 @@ describe('maskVisitorFields', () => {
 });
 
 describe('maskPhone and maskEmail', () => {
-  it('masks phone middle digits', () => {
-    assert.match(maskPhone('+260971234567'), /^\+26\*\*\*\*\d{2}$/);
+  it('masks phone to first 3 digits plus **** ********', () => {
+    assert.equal(maskPhone('+260971234567'), '260**** ********');
+    assert.equal(maskPhone('0971234567'), '097**** ********');
   });
 
   it('masks email local part', () => {

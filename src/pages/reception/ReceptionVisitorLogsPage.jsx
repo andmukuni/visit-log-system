@@ -18,15 +18,15 @@ import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'pending_approval', label: 'Pending approval' },
-  { value: 'expected', label: 'Expected' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'reception_check_in', label: 'At reception' },
-  { value: 'waiting', label: 'Waiting' },
-  { value: 'in_meeting', label: 'In meeting' },
-  { value: 'checked_out', label: 'Checked out' },
-  { value: 'completed', label: 'Completed' },
+  { value: '', label: 'All', dot: 'bg-navy-400' },
+  { value: 'pending_approval', label: 'Pending approval', dot: 'bg-yellow-500' },
+  { value: 'expected', label: 'Expected', dot: 'bg-sky-500' },
+  { value: 'approved', label: 'Approved', dot: 'bg-emerald-500' },
+  { value: 'reception_check_in', label: 'At reception', dot: 'bg-teal-500' },
+  { value: 'waiting', label: 'Waiting', dot: 'bg-sky-500' },
+  { value: 'in_meeting', label: 'In meeting', dot: 'bg-violet-500' },
+  { value: 'checked_out', label: 'Checked out', dot: 'bg-slate-400' },
+  { value: 'completed', label: 'Completed', dot: 'bg-gray-500' },
 ];
 
 export default function ReceptionVisitorLogsPage() {
@@ -95,11 +95,18 @@ export default function ReceptionVisitorLogsPage() {
       />
 
       <Card className="mb-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           <FormField label="Search" name="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, phone, pass code…" />
           <div>
-            <p className="mb-2 text-sm font-semibold text-navy-800">Status</p>
-            <FilterPills options={STATUS_OPTIONS} value={status} onChange={setStatus} />
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-navy-500">Status</p>
+            <FilterPills
+              variant="segmented"
+              size="sm"
+              aria-label="Filter by visit status"
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={setStatus}
+            />
           </div>
         </div>
       </Card>

@@ -4,11 +4,18 @@
 
 export const MASK_LEVELS = ['full', 'security', 'operational', 'management', 'compliance', 'minimum'];
 
+/** VIP/VVIP contact mask — first 3 numeric digits, remainder hidden. */
+export const VIP_PHONE_MASK_SUFFIX = '**** ********';
+
 export function maskPhone(phone = '') {
-  const p = String(phone || '').replace(/\s/g, '');
-  if (!p) return '';
-  if (p.length <= 4) return '****';
-  return `${p.slice(0, 3)}****${p.slice(-2)}`;
+  const raw = String(phone || '').trim();
+  if (!raw) return '';
+
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return VIP_PHONE_MASK_SUFFIX;
+
+  const first3 = digits.slice(0, 3);
+  return `${first3}${VIP_PHONE_MASK_SUFFIX}`;
 }
 
 export function maskEmail(email = '') {

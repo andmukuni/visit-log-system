@@ -11,7 +11,7 @@ import { notifyVisitEvent } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertHostContact } from '../accessSchema.js';
-import { formatVisitListResponse, formatVisitResponse, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
+import { formatVisitListResponse, formatVisitResponse, applyVisitListMasking, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
   canAssignVipClassification,
   filterAssignableCategories,
@@ -157,8 +157,10 @@ export function createExecutiveRouter() {
                AND vis.updated_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
             ),
           },
-          nextAppointment: nextAppointment || null,
-          todaySchedule,
+          nextAppointment: nextAppointment
+            ? applyVisitListMasking([nextAppointment], permissions)[0]
+            : null,
+          todaySchedule: applyVisitListMasking(todaySchedule, permissions),
           recentVisitors,
           permissions,
         },
@@ -178,6 +180,7 @@ export function createExecutiveRouter() {
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
       const baseParams = [orgId, hostId, userId];
+      const permissions = permissionsFromRequest(req);
 
       const appointmentSelect = `
         SELECT a.id, a.title, a.scheduled_at, a.status,
@@ -226,7 +229,7 @@ export function createExecutiveRouter() {
           queryParams,
         );
 
-        return res.json({ ok: true, data: rows });
+        return res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
       }
 
       const tab = String(req.query.tab || 'all').toLowerCase();
@@ -346,7 +349,7 @@ export function createExecutiveRouter() {
       return res.json({
         ok: true,
         data: {
-          rows,
+          rows: applyVisitListMasking(rows, permissions),
           total,
           page,
           pageSize,
@@ -559,7 +562,10 @@ export function createExecutiveRouter() {
         [appointmentId],
       );
 
-      return res.status(201).json({ ok: true, data: appointment });
+      return res.status(201).json({
+        ok: true,
+        data: applyVisitListMasking([appointment], permissionsFromRequest(req))[0],
+      });
     } catch (error) {
       console.error('[executive/appointments POST]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to create appointment.' });
@@ -582,11 +588,22 @@ export function createExecutiveRouter() {
       const orgId = ctx.scope.organisation_id;
       const search = String(req.query.q || req.query.search || '').trim().toLowerCase();
       const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 8));
+      const permissions = permissionsFromRequest(req);
 
       let sql = `
-        SELECT id, full_name, email, phone, company, visitor_id, use_count, last_used_at, created_at
-        FROM host_contacts
-        WHERE organisation_id = ? AND host_id = ?
+        SELECT hc.id, hc.full_name, hc.email, hc.phone, hc.company, hc.visitor_id, hc.use_count, hc.last_used_at, hc.created_at,
+               COALESCE((
+                 SELECT LOWER(COALESCE(vc2.classification, 'standard'))
+                 FROM visits vis2
+                 LEFT JOIN visitor_categories vc2 ON vc2.id = vis2.category_id
+                 WHERE vis2.visitor_id = hc.visitor_id AND vis2.host_id = hc.host_id
+                 ORDER BY CASE LOWER(COALESCE(vc2.classification, 'standard'))
+                   WHEN 'vvip' THEN 3 WHEN 'vip' THEN 2 ELSE 1 END DESC,
+                   vis2.created_at DESC
+                 LIMIT 1
+               ), 'standard') AS classification
+        FROM host_contacts hc
+        WHERE hc.organisation_id = ? AND hc.host_id = ?
       `;
       const params = [orgId, hostId];
 
@@ -605,7 +622,7 @@ export function createExecutiveRouter() {
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
-      return res.json({ ok: true, data: rows });
+      return res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
     } catch (error) {
       console.error('[executive/contacts]', error.message);
       return res.status(500).json({ ok: false, message: 'Unable to load contacts.' });

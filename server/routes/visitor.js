@@ -3936,7 +3936,17 @@ export function createOrgAdminRouter() {
         SELECT v.id, v.full_name, v.phone, v.email, v.company, v.created_at,
                o.name AS organisation_name,
                (SELECT COUNT(*) FROM visits vis WHERE vis.visitor_id = v.id) AS visit_count,
-               (SELECT MAX(vis.created_at) FROM visits vis WHERE vis.visitor_id = v.id) AS last_visit_at
+               (SELECT MAX(vis.created_at) FROM visits vis WHERE vis.visitor_id = v.id) AS last_visit_at,
+               COALESCE((
+                 SELECT LOWER(COALESCE(vc.classification, 'standard'))
+                 FROM visits vis2
+                 LEFT JOIN visitor_categories vc ON vc.id = vis2.category_id
+                 WHERE vis2.visitor_id = v.id
+                 ORDER BY CASE LOWER(COALESCE(vc.classification, 'standard'))
+                   WHEN 'vvip' THEN 3 WHEN 'vip' THEN 2 ELSE 1 END DESC,
+                   vis2.created_at DESC
+                 LIMIT 1
+               ), 'standard') AS classification
         FROM visitors v
         INNER JOIN organisations o ON o.id = v.organisation_id
         WHERE 1=1
@@ -3963,7 +3973,8 @@ export function createOrgAdminRouter() {
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
-      res.json({ ok: true, data: rows });
+      const perms = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

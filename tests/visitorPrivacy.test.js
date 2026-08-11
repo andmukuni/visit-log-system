@@ -19,7 +19,7 @@ describe('visitorPrivacy', () => {
 
   it('masks VIP contact for gate/reception roles', () => {
     const masked = maskVisitForViewer(vipRow, ['station.visitors.view']);
-    assert.equal(masked.phone.includes('****'), true);
+    assert.equal(masked.phone, '260**** ********');
     assert.equal(masked.email.includes('***'), true);
     assert.equal(masked.id_number, '***');
     assert.equal(masked.purpose, '[Confidential meeting details]');

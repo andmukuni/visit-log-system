@@ -61,8 +61,4 @@ export function generatePassCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-export function maskPhone(phone = '') {
-  const p = String(phone).replace(/\s/g, '');
-  if (p.length <= 4) return p;
-  return `${p.slice(0, 3)}****${p.slice(-2)}`;
-}
+export { maskPhone } from '../shared/reportMasking.js';

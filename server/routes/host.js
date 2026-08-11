@@ -17,12 +17,15 @@ import {
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
+import { applyVisitListMasking } from '../visitResponseService.js';
 import { normalizeHostAvailability } from '../hostAvailability.js';
 
 function visitSelectSql(extraWhere = '', orderBy = 'vis.created_at DESC') {
   return `
     SELECT vis.*, v.full_name, v.phone, v.email, v.company,
-           vc.name AS category_name, h.name AS host_name
+           vc.name AS category_name,
+           COALESCE(vc.classification, 'standard') AS classification,
+           h.name AS host_name
     FROM visits vis
     INNER JOIN visitors v ON v.id = vis.visitor_id
     LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
@@ -147,7 +150,8 @@ export function createHostRouter() {
       }
 
       const [rows] = await pool.query(visitSelectSql(extra), params);
-      res.json({ ok: true, data: rows });
+      const permissions = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -158,11 +162,12 @@ export function createHostRouter() {
       const ctx = await getHostContext(req);
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
+      const permissions = permissionsFromRequest(req);
       const [rows] = await pool.query(
         visitSelectSql(`AND vis.status IN ('pending_approval', 'pre_registered')`, 'vis.created_at ASC'),
         [ctx.scope.organisation_id, ctx.host.id, req.adminClaims.sub],
       );
-      res.json({ ok: true, data: rows });
+      res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -173,11 +178,12 @@ export function createHostRouter() {
       const ctx = await getHostContext(req);
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
+      const permissions = permissionsFromRequest(req);
       const [rows] = await pool.query(
         visitSelectSql(`AND vis.status = 'checked_in'`, 'vis.checked_in_at DESC'),
         [ctx.scope.organisation_id, ctx.host.id, req.adminClaims.sub],
       );
-      res.json({ ok: true, data: rows });
+      res.json({ ok: true, data: applyVisitListMasking(rows, permissions) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -196,14 +202,17 @@ export function createHostRouter() {
       });
       if (!loaded.ok) return res.status(loaded.status).json({ ok: false, message: loaded.message });
 
-      const [[visit]] = await pool.query(
-        `SELECT vis.*, v.full_name, v.phone, v.email, v.company, vc.name AS category_name
+      const permissions = permissionsFromRequest(req);
+      const [[visitRow]] = await pool.query(
+        `SELECT vis.*, v.full_name, v.phone, v.email, v.company, vc.name AS category_name,
+                COALESCE(vc.classification, 'standard') AS classification
          FROM visits vis
          INNER JOIN visitors v ON v.id = vis.visitor_id
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
          WHERE vis.id = ?`,
         [req.params.id],
       );
+      const visit = applyVisitListMasking([visitRow], permissions)[0];
 
       const [events] = await pool.query(
         `SELECT ve.*, u.name AS actor_name FROM visit_events ve
