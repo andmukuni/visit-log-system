@@ -6,6 +6,9 @@ const VISIT_SELECT_FIELDS = `
   v.full_name, v.phone, v.email, v.company, v.id_number_masked,
   vcd.id_type, vcd.id_number, vcd.confidential_notes,
   h.name AS host_name,
+  h.title AS host_title,
+  ofc.office_number AS host_office_number,
+  ofc.name AS host_office_name,
   vc.name AS category_name,
   vc.slug AS category_slug,
   COALESCE(vc.classification, 'standard') AS classification
@@ -15,6 +18,7 @@ const VISIT_JOINS = `
   INNER JOIN visitors v ON v.id = vis.visitor_id
   LEFT JOIN visitor_contact_details vcd ON vcd.visitor_id = v.id
   LEFT JOIN hosts h ON h.id = vis.host_id
+  LEFT JOIN offices ofc ON ofc.id = h.office_id
   LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
 `;
 

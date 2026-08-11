@@ -14,6 +14,7 @@ import {
   RefreshAction,
   AddAction,
 } from '../../components/ui';
+import { formatVisitHostLabel } from '../../components/visitors/visitorDetailUtils';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
@@ -55,7 +56,11 @@ export default function VisitorLogsPage() {
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
     { key: 'phone', label: 'Phone' },
-    { key: 'host_name', label: 'Host' },
+    {
+      key: 'host_name',
+      label: 'Host',
+      render: (_, row) => formatVisitHostLabel(row, { empty: '—' }),
+    },
     { key: 'category_name', label: 'Category' },
     {
       key: 'status',

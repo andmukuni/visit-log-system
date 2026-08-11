@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { StatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
-import { visitorInitials } from './visitorDetailUtils';
+import { formatVisitHostLabel, visitorInitials } from './visitorDetailUtils';
 
 export default function VisitorDetailHero({ visit, footer = null, compact = false }) {
   if (!visit) return null;
@@ -58,7 +58,7 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
             </div>
             <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-navy-800">
               <User size={14} className="shrink-0 text-cyan-700" aria-hidden="true" />
-              Host: {visit.host_name || 'Not assigned'}
+              Host: {formatVisitHostLabel(visit)}
             </p>
             {visit.site_name ? (
               <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-navy-500">
