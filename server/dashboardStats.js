@@ -1,6 +1,38 @@
+import { rollingWeekDates } from '../shared/rollingWeekChart.js';
+
+export { rollingWeekDates } from '../shared/rollingWeekChart.js';
+
 export function calcVisitTrend(today, yesterday) {
   if (yesterday === 0) return today > 0 ? 100 : 0;
   return Math.round(((today - yesterday) / yesterday) * 100);
+}
+
+function formatLocalIso(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseVisitDate(raw) {
+  if (raw instanceof Date) {
+    return formatLocalIso(raw);
+  }
+  return String(raw).slice(0, 10);
+}
+
+function mapRowsToRollingWeekSeries(rows, endDate = new Date()) {
+  const dates = rollingWeekDates(endDate);
+  const countsByDate = Object.fromEntries(dates.map((entry) => [entry.iso, 0]));
+
+  for (const row of rows) {
+    const dateStr = parseVisitDate(row.visit_date);
+    if (Object.prototype.hasOwnProperty.call(countsByDate, dateStr)) {
+      countsByDate[dateStr] = Number(row.count || 0);
+    }
+  }
+
+  return dates.map((entry) => countsByDate[entry.iso]);
 }
 
 export async function fetchVisitsTodayYesterday(pool, organisationId = null, siteSql = '', siteParams = []) {
@@ -42,19 +74,7 @@ export async function fetchWeeklyVisits(pool, organisationId = null, siteSql = '
      GROUP BY DATE(vis.created_at)`,
     params,
   );
-  return mapRowsToWeeklySeries(rows);
-}
-
-function mapRowsToWeeklySeries(rows) {
-  const weekly = [0, 0, 0, 0, 0, 0, 0];
-  for (const row of rows) {
-    const dateStr = row.visit_date instanceof Date
-      ? row.visit_date.toISOString().slice(0, 10)
-      : String(row.visit_date).slice(0, 10);
-    const d = new Date(`${dateStr}T12:00:00`);
-    weekly[(d.getDay() + 6) % 7] = Number(row.count || 0);
-  }
-  return weekly;
+  return mapRowsToRollingWeekSeries(rows);
 }
 
 export async function fetchWeeklyWalkingVisits(pool, organisationId = null, siteSql = '', siteParams = []) {
@@ -73,7 +93,7 @@ export async function fetchWeeklyWalkingVisits(pool, organisationId = null, site
      GROUP BY DATE(vis.created_at)`,
     params,
   );
-  return mapRowsToWeeklySeries(rows);
+  return mapRowsToRollingWeekSeries(rows);
 }
 
 export async function fetchWeeklyDriveInVisits(pool, organisationId = null, siteSql = '', siteParams = []) {
@@ -92,12 +112,15 @@ export async function fetchWeeklyDriveInVisits(pool, organisationId = null, site
      GROUP BY DATE(vis.created_at)`,
     params,
   );
-  return mapRowsToWeeklySeries(rows);
+  return mapRowsToRollingWeekSeries(rows);
 }
 
-export function buildWeeklyTrend(weeklyVisits, weeklyWalking = [], weeklyDriveIn = []) {
-  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, index) => ({
-    period: label,
+export function buildWeeklyTrend(weeklyVisits, weeklyWalking = [], weeklyDriveIn = [], endDate = new Date()) {
+  const dates = rollingWeekDates(endDate);
+  return dates.map((entry, index) => ({
+    period: entry.label,
+    label: entry.label,
+    date: entry.iso,
     visits: weeklyVisits[index] || 0,
     walking: weeklyWalking[index] || 0,
     driveIn: weeklyDriveIn[index] || 0,
@@ -115,7 +138,7 @@ export async function fetchWeeklySecurityEvents(pool, organisationId, siteSql = 
      GROUP BY DATE(ve.created_at)`,
     params,
   );
-  return mapRowsToWeeklySeries(rows);
+  return mapRowsToRollingWeekSeries(rows);
 }
 
 export async function fetchSecurityEventsByType(pool, organisationId, siteSql = '', siteParams = []) {

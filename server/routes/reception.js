@@ -5,8 +5,13 @@ import { writeVisitEvent } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { permissionsFromRequest } from '../classificationService.js';
 import { applyVisitListMasking, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
-import { getDojahIntegrationStatus } from '../services/dojahService.js';
+import {
+  lookupReceptionDeskNrc,
+  registerWalkInAtReceptionDesk,
+  registerVehicleAtReceptionDesk,
+} from '../receptionDeskEntry.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
+import { isDojahUnavailableError } from '../services/dojahService.js';
 import {
   buildWeeklyTrend,
   fetchSecurityEventsByType,
@@ -180,7 +185,7 @@ export function createReceptionRouter() {
       const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartSiteSql, chartSiteParams);
-      const { visitTrend } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
+      const { visitTrend, visitsToday } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
       const eventsByType = await fetchSecurityEventsByType(pool, orgId, chartSiteSql, chartSiteParams);
 
       const recentParams = [orgId];
@@ -213,6 +218,7 @@ export function createReceptionRouter() {
           scheduledToday,
           checkInAppointments: applyVisitListMasking(checkInRows, perms),
           visitTrend,
+          visitsToday,
           weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
           eventsByType,
           targets: {
@@ -231,6 +237,65 @@ export function createReceptionRouter() {
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/check-in/walk-in', async (req, res) => {
+    try {
+      const result = await registerWalkInAtReceptionDesk(pool, req, req.body || {});
+      if (!result.ok) {
+        return res.status(result.status || 400).json({
+          ok: false,
+          message: result.message,
+          unavailable: result.unavailable,
+          watchlistMatch: result.watchlistMatch,
+        });
+      }
+      res.status(result.status || 201).json({ ok: true, data: result.data });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/check-in/vehicle', async (req, res) => {
+    try {
+      const result = await registerVehicleAtReceptionDesk(pool, req, req.body || {});
+      if (!result.ok) {
+        return res.status(result.status || 400).json({
+          ok: false,
+          message: result.message,
+          watchlistMatch: result.watchlistMatch,
+        });
+      }
+      res.status(result.status || 201).json({ ok: true, data: result.data });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/check-in/nrc-lookup', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.status(400).json({ ok: false, message: 'No organisation scope assigned.' });
+      }
+      const nrc = String(req.body?.nrc || '').trim();
+      if (!nrc) {
+        return res.status(400).json({ ok: false, message: 'NRC is required.' });
+      }
+      const result = await lookupReceptionDeskNrc(pool, { nrc, scope });
+      if (!result.ok) {
+        return res.status(result.status || 400).json({ ok: false, message: result.message });
+      }
+      res.json({ ok: true, data: result.data });
+    } catch (error) {
+      const unavailable = isDojahUnavailableError(error);
+      res.status(unavailable ? 503 : (error.status || 400)).json({
+        ok: false,
+        message: error.message,
+        unavailable,
+      });
     }
   });
 

@@ -188,7 +188,7 @@ export default function ReceptionDashboardPage() {
               title: 'Visitor activity',
               data: data.weeklyTrend,
               trend: data.visitTrend,
-              emptyLabel: 'No visits recorded this week yet.',
+              emptyLabel: 'No visits recorded in the last 7 days yet.',
             }}
             donutChart={{
               title: 'Recent month',

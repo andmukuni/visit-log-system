@@ -176,6 +176,8 @@ export function resolveRouteAdminPermission(req) {
 
   if (path.includes('/reception/dashboard')) return 'reception.dashboard';
   if (path.includes('/reception/reference-data')) return 'reception.dashboard';
+  if (path.includes('/reception/check-in/walk-in') || path.includes('/reception/check-in/vehicle')) return 'reception.visitors.checkin';
+  if (path.includes('/reception/check-in/nrc-lookup')) return 'reception.visitors.register';
   if (path.includes('/reception/check-in-appointments')) return 'reception.visitors.checkin';
   if (path.includes('/reception/calendar')) return 'reception.calendar';
   if (path.includes('/reception/host-availability')) return 'reception.hosts.availability';

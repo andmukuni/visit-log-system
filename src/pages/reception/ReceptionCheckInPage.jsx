@@ -10,12 +10,14 @@ import {
   UnderlineTabs,
 } from '../../components/ui';
 import GateCheckInPanel from '../station/GateCheckInPanel';
+import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
-import { receptionApi } from '../../utils/visitorApi';
+import { receptionApi, visitorApi } from '../../utils/visitorApi';
 
 const TABS = {
   ready: 'ready',
+  register: 'register',
   atReception: 'at-reception',
 };
 
@@ -113,6 +115,11 @@ export default function ReceptionCheckInPage() {
       count: pendingCount,
     },
     {
+      value: TABS.register,
+      label: 'Register & check in',
+      icon: UserPlus,
+    },
+    {
       value: TABS.atReception,
       label: 'Queue to host',
       icon: Users,
@@ -120,11 +127,32 @@ export default function ReceptionCheckInPage() {
     },
   ], [pendingCount, readyToQueue.length]);
 
+  const receptionEntryApi = useMemo(() => ({
+    getReferenceData: () => receptionApi.getReferenceData(),
+    nrcLookup: (nrc) => receptionApi.checkInNrcLookup(nrc),
+    searchVehicleByPlate: (plate) => visitorApi.searchVehicleByPlate(plate),
+    submitWalkIn: (body) => receptionApi.checkInWalkIn(body),
+    submitVehicle: (body) => receptionApi.checkInVehicle(body),
+  }), []);
+
+  const handleDeskEntrySuccess = ({ kind, visit, result }) => {
+    const visitId = visit?.id || result?.visitId;
+    if (visitId) {
+      setLastCheckedInId(visitId);
+      void loadReadyToQueue();
+      setTab(TABS.atReception);
+      return;
+    }
+    if (kind === 'vehicle') {
+      void loadReadyToQueue();
+    }
+  };
+
   return (
     <div className="w-full">
       <PageHeader
         title="Check-in Desk"
-        subtitle="Check in gate arrivals and today’s appointments, then queue them to the host"
+        subtitle="Check in gate arrivals, register walk-ins at the desk, then queue them to the host"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Check-in' }]}
       />
 
@@ -187,6 +215,13 @@ export default function ReceptionCheckInPage() {
                 </FormSection>
               ) : null}
             </>
+          ) : tab === TABS.register ? (
+            <GateEntryCheckInForm
+              layout="embedded"
+              entryContext="reception"
+              api={receptionEntryApi}
+              onSuccess={handleDeskEntrySuccess}
+            />
           ) : (
             <FormSection
               title="Ready to queue"

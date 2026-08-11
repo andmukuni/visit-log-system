@@ -465,6 +465,43 @@ export const executiveApi = {
 export const receptionApi = {
   getDashboard: () => apiFetch('/admin/reception/dashboard'),
   getCheckInAppointments: (type = 'walk-in') => apiFetch(`/admin/reception/check-in-appointments?type=${encodeURIComponent(type)}`),
+  checkInWalkIn: async (body) => {
+    const res = await fetch(`${API_BASE}/admin/reception/check-in/walk-in`, {
+      method: 'POST',
+      headers: {
+        ...getAdminAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      const err = new Error(json?.message || 'Request failed');
+      err.unavailable = Boolean(json?.unavailable);
+      throw err;
+    }
+    return json.data;
+  },
+  checkInVehicle: (body) => apiFetch('/admin/reception/check-in/vehicle', { method: 'POST', body: JSON.stringify(body) }),
+  checkInNrcLookup: async (nrc) => {
+    const res = await fetch(`${API_BASE}/admin/reception/check-in/nrc-lookup`, {
+      method: 'POST',
+      headers: {
+        ...getAdminAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ nrc }),
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      const err = new Error(json?.message || 'Request failed');
+      err.unavailable = Boolean(json?.unavailable);
+      throw err;
+    }
+    return json.data;
+  },
   getCalendar: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/reception/calendar${qs ? `?${qs}` : ''}`);

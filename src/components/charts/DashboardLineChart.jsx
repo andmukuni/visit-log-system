@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
+import { buildRollingWeekTrend } from '../../../shared/rollingWeekChart.js';
 import AnimatedNumber from '../ui/AnimatedNumber';
 
 const PERIOD_OPTIONS = [
@@ -53,9 +54,8 @@ function normalizeSeries(data) {
   if (!Array.isArray(data) || !data.length) return [];
 
   if (typeof data[0] === 'number') {
-    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].slice(0, data.length).map((label, index) => ({
-      label,
-      visits: Number(data[index] || 0),
+    return buildRollingWeekTrend(data).map((row) => ({
+      ...row,
       walking: 0,
       driveIn: 0,
     }));
@@ -63,6 +63,7 @@ function normalizeSeries(data) {
 
   return data.map((row, index) => ({
     label: row.period || row.label || row.day || `Day ${index + 1}`,
+    date: row.date || null,
     visits: Number(row.visits ?? row.value ?? row.count ?? 0),
     walking: Number(row.walking ?? 0),
     driveIn: Number(row.driveIn ?? row.drive_in ?? 0),
@@ -308,6 +309,7 @@ export default function DashboardLineChart({
 
   const activeIndex = hoverIndex ?? null;
   const activeLabel = activeIndex != null ? series[activeIndex]?.label : null;
+  const activeDate = activeIndex != null ? series[activeIndex]?.date : null;
   const activePrimaryPoint = activeIndex != null ? chart.primaryPoints[activeIndex] : null;
   const trendPositive = computedTrend >= 0;
 
@@ -490,7 +492,16 @@ export default function DashboardLineChart({
                 transform: 'translate(-50%, -100%)',
               }}
             >
-              <p className="text-[11px] text-gray-300">{activeLabel}</p>
+              <p className="text-[11px] text-gray-300">
+                {activeDate
+                  ? new Date(`${activeDate}T12:00:00`).toLocaleDateString('en-GB', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                  : activeLabel}
+              </p>
               <div className="mt-1 space-y-1">
                 {chart.lineSeries.map((line) => {
                   const value = line.points[activeIndex]?.value ?? 0;
