@@ -265,9 +265,8 @@ export default function AdminSettingsPage() {
         twilio_account_sid: data?.sms?.twilio_account_sid || '',
         twilio_from: data?.sms?.twilio_from || '',
         twilio_auth_token: '',
-        base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/api',
-        email: data?.sms?.email || '',
-        password: '',
+        base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/smsservice',
+        access_id: '',
         sender_id: data?.sms?.sender_id || '',
       });
       setTestEmail(data?.user?.email || user?.email || '');
@@ -471,10 +470,10 @@ export default function AdminSettingsPage() {
     try {
       const payload = { ...smsForm };
       if (!payload.twilio_auth_token) delete payload.twilio_auth_token;
-      if (!payload.password) delete payload.password;
+      if (!payload.access_id) delete payload.access_id;
       await settingsApi.updateSms(payload);
       toast.success('SMS settings saved.');
-      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '', password: '' }));
+      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '', access_id: '' }));
       await load();
     } catch (err) {
       toast.error(err.message || 'Could not save SMS settings.');
@@ -1021,23 +1020,15 @@ export default function AdminSettingsPage() {
                         name="base_url"
                         value={smsForm.base_url}
                         onChange={(e) => setSmsForm({ ...smsForm, base_url: e.target.value })}
-                        placeholder="https://bulksms.ontech.co.zm/api"
+                        placeholder="https://bulksms.ontech.co.zm/smsservice"
                       />
                       <FormField
-                        label="Ontech account email"
-                        name="email"
-                        type="email"
-                        value={smsForm.email}
-                        onChange={(e) => setSmsForm({ ...smsForm, email: e.target.value })}
-                        placeholder="you@company.com"
-                      />
-                      <FormField
-                        label="Ontech password"
-                        name="password"
+                        label="API key"
+                        name="access_id"
                         type="password"
-                        value={smsForm.password}
-                        onChange={(e) => setSmsForm({ ...smsForm, password: e.target.value })}
-                        placeholder={settings?.sms?.password_set ? 'Leave blank to keep existing password' : ''}
+                        value={smsForm.access_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, access_id: e.target.value })}
+                        placeholder={settings?.sms?.access_id_set ? 'Leave blank to keep existing key' : ''}
                       />
                       <FormField
                         label="Sender ID"
@@ -1046,7 +1037,7 @@ export default function AdminSettingsPage() {
                         onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
                         placeholder="VisitorsLog"
                         maxLength={11}
-                        helpText="Optional. Max 11 characters; must be approved on your Ontech account."
+                        helpText="Max 11 characters; must be approved on your Ontech account."
                       />
                     </>
                   )}

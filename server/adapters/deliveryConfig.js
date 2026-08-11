@@ -40,15 +40,14 @@ export function getSmsConfig() {
     from: process.env.TWILIO_FROM_NUMBER || '',
   };
   const ontech = {
-    email: process.env.ONTECH_EMAIL || '',
-    password: process.env.ONTECH_PASSWORD || '',
+    accessId: process.env.ONTECH_ACCESS_ID || process.env.ONTECH_API_KEY || '',
     senderId: process.env.ONTECH_SENDER_ID || '',
-    baseUrl: process.env.ONTECH_BASE_URL || 'https://bulksms.ontech.co.zm/api',
+    baseUrl: process.env.ONTECH_BASE_URL || 'https://bulksms.ontech.co.zm/smsservice',
   };
 
   const configured = provider === 'console'
     || (provider === 'twilio' && Boolean(twilio.accountSid && twilio.authToken && twilio.from))
-    || (provider === 'ontech' && Boolean(ontech.email && ontech.password));
+    || (provider === 'ontech' && Boolean(ontech.accessId && ontech.senderId));
 
   return { provider, twilio, ontech, configured };
 }

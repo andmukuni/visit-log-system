@@ -77,9 +77,8 @@ export const DEFAULT_SMS = {
   twilio_account_sid: '',
   twilio_auth_token: '',
   twilio_from: '',
-  base_url: 'https://bulksms.ontech.co.zm/api',
-  email: '',
-  password: '',
+  base_url: 'https://bulksms.ontech.co.zm/smsservice',
+  access_id: '',
   sender_id: '',
 };
 
@@ -230,8 +229,8 @@ function maskDojahForClient(stored, effective) {
   };
 }
 
-export function resolveOntechPassword(config = {}) {
-  return String(config.password || process.env.ONTECH_PASSWORD || '').trim();
+export function resolveOntechApiKey(config = {}) {
+  return String(config.access_id || process.env.ONTECH_ACCESS_ID || process.env.ONTECH_API_KEY || '').trim();
 }
 
 function envSmsConfig() {
@@ -252,15 +251,13 @@ function envSmsConfig() {
   }
 
   if (provider === 'ontech') {
-    const email = String(process.env.ONTECH_EMAIL || '').trim();
-    const password = String(process.env.ONTECH_PASSWORD || '').trim();
+    const accessId = resolveOntechApiKey();
     const senderId = String(process.env.ONTECH_SENDER_ID || '').trim();
-    if (!email || !password) return null;
+    if (!accessId || !senderId) return null;
     return {
       enabled: true,
       provider: 'ontech',
-      email,
-      password,
+      access_id: accessId,
       sender_id: senderId,
       base_url: String(process.env.ONTECH_BASE_URL || DEFAULT_SMS.base_url).trim(),
       source: 'env',
@@ -283,7 +280,7 @@ export function isSmsConfigured(config) {
     return Boolean(config.twilio_account_sid && config.twilio_auth_token && config.twilio_from);
   }
   if (provider === 'ontech') {
-    return Boolean(config.email && resolveOntechPassword(config));
+    return Boolean(resolveOntechApiKey(config) && config.sender_id);
   }
   return false;
 }
@@ -293,7 +290,7 @@ export async function getEffectiveSmsConfig() {
   if (stored.enabled) {
     return {
       ...stored,
-      password: resolveOntechPassword(stored),
+      access_id: resolveOntechApiKey(stored),
       source: 'database',
     };
   }
@@ -310,8 +307,7 @@ function maskSmsForClient(stored, effective) {
     twilio_from: stored.twilio_from || '',
     twilio_auth_token_set: Boolean(stored.twilio_auth_token),
     base_url: stored.base_url || DEFAULT_SMS.base_url,
-    email: stored.email || '',
-    password_set: Boolean(stored.password),
+    access_id_set: Boolean(stored.access_id),
     sender_id: stored.sender_id || '',
     configured: isSmsConfigured(effective),
     source: effective.source,
@@ -493,9 +489,8 @@ export async function updateSmsSettings(claims, payload = {}) {
   if (payload.twilio_auth_token !== undefined && String(payload.twilio_auth_token).trim() !== '') {
     next.twilio_auth_token = String(payload.twilio_auth_token);
   }
-  if (payload.email !== undefined) next.email = String(payload.email || '').trim();
-  if (payload.password !== undefined && String(payload.password).trim() !== '') {
-    next.password = String(payload.password);
+  if (payload.access_id !== undefined && String(payload.access_id).trim() !== '') {
+    next.access_id = String(payload.access_id).trim();
   }
   if (payload.sender_id !== undefined) {
     const senderId = String(payload.sender_id || '').trim();
@@ -506,8 +501,8 @@ export async function updateSmsSettings(claims, payload = {}) {
   }
   if (payload.base_url !== undefined) {
     let baseUrl = String(payload.base_url || DEFAULT_SMS.base_url).trim().replace(/\/$/, '');
-    if (/\/smsservice$/i.test(baseUrl)) {
-      baseUrl = baseUrl.replace(/\/smsservice$/i, '/api');
+    if (/\/api$/i.test(baseUrl)) {
+      baseUrl = baseUrl.replace(/\/api$/i, '/smsservice');
     }
     if (baseUrl && !/^https?:\/\/.+/i.test(baseUrl)) {
       throw new Error('SMS API base URL must start with http:// or https://.');
@@ -515,16 +510,17 @@ export async function updateSmsSettings(claims, payload = {}) {
     next.base_url = baseUrl || DEFAULT_SMS.base_url;
   }
 
-  // Drop legacy access_id field if present from older saves.
-  if ('access_id' in next) delete next.access_id;
+  // Drop unused portal-login fields from earlier settings shape.
+  if ('email' in next) delete next.email;
+  if ('password' in next) delete next.password;
 
   if (next.enabled) {
     const provider = String(next.provider || 'console').toLowerCase();
     if (provider === 'twilio' && (!next.twilio_account_sid || !next.twilio_from || !next.twilio_auth_token)) {
       throw new Error('Twilio Account SID, Auth Token, and From number are required when SMS is enabled.');
     }
-    if (provider === 'ontech' && (!next.email || !resolveOntechPassword(next))) {
-      throw new Error('Ontech account email and password are required when SMS is enabled.');
+    if (provider === 'ontech' && (!resolveOntechApiKey(next) || !next.sender_id)) {
+      throw new Error('Ontech API key and Sender ID are required when SMS is enabled.');
     }
   }
 

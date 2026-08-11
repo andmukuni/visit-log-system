@@ -10,14 +10,14 @@ describe('ontechSmsClient helpers', () => {
     assert.equal(normalizeZmPhone('260 971 234 567'), '260971234567');
   });
 
-  it('migrates legacy smsservice base URL to /api', () => {
+  it('normalizes base URL to /smsservice', () => {
     assert.equal(
       normalizeBaseUrl('https://bulksms.ontech.co.zm/smsservice'),
-      'https://bulksms.ontech.co.zm/api',
+      'https://bulksms.ontech.co.zm/smsservice',
     );
     assert.equal(
       normalizeBaseUrl('https://bulksms.ontech.co.zm/api/'),
-      'https://bulksms.ontech.co.zm/api',
+      'https://bulksms.ontech.co.zm/smsservice',
     );
   });
 });
