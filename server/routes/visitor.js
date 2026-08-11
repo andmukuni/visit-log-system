@@ -33,7 +33,7 @@ import {
   normalizeHostAvailability,
   refreshHostAvailabilityAfterVisit,
 } from '../hostAvailability.js';
-import { loadReceptionistRow, syncReceptionistPortalUser } from '../receptionistService.js';
+import { loadReceptionistRow, syncReceptionistPortalUser, parseReceptionistZoneIds, validateReceptionistZones, syncReceptionistZones, attachReceptionistZones, loadReceptionistZones } from '../receptionistService.js';
 import { loadSecurityGuardRow, syncSecurityGuardPortalUser } from '../securityGuardService.js';
 import { sendHostPasswordResetEmail, syncHostPortalUser } from '../hostPortalService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
@@ -3244,14 +3244,16 @@ export function createOrgAdminRouter() {
         ? await pool.query(`${selectSql} WHERE r.organisation_id = ? ORDER BY r.name`, [orgId])
         : await pool.query(`${selectSql} ORDER BY o.name, r.name`);
 
+      const enrichedRows = await attachReceptionistZones(pool, rows);
+
       const stats = {
-        total: rows.length,
-        active: rows.filter((row) => row.status === 'active').length,
-        with_zone: rows.filter((row) => row.zone_id).length,
-        with_login: rows.filter((row) => row.user_id).length,
+        total: enrichedRows.length,
+        active: enrichedRows.filter((row) => row.status === 'active').length,
+        with_zone: enrichedRows.filter((row) => (row.zone_ids || []).length > 0 || row.zone_id).length,
+        with_login: enrichedRows.filter((row) => row.user_id).length,
       };
 
-      res.json({ ok: true, data: rows, stats });
+      res.json({ ok: true, data: enrichedRows, stats });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -3264,7 +3266,7 @@ export function createOrgAdminRouter() {
       const bodyOrgId = String(req.body?.organisationId || req.body?.organisation_id || '').trim() || null;
       const orgId = bodyOrgId || scope?.organisation_id || null;
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
-      const zoneId = String(req.body?.zoneId || req.body?.zone_id || '').trim() || null;
+      const zoneIds = parseReceptionistZoneIds(req.body);
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim() || null;
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase() || null;
@@ -3278,7 +3280,6 @@ export function createOrgAdminRouter() {
         return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
       }
       if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
-      if (!zoneId) return res.status(400).json({ ok: false, message: 'Zone is required.' });
       if (!email) return res.status(400).json({ ok: false, message: 'Email is required for receptionist login.' });
 
       const placement = await assertStationPlacement(pool, { organisationId: orgId, siteId });
@@ -3286,13 +3287,11 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
-      const zone = await loadZoneInOrg(pool, zoneId, orgId);
-      if (!zone) {
-        return res.status(400).json({ ok: false, message: 'Zone not found in this organisation.' });
+      const zoneValidation = await validateReceptionistZones(pool, zoneIds, orgId, siteId);
+      if (!zoneValidation.ok) {
+        return res.status(zoneValidation.status).json({ ok: false, message: zoneValidation.message });
       }
-      if (zone.site_id && zone.site_id !== siteId) {
-        return res.status(400).json({ ok: false, message: 'Zone must belong to the selected site.' });
-      }
+      const primaryZoneId = zoneValidation.zoneIds[0];
 
       const [[emailTaken]] = await pool.query(
         'SELECT id FROM receptionists WHERE LOWER(email) = ? LIMIT 1',
@@ -3319,8 +3318,9 @@ export function createOrgAdminRouter() {
         `INSERT INTO receptionists
            (id, organisation_id, site_id, zone_id, station_id, department_id, user_id, name, email, phone, status)
          VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, siteId, zoneId, departmentId, linkedUserId, name, email, phone, status],
+        [id, orgId, siteId, primaryZoneId, departmentId, linkedUserId, name, email, phone, status],
       );
+      await syncReceptionistZones(pool, id, zoneValidation.zoneIds);
 
       const row = await loadReceptionistRow(pool, id);
       res.status(201).json({ ok: true, data: row });
@@ -3345,9 +3345,16 @@ export function createOrgAdminRouter() {
       const siteId = req.body?.siteId != null || req.body?.site_id != null
         ? String(req.body.siteId || req.body.site_id || '').trim()
         : existing.site_id;
-      const zoneId = req.body?.zoneId != null || req.body?.zone_id != null
-        ? String(req.body.zoneId || req.body.zone_id || '').trim() || null
-        : existing.zone_id || null;
+      const hasZonePayload = req.body.zoneIds != null
+        || req.body.zone_ids != null
+        || req.body.zoneId != null
+        || req.body.zone_id != null;
+      let zoneIds = parseReceptionistZoneIds(req.body);
+      if (!hasZonePayload) {
+        const existingZones = await loadReceptionistZones(pool, receptionistId);
+        zoneIds = existingZones.map((zone) => zone.id);
+        if (!zoneIds.length && existing.zone_id) zoneIds = [existing.zone_id];
+      }
       const departmentId = req.body?.departmentId != null || req.body?.department_id != null
         ? String(req.body.departmentId || req.body.department_id || '').trim() || null
         : existing.department_id;
@@ -3363,7 +3370,6 @@ export function createOrgAdminRouter() {
 
       if (!name) return res.status(400).json({ ok: false, message: 'Receptionist name is required.' });
       if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
-      if (!zoneId) return res.status(400).json({ ok: false, message: 'Zone is required.' });
       if (!email) return res.status(400).json({ ok: false, message: 'Email is required for receptionist login.' });
 
       const placement = await assertStationPlacement(pool, {
@@ -3374,13 +3380,16 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
-      const zone = await loadZoneInOrg(pool, zoneId, existing.organisation_id);
-      if (!zone) {
-        return res.status(400).json({ ok: false, message: 'Zone not found in this organisation.' });
+      const zoneValidation = await validateReceptionistZones(
+        pool,
+        zoneIds,
+        existing.organisation_id,
+        siteId,
+      );
+      if (!zoneValidation.ok) {
+        return res.status(zoneValidation.status).json({ ok: false, message: zoneValidation.message });
       }
-      if (zone.site_id && zone.site_id !== siteId) {
-        return res.status(400).json({ ok: false, message: 'Zone must belong to the selected site.' });
-      }
+      const primaryZoneId = zoneValidation.zoneIds[0];
 
       const linkedUserId = await syncReceptionistPortalUser(pool, {
         userId: existing.user_id,
@@ -3399,8 +3408,9 @@ export function createOrgAdminRouter() {
         `UPDATE receptionists
          SET site_id = ?, zone_id = ?, station_id = NULL, department_id = ?, user_id = ?, name = ?, email = ?, phone = ?, status = ?
          WHERE id = ?`,
-        [siteId, zoneId, departmentId, linkedUserId, name, email, phone, status, receptionistId],
+        [siteId, primaryZoneId, departmentId, linkedUserId, name, email, phone, status, receptionistId],
       );
+      await syncReceptionistZones(pool, receptionistId, zoneValidation.zoneIds);
 
       const row = await loadReceptionistRow(pool, receptionistId);
       res.json({ ok: true, data: row });
@@ -3436,6 +3446,7 @@ export function createOrgAdminRouter() {
         });
       }
 
+      await pool.query('DELETE FROM receptionist_zones WHERE receptionist_id = ?', [receptionistId]);
       await pool.query('DELETE FROM receptionists WHERE id = ?', [receptionistId]);
       res.json({ ok: true, message: 'Receptionist deleted.' });
     } catch (error) {

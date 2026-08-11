@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { hashPassword } from './auth.js';
+import { loadZoneInOrg } from './orgStructureService.js';
 
 const RECEPTION_ROLE_SLUG = 'main_reception';
 
@@ -81,6 +82,110 @@ export async function syncReceptionistPortalUser(pool, {
   return nextUserId;
 }
 
+export function parseReceptionistZoneIds(body = {}, fallback = []) {
+  if (Array.isArray(body.zoneIds)) {
+    return [...new Set(body.zoneIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+  if (Array.isArray(body.zone_ids)) {
+    return [...new Set(body.zone_ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+  if (body.zoneId != null || body.zone_id != null) {
+    const single = String(body.zoneId || body.zone_id || '').trim();
+    return single ? [single] : [];
+  }
+  return [...new Set((fallback || []).map((id) => String(id || '').trim()).filter(Boolean))];
+}
+
+export async function validateReceptionistZones(pool, zoneIds, organisationId, siteId) {
+  const uniqueIds = [...new Set(zoneIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!uniqueIds.length) {
+    return { ok: false, status: 400, message: 'At least one zone is required.' };
+  }
+
+  const resolved = [];
+  for (const zoneId of uniqueIds) {
+    const zone = await loadZoneInOrg(pool, zoneId, organisationId);
+    if (!zone) {
+      return { ok: false, status: 400, message: 'One or more zones were not found in this organisation.' };
+    }
+    if (zone.site_id && siteId && zone.site_id !== siteId) {
+      return { ok: false, status: 400, message: 'All selected zones must belong to the chosen site.' };
+    }
+    resolved.push(zone);
+  }
+
+  return { ok: true, zones: resolved, zoneIds: uniqueIds };
+}
+
+export async function syncReceptionistZones(pool, receptionistId, zoneIds = []) {
+  const uniqueIds = [...new Set(zoneIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  await pool.query('DELETE FROM receptionist_zones WHERE receptionist_id = ?', [receptionistId]);
+  for (const zoneId of uniqueIds) {
+    await pool.query(
+      'INSERT INTO receptionist_zones (receptionist_id, zone_id) VALUES (?, ?)',
+      [receptionistId, zoneId],
+    );
+  }
+  // Keep legacy primary zone column aligned for older readers without touching other columns.
+  await pool.query(
+    'UPDATE receptionists SET zone_id = ? WHERE id = ?',
+    [uniqueIds[0] || null, receptionistId],
+  );
+  return uniqueIds;
+}
+
+export async function loadReceptionistZones(pool, receptionistId) {
+  const [rows] = await pool.query(
+    `SELECT z.id, z.name, z.site_id, z.organisation_id, b.name AS building_name
+     FROM receptionist_zones rz
+     INNER JOIN zones z ON z.id = rz.zone_id
+     LEFT JOIN buildings b ON b.id = z.building_id
+     WHERE rz.receptionist_id = ?
+     ORDER BY z.name`,
+    [receptionistId],
+  );
+  return rows;
+}
+
+export async function attachReceptionistZones(pool, rows = []) {
+  if (!rows.length) return rows;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const placeholders = ids.map(() => '?').join(', ');
+  const [zoneRows] = await pool.query(
+    `SELECT rz.receptionist_id, z.id, z.name, b.name AS building_name
+     FROM receptionist_zones rz
+     INNER JOIN zones z ON z.id = rz.zone_id
+     LEFT JOIN buildings b ON b.id = z.building_id
+     WHERE rz.receptionist_id IN (${placeholders})
+     ORDER BY z.name`,
+    ids,
+  );
+
+  const byReceptionist = new Map();
+  for (const row of zoneRows) {
+    const list = byReceptionist.get(row.receptionist_id) || [];
+    list.push(row);
+    byReceptionist.set(row.receptionist_id, list);
+  }
+
+  return rows.map((row) => {
+    const assigned = byReceptionist.get(row.id) || [];
+    const zoneIds = assigned.map((zone) => zone.id);
+    const zoneNames = assigned.map((zone) => (
+      zone.building_name ? `${zone.name} · ${zone.building_name}` : zone.name
+    ));
+    const fallbackName = row.zone_name || '';
+    return {
+      ...row,
+      zone_ids: zoneIds.length ? zoneIds : (row.zone_id ? [row.zone_id] : []),
+      zone_names: zoneNames.length ? zoneNames.join(', ') : fallbackName,
+      zones: assigned,
+      zone_id: zoneIds[0] || row.zone_id || null,
+      zone_name: zoneNames.length ? zoneNames.join(', ') : fallbackName,
+    };
+  });
+}
+
 export async function loadReceptionistRow(pool, id) {
   const [[row]] = await pool.query(
     `SELECT r.*,
@@ -99,5 +204,20 @@ export async function loadReceptionistRow(pool, id) {
      LIMIT 1`,
     [id],
   );
-  return row || null;
+  if (!row) return null;
+
+  const assignedZones = await loadReceptionistZones(pool, id);
+  const zoneIds = assignedZones.map((zone) => zone.id);
+  const zoneNames = assignedZones.map((zone) => (
+    zone.building_name ? `${zone.name} · ${zone.building_name}` : zone.name
+  ));
+
+  return {
+    ...row,
+    zones: assignedZones,
+    zone_ids: zoneIds.length ? zoneIds : (row.zone_id ? [row.zone_id] : []),
+    zone_names: zoneNames.length ? zoneNames.join(', ') : (row.zone_name || ''),
+    zone_id: zoneIds[0] || row.zone_id || null,
+    zone_name: zoneNames.length ? zoneNames.join(', ') : (row.zone_name || ''),
+  };
 }

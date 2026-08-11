@@ -86,6 +86,44 @@ export async function ensureOfficeSchema(db = pool) {
   }
 }
 
+async function ensureReceptionistZonesSchema(db = pool) {
+  // Additive migration only: keep receptionists.zone_id at rest and mirror assignments
+  // into receptionist_zones for multi-zone support.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS receptionist_zones (
+      receptionist_id VARCHAR(90) NOT NULL,
+      zone_id VARCHAR(90) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (receptionist_id, zone_id),
+      INDEX idx_receptionist_zones_zone (zone_id)
+    )
+  `);
+  if (getDbDriver() === 'postgres') {
+    await db.query('CREATE INDEX IF NOT EXISTS idx_receptionist_zones_zone ON receptionist_zones (zone_id)');
+  }
+
+  if (getDbDriver() === 'postgres') {
+    await db.query(`
+      INSERT INTO receptionist_zones (receptionist_id, zone_id)
+      SELECT r.id, r.zone_id
+      FROM receptionists r
+      WHERE r.zone_id IS NOT NULL AND r.zone_id != ''
+        AND NOT EXISTS (
+          SELECT 1
+          FROM receptionist_zones rz
+          WHERE rz.receptionist_id = r.id AND rz.zone_id = r.zone_id
+        )
+    `);
+    return;
+  }
+
+  await db.query(`
+    INSERT IGNORE INTO receptionist_zones (receptionist_id, zone_id)
+    SELECT id, zone_id FROM receptionists
+    WHERE zone_id IS NOT NULL AND zone_id != ''
+  `);
+}
+
 export async function ensureVisitorSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -218,6 +256,8 @@ export async function ensureVisitorSchema() {
   if (getDbDriver() === 'postgres') {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_receptionists_zone ON receptionists (zone_id)');
   }
+
+  await ensureReceptionistZonesSchema(pool);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS security_guards (

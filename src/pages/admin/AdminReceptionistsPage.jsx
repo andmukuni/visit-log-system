@@ -42,11 +42,59 @@ const emptyForm = () => ({
   email: '',
   phone: '',
   siteId: '',
-  zoneId: '',
+  zoneIds: [],
   departmentId: '',
   status: 'active',
   password: '',
 });
+
+function ZoneCheckboxField({
+  label,
+  zones,
+  selectedIds,
+  onChange,
+  required = false,
+  helpText = '',
+}) {
+  const toggleZone = (zoneId) => {
+    onChange(
+      selectedIds.includes(zoneId)
+        ? selectedIds.filter((id) => id !== zoneId)
+        : [...selectedIds, zoneId],
+    );
+  };
+
+  return (
+    <div>
+      {label ? (
+        <p className="mb-1.5 block text-sm font-medium text-navy-700">
+          {label} {required ? <span className="text-red-400">*</span> : null}
+        </p>
+      ) : null}
+      <div className="max-h-44 space-y-2 overflow-y-auto rounded-xl border border-navy-200 bg-navy-50 p-3">
+        {zones.length === 0 ? (
+          <p className="text-sm text-navy-400">No zones available for this site.</p>
+        ) : (
+          zones.map((zone) => (
+            <label
+              key={zone.value}
+              className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-white/70"
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(zone.value)}
+                onChange={() => toggleZone(zone.value)}
+                className="mt-0.5 rounded border-navy-300 text-cyan-600 focus:ring-cyan-500"
+              />
+              <span className="font-medium text-navy-900">{zone.label}</span>
+            </label>
+          ))
+        )}
+      </div>
+      {helpText ? <p className="mt-1 text-xs text-navy-400">{helpText}</p> : null}
+    </div>
+  );
+}
 
 export default function AdminReceptionistsPage() {
   const toast = useToast();
@@ -125,7 +173,7 @@ export default function AdminReceptionistsPage() {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter((row) =>
-      [row.name, row.email, row.organisation_name, row.site_name, row.zone_name, row.department_name]
+      [row.name, row.email, row.organisation_name, row.site_name, row.zone_name, row.zone_names, row.department_name]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
@@ -211,7 +259,7 @@ export default function AdminReceptionistsPage() {
       ...emptyForm(),
       organisationId: defaultOrgId,
       siteId: zoneForSite?.site_id || defaultSiteId,
-      zoneId: zoneForSite?.id || '',
+      zoneIds: zonesForSite.length ? [zonesForSite[0].id] : [],
     });
     setModalOpen(true);
   };
@@ -224,7 +272,9 @@ export default function AdminReceptionistsPage() {
       email: row.email || '',
       phone: row.phone || '',
       siteId: row.site_id || '',
-      zoneId: row.zone_id || '',
+      zoneIds: Array.isArray(row.zone_ids) && row.zone_ids.length
+        ? row.zone_ids
+        : (row.zone_id ? [row.zone_id] : []),
       departmentId: row.department_id || '',
       status: row.status || 'active',
       password: '',
@@ -245,8 +295,8 @@ export default function AdminReceptionistsPage() {
       toast.error('Site / branch is required.');
       return;
     }
-    if (!form.zoneId) {
-      toast.error('Zone is required.');
+    if (!form.zoneIds.length) {
+      toast.error('Select at least one zone.');
       return;
     }
     if (!form.email.trim()) {
@@ -260,7 +310,7 @@ export default function AdminReceptionistsPage() {
         email: form.email,
         phone: form.phone,
         siteId: form.siteId,
-        zoneId: form.zoneId,
+        zoneIds: form.zoneIds,
         departmentId: form.departmentId || null,
         status: form.status,
         password: form.password || undefined,
@@ -313,7 +363,7 @@ export default function AdminReceptionistsPage() {
     },
     { key: 'organisation_name', label: 'Organisation' },
     { key: 'site_name', label: 'Site / Branch' },
-    { key: 'zone_name', label: 'Zone' },
+    { key: 'zone_names', label: 'Zones', render: (_, row) => row.zone_names || row.zone_name || '—' },
     {
       key: 'status',
       label: 'Status',
@@ -353,7 +403,7 @@ export default function AdminReceptionistsPage() {
     <div className="flex flex-col gap-2.5 sm:gap-3">
       <PageHeader
         title="Receptionists"
-        subtitle="Organisation → Site + Zone → Receptionist. Creates Reception portal login access."
+        subtitle="Organisation → Site + Zones → Receptionist. Creates Reception portal login access."
         breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Receptionists' }]}
         actions={(
           <button
@@ -452,7 +502,7 @@ export default function AdminReceptionistsPage() {
                 </p>
                 <p className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><span className="font-semibold">{selected.organisation_name || '—'}</span></p>
                 <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><Map size={14} className="text-gray-400" /><span className="font-semibold">{selected.zone_name || 'No zone'}</span></p>
+                <p className="flex items-center gap-2"><Map size={14} className="text-gray-400" /><span className="font-semibold">{selected.zone_names || selected.zone_name || 'No zones'}</span></p>
                 <p className="flex items-center gap-2"><Network size={14} className="text-gray-400" /><span className="font-semibold">{selected.department_name || '—'}</span></p>
               </div>
               <div className="mt-auto space-y-2 border-t border-gray-200 p-3">
@@ -480,7 +530,7 @@ export default function AdminReceptionistsPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title={editing ? 'Edit Receptionist' : 'New Receptionist'}
-        subtitle="Organisation → Site + Zone → Receptionist (Reception portal access)"
+        subtitle="Organisation → Site + Zones → Receptionist (Reception portal access)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -505,13 +555,12 @@ export default function AdminReceptionistsPage() {
               const organisationId = e.target.value;
               const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === organisationId);
               const nextSiteId = siteForOrg[0]?.id || '';
-              const nextZone = zones.find((z) => z.site_id === nextSiteId && z.organisation_id === organisationId)
-                || zones.find((z) => z.organisation_id === organisationId);
+              const nextZones = zonesForOrg(zones, organisationId, nextSiteId);
               setForm((prev) => ({
                 ...prev,
                 organisationId,
-                siteId: nextZone?.site_id || nextSiteId,
-                zoneId: nextZone?.id || '',
+                siteId: nextSiteId,
+                zoneIds: nextZones.length ? [nextZones[0].id] : [],
                 departmentId: '',
               }));
             }}
@@ -550,32 +599,22 @@ export default function AdminReceptionistsPage() {
             value={form.siteId}
             onChange={(e) => {
               const siteId = e.target.value;
-              const nextZone = zones.find((z) => z.site_id === siteId);
+              const nextZones = zonesForOrg(zones, form.organisationId, siteId);
               setForm((prev) => ({
                 ...prev,
                 siteId,
-                zoneId: nextZone?.id || '',
+                zoneIds: prev.zoneIds.filter((zoneId) => nextZones.some((zone) => zone.id === zoneId)),
               }));
             }}
             options={siteOptions}
           />
-          <FormField
-            label="Zone"
-            name="zoneId"
-            type="select"
+          <ZoneCheckboxField
+            label="Zones"
+            zones={zoneOptions}
+            selectedIds={form.zoneIds}
+            onChange={(zoneIds) => setForm((prev) => ({ ...prev, zoneIds }))}
             required
-            value={form.zoneId}
-            onChange={(e) => {
-              const zoneId = e.target.value;
-              const zone = zones.find((z) => z.id === zoneId);
-              setForm((prev) => ({
-                ...prev,
-                zoneId,
-                siteId: zone?.site_id || prev.siteId,
-              }));
-            }}
-            options={zoneOptions}
-            helpText="Required. Reception desk zone inside the selected site."
+            helpText="Select every reception desk zone this receptionist can cover."
           />
           <FormField
             label="Department"
