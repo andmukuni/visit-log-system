@@ -233,11 +233,11 @@ export async function resolveHostForUser(pool, userId, userEmail = '') {
   return null;
 }
 
-export function visitMatchesHost(visit, { hostId, userId, elevated = false } = {}) {
-  if (elevated) return true;
+export function visitMatchesHost(visit, { hostId, userId } = {}) {
   if (!visit) return false;
   if (hostId && visit.host_id === hostId) return true;
-  if (userId && visit.created_by === userId) return true;
+  // Unassigned drafts only — never other hosts' calendars via created_by.
+  if (userId && !visit.host_id && visit.created_by === userId) return true;
   return false;
 }
 
@@ -247,8 +247,9 @@ export async function requireHostContext(pool, userId, userEmail, claims = {}) {
     return { ok: false, status: scopeResult.status, message: scopeResult.message };
   }
 
+  // Every host/executive calendar user must be linked to their own host profile.
   const host = await resolveHostForUser(pool, userId, userEmail);
-  if (!host && !scopeResult.elevated) {
+  if (!host) {
     return {
       ok: false,
       status: 403,
@@ -271,7 +272,6 @@ export async function loadVisitForHost(pool, visitId, hostContext) {
   if (!visitMatchesHost(visit, {
     hostId: hostContext.host?.id,
     userId: hostContext.userId,
-    elevated: hostContext.elevated,
   })) {
     return { ok: false, status: 403, message: 'You can only access visits assigned to you.' };
   }
@@ -283,8 +283,11 @@ export async function loadVisitForHost(pool, visitId, hostContext) {
   return { ok: true, visit };
 }
 
-/** SQL fragment: restrict visits to a host's own records */
+/**
+ * SQL fragment: restrict visits to the current host's personal calendar.
+ * Params: [hostId, userId]
+ */
 export function hostVisitFilter(alias = 'vis') {
-  return `(${alias}.host_id = ? OR ${alias}.created_by = ?)`;
+  return `(${alias}.host_id = ? OR (${alias}.host_id IS NULL AND ${alias}.created_by = ?))`;
 }
 

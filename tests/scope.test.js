@@ -63,8 +63,13 @@ describe('host record scope', () => {
     assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), true);
   });
 
-  it('allows visit created by user', () => {
+  it('denies another host visit even if current user created it', () => {
     const visit = { host_id: 'host-2', created_by: 'user-1' };
+    assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), false);
+  });
+
+  it('allows unassigned draft created by user', () => {
+    const visit = { host_id: null, created_by: 'user-1' };
     assert.equal(visitMatchesHost(visit, { hostId: 'host-1', userId: 'user-1' }), true);
   });
 

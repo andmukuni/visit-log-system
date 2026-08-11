@@ -202,6 +202,12 @@ export function createExecutiveRouter() {
       const orgId = ctx.scope.organisation_id;
       const hostId = ctx.host?.id;
       const userId = req.adminClaims.sub;
+      if (!hostId) {
+        return res.status(403).json({
+          ok: false,
+          message: 'No host profile is linked to this account. Contact your administrator.',
+        });
+      }
       const baseParams = [orgId, hostId, userId];
       const permissions = permissionsFromRequest(req);
 
