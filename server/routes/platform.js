@@ -673,7 +673,7 @@ export function createPlatformRouter() {
       const dbLatencyMs = Date.now() - start;
 
       const deliveryStats = await getDeliveryStats(pool);
-      const email = getEmailProviderStatus();
+      const email = await getEmailProviderStatus();
       const sms = await getSmsProviderStatus();
       const [[totalNotifications]] = await pool.query(`SELECT COUNT(*) AS count FROM notifications`);
 

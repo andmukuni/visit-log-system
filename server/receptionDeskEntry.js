@@ -425,6 +425,11 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
         [signatureResult.signature, visitId],
       );
       await writeVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, stationId: scope.station_id });
+      try {
+        await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId });
+      } catch (error) {
+        console.warn('[reception_entry.vehicle] notify failed:', error.message);
+      }
     } else {
       await pool.query(
         `UPDATE visits SET check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,

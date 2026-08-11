@@ -1,6 +1,10 @@
 import pool from '../db.js';
 import { writeAuditLog } from '../auditService.js';
 import { APP_NAME, EMAIL_FROM_NAME_DEFAULT } from '../../shared/branding.js';
+import {
+  VISITOR_NOTIFICATION_KEYS,
+  DEFAULT_SMS_ENABLED_KEYS,
+} from '../../shared/notificationCategories.js';
 
 export const SETTING_KEYS = {
   NOTIFICATIONS: 'notifications',
@@ -11,23 +15,13 @@ export const SETTING_KEYS = {
   SMS: 'sms',
 };
 
-export const VISITOR_NOTIFICATION_KEYS = [
-  'visit_registered',
-  'visit_approved',
-  'visit_rejected',
-  'visit_checked_in',
-  'visit_checked_out',
-  'visit_reminder',
-  'vehicle_registered',
-  'emergency_roll_call',
-  'incident_reported',
-];
+export { VISITOR_NOTIFICATION_KEYS };
 
 function buildDefaultNotifications() {
   const defaults = { in_app_notifications: true };
   for (const key of VISITOR_NOTIFICATION_KEYS) {
     defaults[`email_${key}`] = true;
-    defaults[`sms_${key}`] = ['emergency_roll_call', 'incident_reported', 'visit_reminder'].includes(key);
+    defaults[`sms_${key}`] = DEFAULT_SMS_ENABLED_KEYS.includes(key);
   }
   return defaults;
 }

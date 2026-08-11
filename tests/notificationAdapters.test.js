@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { sendEmail } from '../server/adapters/emailAdapter.js';
+import { sendEmail, resolveEmailDeliveryConfig } from '../server/adapters/emailAdapter.js';
 import { sendSms } from '../server/adapters/smsAdapter.js';
 import { getEmailConfig, getSmsConfig } from '../server/adapters/deliveryConfig.js';
 import pool from '../server/db.js';
@@ -34,6 +34,8 @@ describe('email adapter', () => {
       to: 'visitor@example.com',
       subject: 'Test',
       body: 'Hello world',
+    }, {
+      effectiveSmtp: { enabled: false, host: '', source: 'none' },
     });
     assert.equal(result.provider, 'console');
     assert.ok(result.messageId);
@@ -45,6 +47,27 @@ describe('email adapter', () => {
     const config = getEmailConfig();
     assert.equal(config.provider, 'sendgrid');
     assert.equal(config.configured, false);
+  });
+
+  it('prefers effective admin SMTP when configured', async () => {
+    const config = await resolveEmailDeliveryConfig({
+      effectiveSmtp: {
+        enabled: true,
+        host: 'smtp.admin.example',
+        port: 587,
+        secure: false,
+        user: 'mailer',
+        pass: 'secret',
+        from: 'alerts@admin.example',
+        from_name: 'Visitors Log',
+        source: 'database',
+      },
+    });
+    assert.equal(config.provider, 'smtp');
+    assert.equal(config.configured, true);
+    assert.equal(config.source, 'database');
+    assert.equal(config.smtp.host, 'smtp.admin.example');
+    assert.equal(config.from, 'alerts@admin.example');
   });
 });
 

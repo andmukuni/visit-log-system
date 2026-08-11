@@ -474,7 +474,24 @@ export const notificationsApi = {
   markRead: (id) => apiFetch(`/admin/notifications/${id}/read`, { method: 'POST' }),
   markAllRead: () => apiFetch('/admin/notifications/read-all', { method: 'POST' }),
   getTemplates: () => apiFetch('/admin/notifications/templates'),
-  getOrgRecent: () => apiFetch('/admin/notifications/org/recent'),
+  getOrgRecent: async () => {
+    const res = await fetch(`${API_BASE}/admin/notifications/org/recent`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.delivery = json.delivery || null;
+    return rows;
+  },
+  getPreferences: () => apiFetch('/admin/notifications/preferences'),
+  updatePreferences: (preferences) => apiFetch('/admin/notifications/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify({ preferences }),
+  }),
 };
 
 export const executiveApi = {

@@ -39,15 +39,18 @@ const BASE_TABS = [
 const HEALTH_TAB = { value: 'health', label: 'System Health', icon: Activity };
 
 const NOTIFICATION_CATEGORIES = [
-  { key: 'visit_registered', label: 'Visit registered', description: 'When a new visit is logged at a station or kiosk.' },
+  { key: 'visit_registered', label: 'Visit registered / invite', description: 'When a visitor is invited or pre-registered.' },
+  { key: 'visit_host_booking', label: 'Host booking confirmed', description: 'When a host or executive books a confirmed visit.' },
+  { key: 'visit_pending_approval', label: 'Pending approval', description: 'When a visit is waiting for host approval.' },
   { key: 'visit_approved', label: 'Visit approved', description: 'When a host or security approves a visit.' },
   { key: 'visit_rejected', label: 'Visit rejected', description: 'When a visit request is declined.' },
-  { key: 'visit_checked_in', label: 'Visit check-in', description: 'When a visitor checks in on-site.' },
+  { key: 'visit_cancelled', label: 'Visit cancelled', description: 'When a visit is cancelled.' },
+  { key: 'visit_rescheduled', label: 'Visit rescheduled', description: 'When a visit time is changed.' },
+  { key: 'visit_reminder', label: 'Pre-arrival reminder', description: 'About one hour before expected arrival.' },
+  { key: 'visit_arrived_gate', label: 'Arrived at gate', description: 'When a visitor (or vehicle) arrives at the gate.' },
+  { key: 'visit_checked_in', label: 'Reception check-in', description: 'When a visitor checks in at reception.' },
+  { key: 'visit_waiting', label: 'Waiting / in meeting', description: 'When a visitor is waiting or a meeting starts.' },
   { key: 'visit_checked_out', label: 'Visit check-out', description: 'When a visitor completes their visit.' },
-  { key: 'visit_reminder', label: 'Visit reminder', description: 'Upcoming visit reminders for hosts and visitors.' },
-  { key: 'vehicle_registered', label: 'Vehicle registered', description: 'When a vehicle entry is recorded at a gate.' },
-  { key: 'emergency_roll_call', label: 'Emergency roll call', description: 'During emergency roll-call events.' },
-  { key: 'incident_reported', label: 'Incident reported', description: 'When a security incident is logged.' },
 ];
 
 function SettingsCard({ children, className = '' }) {
@@ -719,15 +722,19 @@ export default function AdminSettingsPage() {
           <div className="max-w-2xl">
             <TabPanelHeader
               title="Notification categories"
-              subtitle="Choose which visitor-system events trigger email and SMS alerts"
+              subtitle="Organisation defaults enforced at send time. Hosts and executives can mute channels further on their Notifications page."
             />
             <form onSubmit={saveNotifications} className="space-y-3">
               <ToggleRow
                 label="In-app notifications"
-                description="Show alerts inside the portal for signed-in users."
+                description="Master switch for in-app alerts for signed-in users across all categories below."
                 checked={Boolean(notificationForm.in_app_notifications)}
                 onChange={(value) => setNotificationForm({ ...notificationForm, in_app_notifications: value })}
               />
+
+              <p className="text-xs text-navy-500 pt-1">
+                Email and SMS toggles apply per event. Turning a channel off here blocks it for everyone, including visitors.
+              </p>
 
               {NOTIFICATION_CATEGORIES.map((cat) => (
                 <div key={cat.key} className="rounded-2xl border border-gray-100 p-4 space-y-2">

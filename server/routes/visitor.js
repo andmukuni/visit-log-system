@@ -742,6 +742,11 @@ export function createStationRouter() {
             [signature, visitId],
           );
           await writeVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId, stationId: scope.station_id });
+          try {
+            await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
+          } catch (error) {
+            console.warn('[gate-entry/vehicle] notify failed:', error.message);
+          }
         } else {
           await pool.query(
             `UPDATE visits SET check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,

@@ -75,6 +75,22 @@ export async function ensurePlatformSchema() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_notification_preferences (
+      id VARCHAR(90) PRIMARY KEY,
+      user_id VARCHAR(90) NOT NULL,
+      organisation_id VARCHAR(90) NOT NULL,
+      channel VARCHAR(20) NOT NULL,
+      category_key VARCHAR(60) NOT NULL,
+      enabled TINYINT(1) DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_user_notif_pref (user_id, organisation_id, channel, category_key),
+      INDEX idx_user_notif_pref_user (user_id),
+      INDEX idx_user_notif_pref_org (organisation_id)
+    )
+  `);
+
   const deliveryColumns = [
     { name: 'recipient', ddl: 'ADD COLUMN recipient VARCHAR(255)' },
     { name: 'provider_message_id', ddl: 'ADD COLUMN provider_message_id VARCHAR(120)' },
@@ -110,6 +126,20 @@ export async function ensurePlatformSchema() {
   }
 }
 
+/** System template keys refreshed on boot even if already present. */
+const REFRESH_TEMPLATE_KEYS = new Set([
+  'visit.pre_arrival_alert',
+  'visit.entered_premises',
+  'visit.in_meeting',
+  'visit.visitor_cancelled',
+  'visit.visitor_rescheduled',
+  'visit.visitor_checked_in',
+  'visit.visitor_checked_out',
+  'visit.visitor_reminder',
+  'visit.host_approved',
+  'visit.host_rejected',
+]);
+
 const DEFAULT_TEMPLATES = [
   {
     key: 'visit.pending_approval',
@@ -126,6 +156,13 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: Visit approved. Pass code {{pass_code}}. {{invite_url}}`,
   },
   {
+    key: 'visit.host_approved',
+    subject: 'Visit approved',
+    inApp: 'Visit for {{visitor_name}} was approved.',
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been approved.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit approved for {{visitor_name}}. Code {{pass_code}}.`,
+  },
+  {
     key: 'visit.host_booking',
     subject: 'Visit confirmed',
     inApp: 'Host booking confirmed for {{visitor_name}}.',
@@ -140,11 +177,25 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: Expected in ~1h — {{visitor_name}} ({{host_name}}). Code {{pass_code}}.`,
   },
   {
+    key: 'visit.visitor_reminder',
+    subject: 'Visit reminder',
+    inApp: 'Reminder: your visit is expected soon.',
+    email: `Hello {{visitor_name}},\n\nReminder: your visit with {{host_name}} is expected at {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Reminder — visit at {{expected_at}}. Code {{pass_code}}. {{invite_url}}`,
+  },
+  {
     key: 'visit.rejected',
     subject: 'Visit rejected',
     inApp: 'The visit for {{visitor_name}} was rejected.',
     email: `Hello {{visitor_name}},\n\nUnfortunately your visit request was not approved.\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX}: Your visit request was not approved.`,
+  },
+  {
+    key: 'visit.host_rejected',
+    subject: 'Visit rejected',
+    inApp: 'The visit for {{visitor_name}} was rejected.',
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was not approved.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit for {{visitor_name}} was rejected.`,
   },
   {
     key: 'visit.checked_in',
@@ -154,6 +205,13 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked in.`,
   },
   {
+    key: 'visit.visitor_checked_in',
+    subject: 'You are checked in',
+    inApp: 'You have checked in.',
+    email: `Hello {{visitor_name}},\n\nYou have checked in at reception. Your host {{host_name}} has been notified.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Checked in. Host {{host_name}} notified.`,
+  },
+  {
     key: 'visit.waiting_at_reception',
     subject: 'Visitor waiting',
     inApp: '{{visitor_name}} is waiting for you at reception.',
@@ -161,11 +219,25 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} is waiting at reception.`,
   },
   {
+    key: 'visit.in_meeting',
+    subject: 'Meeting started',
+    inApp: 'Meeting with {{visitor_name}} has started.',
+    email: `Hello {{host_name}},\n\nYour meeting with {{visitor_name}} has started.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Meeting with {{visitor_name}} started.`,
+  },
+  {
     key: 'visit.checked_out',
     subject: 'Visitor departed',
     inApp: '{{visitor_name}} has checked out.',
     email: `Hello {{host_name}},\n\n{{visitor_name}} has checked out.\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked out.`,
+  },
+  {
+    key: 'visit.visitor_checked_out',
+    subject: 'Visit complete',
+    inApp: 'Your visit is complete.',
+    email: `Hello {{visitor_name}},\n\nThank you for visiting. Your check-out is complete.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit complete. Thank you.`,
   },
   {
     key: 'visit.invite_sent',
@@ -178,48 +250,54 @@ const DEFAULT_TEMPLATES = [
     key: 'visit.arrived_at_gate',
     subject: 'Visitor at gate',
     inApp: '{{visitor_name}} has arrived at the gate.',
-    email: '{{visitor_name}} has arrived at the gate.\n\nPass code: {{pass_code}}',
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has arrived at the gate.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} at gate. Code {{pass_code}}`,
+  },
+  {
+    key: 'visit.entered_premises',
+    subject: 'Visitor on premises',
+    inApp: '{{visitor_name}} has entered the premises.',
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has entered the premises.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} entered premises. Code {{pass_code}}`,
   },
   {
     key: 'visit.vip_arrival',
     subject: 'VIP visitor arrival',
     inApp: 'VIP/VVIP visitor {{visitor_name}} has arrived.',
-    email: 'VIP/VVIP visitor {{visitor_name}} has arrived.\n\nHost: {{host_name}}',
+    email: `VIP/VVIP visitor {{visitor_name}} has arrived.\n\nHost: {{host_name}}\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX} VIP arrival: {{visitor_name}}`,
   },
   {
     key: 'visit.cancelled',
     subject: 'Visit cancelled',
     inApp: 'The visit for {{visitor_name}} was cancelled.',
-    email: 'The visit for {{visitor_name}} has been cancelled.',
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been cancelled.\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX}: Visit for {{visitor_name}} cancelled.`,
+  },
+  {
+    key: 'visit.visitor_cancelled',
+    subject: 'Visit cancelled',
+    inApp: 'Your visit was cancelled.',
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} has been cancelled.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Your visit has been cancelled.`,
   },
   {
     key: 'visit.rescheduled',
     subject: 'Visit rescheduled',
-    inApp: 'The visit for {{visitor_name}} was rescheduled.',
-    email: 'The visit for {{visitor_name}} was rescheduled to {{expected_at}}.',
-    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled for {{visitor_name}}.`,
+    inApp: 'The visit for {{visitor_name}} was rescheduled to {{expected_at}}.',
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was rescheduled to {{expected_at}}.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled for {{visitor_name}} to {{expected_at}}.`,
+  },
+  {
+    key: 'visit.visitor_rescheduled',
+    subject: 'Visit rescheduled',
+    inApp: 'Your visit was rescheduled.',
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} was rescheduled to {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled to {{expected_at}}. Code {{pass_code}}.`,
   },
 ];
 
-export async function seedPlatformData() {
-  const [[org]] = await pool.query('SELECT id FROM organisations LIMIT 1');
-  if (!org?.id) return;
-
-  const [[existingSub]] = await pool.query(
-    'SELECT id FROM subscriptions WHERE organisation_id = ? LIMIT 1',
-    [org.id],
-  );
-  if (!existingSub) {
-    await pool.query(
-      `INSERT INTO subscriptions (id, organisation_id, plan_name, status, max_sites, max_users)
-       VALUES (?, ?, 'professional', 'active', 5, 50)`,
-      [generateId('sub'), org.id],
-    );
-  }
-
+async function seedTemplatesForOrg(organisationId) {
   for (const tpl of DEFAULT_TEMPLATES) {
     for (const [channel, body] of [
       ['in_app', tpl.inApp],
@@ -229,11 +307,10 @@ export async function seedPlatformData() {
       const [[existing]] = await pool.query(
         `SELECT id FROM notification_templates
          WHERE organisation_id = ? AND template_key = ? AND channel = ? LIMIT 1`,
-        [org.id, tpl.key, channel],
+        [organisationId, tpl.key, channel],
       );
       if (existing) {
-        // Keep pre-arrival copy in sync when lead time messaging changes.
-        if (tpl.key === 'visit.pre_arrival_alert') {
+        if (REFRESH_TEMPLATE_KEYS.has(tpl.key)) {
           await pool.query(
             `UPDATE notification_templates
              SET subject = ?, body_template = ?
@@ -247,10 +324,31 @@ export async function seedPlatformData() {
       await pool.query(
         `INSERT INTO notification_templates (id, organisation_id, template_key, channel, subject, body_template, enabled)
          VALUES (?, ?, ?, ?, ?, ?, 1)`,
-        [generateId('ntpl'), org.id, tpl.key, channel, tpl.subject, body],
+        [generateId('ntpl'), organisationId, tpl.key, channel, tpl.subject, body],
       );
     }
   }
+}
 
-  console.log('[platform] Subscription and notification templates seeded.');
+export async function seedPlatformData() {
+  const [orgs] = await pool.query('SELECT id FROM organisations');
+  if (!orgs.length) return;
+
+  for (const org of orgs) {
+    const [[existingSub]] = await pool.query(
+      'SELECT id FROM subscriptions WHERE organisation_id = ? LIMIT 1',
+      [org.id],
+    );
+    if (!existingSub) {
+      await pool.query(
+        `INSERT INTO subscriptions (id, organisation_id, plan_name, status, max_sites, max_users)
+         VALUES (?, ?, 'professional', 'active', 5, 50)`,
+        [generateId('sub'), org.id],
+      );
+    }
+
+    await seedTemplatesForOrg(org.id);
+  }
+
+  console.log(`[platform] Subscriptions and notification templates seeded for ${orgs.length} organisation(s).`);
 }

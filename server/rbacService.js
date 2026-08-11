@@ -246,6 +246,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/platform/audit')) return 'platform.audit';
   if (path.includes('/platform/')) return 'platform.dashboard';
   if (path.includes('/notifications/templates') || path.includes('/notifications/org')) return 'admin.notifications';
+  if (path.includes('/notifications/preferences')) return 'host.notifications';
   if (path.includes('/notifications')) return 'host.notifications';
 
   if (path.includes('/visits')) {

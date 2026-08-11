@@ -3,9 +3,18 @@ import { writeVisitEvent } from './auditService.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { sendSms } from './adapters/smsAdapter.js';
 import { getAppBaseUrl, getDeliveryConfig } from './adapters/deliveryConfig.js';
+import { getNotificationSettings } from './services/adminSettingsService.js';
+import { categoryKeyForEvent } from '../shared/notificationCategories.js';
 
 const GATE_RECEPTION_ROLE_SLUGS = [
   'gate_security',
+  'main_reception',
+  'executive_reception',
+  'receptionist',
+];
+
+const GATE_ROLE_SLUGS = ['gate_security'];
+const RECEPTION_ROLE_SLUGS = [
   'main_reception',
   'executive_reception',
   'receptionist',
@@ -88,7 +97,6 @@ export async function sendNotification(pool, {
   }
 
   const id = generateId('ntf');
-  const isExternal = channel === 'email' || channel === 'sms';
   const notificationStatus = channel === 'in_app' ? 'delivered' : 'pending';
 
   await pool.query(
@@ -146,6 +154,55 @@ export async function sendNotification(pool, {
   return { ok: delivery.ok, id, skipped: false, channel, ...delivery };
 }
 
+/**
+ * Resolve whether a channel may send for org defaults + optional user mutes.
+ * Resolution: org category off → skip; user mute (category or *) → skip; else allow.
+ */
+export async function resolveChannelAllowed(pool, {
+  organisationId,
+  userId = null,
+  channel,
+  categoryKey,
+  orgSettings = null,
+}) {
+  const settings = orgSettings || await getNotificationSettings();
+
+  if (channel === 'in_app' && settings.in_app_notifications === false) {
+    return { allowed: false, reason: 'org_in_app_disabled' };
+  }
+
+  if (categoryKey && (channel === 'email' || channel === 'sms')) {
+    const flag = settings[`${channel}_${categoryKey}`];
+    if (flag === false) {
+      return { allowed: false, reason: `org_${channel}_disabled` };
+    }
+  }
+
+  if (!userId) {
+    return { allowed: true };
+  }
+
+  const [prefs] = await pool.query(
+    `SELECT channel, category_key, enabled
+     FROM user_notification_preferences
+     WHERE user_id = ? AND organisation_id = ?
+       AND channel = ?
+       AND category_key IN (?, '*')`,
+    [userId, organisationId, channel, categoryKey || '*'],
+  );
+
+  for (const pref of prefs) {
+    if (Number(pref.enabled) === 0) {
+      return {
+        allowed: false,
+        reason: pref.category_key === '*' ? 'user_channel_muted' : 'user_category_muted',
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
 export async function sendFromTemplate(pool, {
   organisationId,
   userId = null,
@@ -155,6 +212,9 @@ export async function sendFromTemplate(pool, {
   idempotencyKey,
   metadata = null,
   channels = null,
+  categoryKey = null,
+  orgSettings = null,
+  skipPreferenceCheck = false,
 }) {
   let sql = `SELECT * FROM notification_templates
              WHERE organisation_id = ? AND template_key = ? AND enabled = 1`;
@@ -171,6 +231,20 @@ export async function sendFromTemplate(pool, {
 
   const results = [];
   for (const tpl of templates) {
+    if (!skipPreferenceCheck && categoryKey) {
+      const gate = await resolveChannelAllowed(pool, {
+        organisationId,
+        userId,
+        channel: tpl.channel,
+        categoryKey,
+        orgSettings,
+      });
+      if (!gate.allowed) {
+        results.push({ ok: true, skipped: true, channel: tpl.channel, reason: gate.reason });
+        continue;
+      }
+    }
+
     const title = tpl.subject || templateKey;
     const body = renderTemplate(tpl.body_template, vars);
     const channelKey = idempotencyKey ? `${idempotencyKey}:${tpl.channel}` : null;
@@ -217,19 +291,79 @@ export async function sendFromTemplate(pool, {
   return results;
 }
 
+/**
+ * Preference-aware send for a single audience member.
+ */
+export async function notifyAudience(pool, {
+  organisationId,
+  userId = null,
+  recipient = null,
+  templateKey,
+  categoryKey,
+  channels = null,
+  vars = {},
+  idempotencyKey,
+  metadata = null,
+  orgSettings = null,
+}) {
+  return sendFromTemplate(pool, {
+    organisationId,
+    userId,
+    recipient,
+    templateKey,
+    categoryKey,
+    channels,
+    vars,
+    idempotencyKey,
+    metadata,
+    orgSettings,
+  });
+}
+
 async function resolveHostUserId(pool, hostId) {
   if (!hostId) return null;
   const [[host]] = await pool.query('SELECT user_id FROM hosts WHERE id = ? LIMIT 1', [hostId]);
   return host?.user_id || null;
 }
 
-const VISITOR_TEMPLATE_EVENTS = new Set([
-  'pre_registered',
-  'approved',
-  'host_booking',
-  'rejected',
-]);
+async function resolveStaffUsers(pool, { organisationId, siteId = null, roleSlugs = GATE_RECEPTION_ROLE_SLUGS }) {
+  const rolePlaceholders = roleSlugs.map(() => '?').join(', ');
+  const params = [...roleSlugs, organisationId];
+  let siteClause = '';
+  if (siteId) {
+    siteClause = ' AND (us.site_id IS NULL OR us.site_id = ?)';
+    params.push(siteId);
+  }
 
+  const [rows] = await pool.query(
+    `SELECT DISTINCT u.id, u.email, u.phone, u.name
+     FROM users u
+     INNER JOIN user_admin_roles uar ON uar.user_id = u.id
+     INNER JOIN admin_roles ar ON ar.id = uar.role_id
+     INNER JOIN user_scopes us ON us.user_id = u.id
+     WHERE ar.slug IN (${rolePlaceholders})
+       AND us.organisation_id = ?
+       ${siteClause}`,
+    params,
+  );
+  return rows;
+}
+
+async function resolveGateAndReceptionUsers(pool, { organisationId, siteId = null }) {
+  return resolveStaffUsers(pool, {
+    organisationId,
+    siteId,
+    roleSlugs: GATE_RECEPTION_ROLE_SLUGS,
+  });
+}
+
+function isVipClassification(classification) {
+  return classification === 'vip' || classification === 'vvip';
+}
+
+/**
+ * Notify hosts, visitors, and staff for a visit lifecycle event.
+ */
 export async function notifyVisitEvent(pool, {
   visitId,
   eventType,
@@ -251,6 +385,10 @@ export async function notifyVisitEvent(pool, {
   );
   if (!visit) return;
 
+  const categoryKey = categoryKeyForEvent(eventType);
+  if (!categoryKey) return;
+
+  const orgSettings = await getNotificationSettings();
   const inviteUrl = visit.invite_token
     ? `${getAppBaseUrl()}/visit/invite/${visit.invite_token}`
     : '';
@@ -261,38 +399,13 @@ export async function notifyVisitEvent(pool, {
     pass_code: visit.pass_code,
     invite_url: inviteUrl,
     status: visit.status,
-    expected_at: formatExpectedAt(visit.expected_at),
+    expected_at: formatExpectedAt(extra.expected_at || visit.expected_at),
     site_name: visit.site_name || '',
     ...extra,
   };
 
   const hostUserId = visit.host_user_id || await resolveHostUserId(pool, visit.host_id);
-  const idempotencyKey = `${eventType}:${visitId}:${visit.status}`;
-
-  const templateMap = {
-    pending_approval: 'visit.pending_approval',
-    approved: 'visit.approved',
-    host_booking: 'visit.host_booking',
-    rejected: 'visit.rejected',
-    checked_in: 'visit.checked_in',
-    reception_check_in: 'visit.checked_in',
-    waiting: 'visit.waiting_at_reception',
-    in_meeting: 'visit.waiting_at_reception',
-    checked_out: 'visit.checked_out',
-    pre_registered: 'visit.invite_sent',
-    arrived_at_gate: 'visit.arrived_at_gate',
-    cancelled: 'visit.cancelled',
-    rescheduled: 'visit.rescheduled',
-    left_premises: 'visit.checked_out',
-  };
-
-  let templateKey = templateMap[eventType] || templateMap[visit.status];
-  if ((visit.classification === 'vip' || visit.classification === 'vvip')
-    && (eventType === 'arrived_at_gate' || eventType === 'reception_check_in' || eventType === 'checked_in')) {
-    templateKey = 'visit.vip_arrival';
-  }
-  if (!templateKey) return;
-
+  const vip = isVipClassification(visit.classification);
   const metadata = { visitId, eventType };
   const visitorRecipient = {
     email: visit.visitor_email || null,
@@ -303,52 +416,143 @@ export async function notifyVisitEvent(pool, {
   if (hostUserId) hostTargets.add(hostUserId);
   if (eventType === 'pending_approval' && visit.created_by) hostTargets.add(visit.created_by);
 
-  for (const userId of hostTargets) {
-    if (userId === actorUserId && eventType !== 'checked_in') continue;
-    await sendFromTemplate(pool, {
-      organisationId: visit.organisation_id,
-      userId,
-      templateKey,
-      vars,
-      idempotencyKey: `${idempotencyKey}:host:${userId}`,
-      metadata,
-    });
+  const hostTemplateMap = {
+    pending_approval: 'visit.pending_approval',
+    approved: 'visit.host_approved',
+    rejected: 'visit.host_rejected',
+    checked_in: 'visit.checked_in',
+    reception_check_in: 'visit.checked_in',
+    waiting: 'visit.waiting_at_reception',
+    in_meeting: 'visit.in_meeting',
+    checked_out: 'visit.checked_out',
+    left_premises: 'visit.checked_out',
+    pre_registered: 'visit.invite_sent',
+    arrived_at_gate: 'visit.arrived_at_gate',
+    entered_premises: 'visit.entered_premises',
+    cancelled: 'visit.cancelled',
+    rescheduled: 'visit.rescheduled',
+    host_booking: null,
+  };
+
+  const visitorTemplateMap = {
+    pre_registered: 'visit.invite_sent',
+    host_booking: 'visit.host_booking',
+    approved: 'visit.approved',
+    rejected: 'visit.rejected',
+    cancelled: 'visit.visitor_cancelled',
+    rescheduled: 'visit.visitor_rescheduled',
+    checked_in: 'visit.visitor_checked_in',
+    reception_check_in: 'visit.visitor_checked_in',
+    checked_out: 'visit.visitor_checked_out',
+    left_premises: 'visit.visitor_checked_out',
+  };
+
+  const hostChannelsByEvent = {
+    pending_approval: ['in_app', 'email', 'sms'],
+    approved: ['in_app'],
+    rejected: ['in_app'],
+    cancelled: ['in_app', 'email'],
+    rescheduled: ['in_app', 'email'],
+    arrived_at_gate: ['in_app', 'email', 'sms'],
+    entered_premises: ['in_app'],
+    checked_in: ['in_app', 'email', 'sms'],
+    reception_check_in: ['in_app', 'email', 'sms'],
+    waiting: ['in_app', 'email', 'sms'],
+    in_meeting: ['in_app', 'email', 'sms'],
+    checked_out: ['in_app'],
+    left_premises: ['in_app'],
+    pre_registered: ['in_app'],
+  };
+
+  // Host notifications
+  let hostTemplateKey = hostTemplateMap[eventType];
+  if (vip && (eventType === 'arrived_at_gate' || eventType === 'reception_check_in' || eventType === 'checked_in')) {
+    hostTemplateKey = 'visit.vip_arrival';
   }
 
-  if (VISITOR_TEMPLATE_EVENTS.has(eventType) && (visitorRecipient.email || visitorRecipient.phone)) {
-    await sendFromTemplate(pool, {
+  if (hostTemplateKey) {
+    const channels = hostChannelsByEvent[eventType] || ['in_app'];
+    for (const userId of hostTargets) {
+      if (userId === actorUserId && !['checked_in', 'reception_check_in', 'arrived_at_gate', 'waiting', 'in_meeting'].includes(eventType)) {
+        continue;
+      }
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId,
+        templateKey: hostTemplateKey,
+        categoryKey,
+        channels,
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:host:${userId}`,
+        metadata: { ...metadata, audience: 'host' },
+        orgSettings,
+      });
+    }
+  }
+
+  // Visitor notifications (external — org toggles only)
+  const visitorTemplateKey = visitorTemplateMap[eventType];
+  if (visitorTemplateKey && (visitorRecipient.email || visitorRecipient.phone)) {
+    await notifyAudience(pool, {
       organisationId: visit.organisation_id,
       recipient: visitorRecipient,
-      templateKey,
-      vars,
-      idempotencyKey: `${idempotencyKey}:visitor`,
-      metadata: { ...metadata, audience: 'visitor' },
+      templateKey: visitorTemplateKey,
+      categoryKey,
       channels: ['email', 'sms'],
+      vars,
+      idempotencyKey: `${eventType}:${visitId}:visitor`,
+      metadata: { ...metadata, audience: 'visitor' },
+      orgSettings,
     });
   }
-}
 
-async function resolveGateAndReceptionUsers(pool, { organisationId, siteId = null }) {
-  const rolePlaceholders = GATE_RECEPTION_ROLE_SLUGS.map(() => '?').join(', ');
-  const params = [...GATE_RECEPTION_ROLE_SLUGS, organisationId];
-  let siteClause = '';
-  if (siteId) {
-    siteClause = ' AND (us.site_id IS NULL OR us.site_id = ?)';
-    params.push(siteId);
+  // Gate / reception staff
+  if (eventType === 'arrived_at_gate' || (vip && (eventType === 'reception_check_in' || eventType === 'checked_in'))) {
+    const staff = await resolveGateAndReceptionUsers(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+    });
+    const staffTemplate = vip ? 'visit.vip_arrival' : 'visit.arrived_at_gate';
+    const staffChannels = vip ? ['in_app', 'email', 'sms'] : ['in_app'];
+
+    for (const user of staff) {
+      if (user.id === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: user.id,
+        recipient: { email: user.email || null, phone: user.phone || null },
+        templateKey: staffTemplate,
+        categoryKey,
+        channels: staffChannels,
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:staff:${user.id}`,
+        metadata: { ...metadata, audience: 'gate_reception' },
+        orgSettings,
+      });
+    }
   }
 
-  const [rows] = await pool.query(
-    `SELECT DISTINCT u.id, u.email, u.phone, u.name
-     FROM users u
-     INNER JOIN user_admin_roles uar ON uar.user_id = u.id
-     INNER JOIN admin_roles ar ON ar.id = uar.role_id
-     INNER JOIN user_scopes us ON us.user_id = u.id
-     WHERE ar.slug IN (${rolePlaceholders})
-       AND us.organisation_id = ?
-       ${siteClause}`,
-    params,
-  );
-  return rows;
+  if (eventType === 'entered_premises') {
+    const reception = await resolveStaffUsers(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+      roleSlugs: RECEPTION_ROLE_SLUGS,
+    });
+    for (const user of reception) {
+      if (user.id === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: user.id,
+        templateKey: 'visit.entered_premises',
+        categoryKey,
+        channels: ['in_app'],
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:reception:${user.id}`,
+        metadata: { ...metadata, audience: 'reception' },
+        orgSettings,
+      });
+    }
+  }
 }
 
 /**
@@ -362,8 +566,9 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
   );
 
   const [visits] = await pool.query(
-    `SELECT vis.id, vis.organisation_id, vis.site_id, vis.pass_code,
-            v.full_name AS visitor_name,
+    `SELECT vis.id, vis.organisation_id, vis.site_id, vis.pass_code, vis.invite_token,
+            vis.host_id, h.user_id AS host_user_id,
+            v.full_name AS visitor_name, v.email AS visitor_email, v.phone AS visitor_phone,
             h.name AS host_name,
             s.name AS site_name,
             COALESCE(vis.expected_at, a.scheduled_at) AS arrival_at
@@ -385,12 +590,19 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
     [leadMinutes, limit],
   );
 
+  const orgSettings = await getNotificationSettings();
+  const categoryKey = 'visit_reminder';
   let notified = 0;
+
   for (const visit of visits) {
     const staff = await resolveGateAndReceptionUsers(pool, {
       organisationId: visit.organisation_id,
       siteId: visit.site_id,
     });
+
+    const inviteUrl = visit.invite_token
+      ? `${getAppBaseUrl()}/visit/invite/${visit.invite_token}`
+      : '';
 
     const vars = {
       visitor_name: visit.visitor_name,
@@ -398,10 +610,11 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
       pass_code: visit.pass_code,
       expected_at: formatExpectedAt(visit.arrival_at),
       site_name: visit.site_name || '',
+      invite_url: inviteUrl,
     };
 
     for (const user of staff) {
-      await sendFromTemplate(pool, {
+      await notifyAudience(pool, {
         organisationId: visit.organisation_id,
         userId: user.id,
         recipient: {
@@ -409,6 +622,8 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
           phone: user.phone || null,
         },
         templateKey: 'visit.pre_arrival_alert',
+        categoryKey,
+        channels: ['in_app', 'email', 'sms'],
         vars,
         idempotencyKey: `pre_arrival_reminder:${visit.id}:staff:${user.id}`,
         metadata: {
@@ -416,7 +631,48 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
           eventType: 'pre_arrival_reminder',
           audience: 'gate_reception',
         },
-        channels: ['in_app', 'email', 'sms'],
+        orgSettings,
+      });
+    }
+
+    const hostUserId = visit.host_user_id || await resolveHostUserId(pool, visit.host_id);
+    if (hostUserId) {
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: hostUserId,
+        templateKey: 'visit.pre_arrival_alert',
+        categoryKey,
+        channels: ['in_app'],
+        vars,
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:host:${hostUserId}`,
+        metadata: {
+          visitId: visit.id,
+          eventType: 'pre_arrival_reminder',
+          audience: 'host',
+        },
+        orgSettings,
+      });
+    }
+
+    // Optional visitor reminder when org enables visit_reminder email/SMS
+    if (visit.visitor_email || visit.visitor_phone) {
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        recipient: {
+          email: visit.visitor_email || null,
+          phone: visit.visitor_phone || null,
+        },
+        templateKey: 'visit.visitor_reminder',
+        categoryKey,
+        channels: ['email', 'sms'],
+        vars,
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:visitor`,
+        metadata: {
+          visitId: visit.id,
+          eventType: 'pre_arrival_reminder',
+          audience: 'visitor',
+        },
+        orgSettings,
       });
     }
 
@@ -512,3 +768,57 @@ export async function getDeliveryStats(pool) {
     deliveredExternal: Number(delivered?.count || 0),
   };
 }
+
+export async function getUserNotificationPreferences(pool, userId, organisationId) {
+  const [rows] = await pool.query(
+    `SELECT channel, category_key, enabled
+     FROM user_notification_preferences
+     WHERE user_id = ? AND organisation_id = ?`,
+    [userId, organisationId],
+  );
+  return rows.map((row) => ({
+    channel: row.channel,
+    category_key: row.category_key,
+    enabled: Boolean(Number(row.enabled)),
+  }));
+}
+
+export async function upsertUserNotificationPreferences(pool, {
+  userId,
+  organisationId,
+  preferences = [],
+}) {
+  const allowedChannels = new Set(['in_app', 'email', 'sms']);
+  for (const pref of preferences) {
+    const channel = String(pref.channel || '').trim();
+    const categoryKey = String(pref.category_key || '').trim();
+    if (!allowedChannels.has(channel) || !categoryKey) continue;
+
+    const enabled = pref.enabled === false || pref.enabled === 0 ? 0 : 1;
+    const [[existing]] = await pool.query(
+      `SELECT id FROM user_notification_preferences
+       WHERE user_id = ? AND organisation_id = ? AND channel = ? AND category_key = ?
+       LIMIT 1`,
+      [userId, organisationId, channel, categoryKey],
+    );
+
+    if (existing) {
+      await pool.query(
+        `UPDATE user_notification_preferences SET enabled = ?, updated_at = NOW() WHERE id = ?`,
+        [enabled, existing.id],
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO user_notification_preferences
+         (id, user_id, organisation_id, channel, category_key, enabled)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [generateId('unp'), userId, organisationId, channel, categoryKey, enabled],
+      );
+    }
+  }
+
+  return getUserNotificationPreferences(pool, userId, organisationId);
+}
+
+// Re-export for tests / callers that need role helpers
+export { GATE_ROLE_SLUGS, RECEPTION_ROLE_SLUGS };

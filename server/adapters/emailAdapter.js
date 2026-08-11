@@ -1,4 +1,9 @@
 import { getEmailConfig } from './deliveryConfig.js';
+import {
+  getEffectiveSmtpConfig,
+  isSmtpConfigured,
+  resolveSmtpPass,
+} from '../services/adminSettingsService.js';
 
 async function sendViaConsole({ to, subject, body }) {
   console.log('[email:console] ─────────────────────────');
@@ -37,8 +42,8 @@ async function sendViaSendGrid({ to, subject, body }, config) {
   return { provider: 'sendgrid', messageId };
 }
 
-async function sendViaSmtp({ to, subject, body }, config) {
-  if (!config.smtp.host) {
+async function sendViaSmtp({ to, subject, body }, smtpConfig) {
+  if (!smtpConfig.host) {
     throw new Error('SMTP host is not configured (SMTP_HOST)');
   }
 
@@ -50,16 +55,16 @@ async function sendViaSmtp({ to, subject, body }, config) {
   }
 
   const transporter = nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.secure,
-    auth: config.smtp.user
-      ? { user: config.smtp.user, pass: config.smtp.pass }
+    host: smtpConfig.host,
+    port: Number(smtpConfig.port || 587),
+    secure: Boolean(smtpConfig.secure),
+    auth: smtpConfig.user
+      ? { user: smtpConfig.user, pass: smtpConfig.pass }
       : undefined,
   });
 
   const info = await transporter.sendMail({
-    from: `"${config.fromName}" <${config.from}>`,
+    from: `"${smtpConfig.fromName}" <${smtpConfig.from}>`,
     to,
     subject,
     text: body,
@@ -69,28 +74,72 @@ async function sendViaSmtp({ to, subject, body }, config) {
 }
 
 /**
- * Send an email via the configured provider.
+ * Build runtime email delivery config:
+ * - Prefer admin SMTP (getEffectiveSmtpConfig) when configured
+ * - Else SendGrid when EMAIL_PROVIDER=sendgrid
+ * - Else env SMTP / console
+ *
+ * @param {{ effectiveSmtp?: object }} [options] optional inject for tests
  */
-export async function sendEmail({ to, subject, body }) {
+export async function resolveEmailDeliveryConfig(options = {}) {
+  const envConfig = getEmailConfig();
+  const effectiveSmtp = options.effectiveSmtp !== undefined
+    ? options.effectiveSmtp
+    : await getEffectiveSmtpConfig();
+
+  if (isSmtpConfigured(effectiveSmtp)) {
+    return {
+      provider: 'smtp',
+      from: effectiveSmtp.from || envConfig.from,
+      fromName: effectiveSmtp.from_name || envConfig.fromName,
+      sendgrid: envConfig.sendgrid,
+      smtp: {
+        host: effectiveSmtp.host,
+        port: Number(effectiveSmtp.port || 587),
+        secure: Boolean(effectiveSmtp.secure),
+        user: effectiveSmtp.user || '',
+        pass: resolveSmtpPass(effectiveSmtp),
+      },
+      configured: true,
+      source: effectiveSmtp.source || 'database',
+    };
+  }
+
+  if (envConfig.provider === 'sendgrid' && envConfig.sendgrid.apiKey) {
+    return { ...envConfig, configured: true, source: 'env' };
+  }
+
+  return { ...envConfig, source: envConfig.configured ? 'env' : 'none' };
+}
+
+/**
+ * Send an email via effective SMTP (admin settings) with env fallback.
+ */
+export async function sendEmail({ to, subject, body }, options = {}) {
   if (!to) throw new Error('Email recipient is required');
-  const config = getEmailConfig();
+  const config = await resolveEmailDeliveryConfig(options);
 
   switch (config.provider) {
     case 'sendgrid':
       return sendViaSendGrid({ to, subject, body }, config);
     case 'smtp':
-      return sendViaSmtp({ to, subject, body }, config);
+      return sendViaSmtp({ to, subject, body }, {
+        ...config.smtp,
+        from: config.from,
+        fromName: config.fromName,
+      });
     case 'console':
     default:
       return sendViaConsole({ to, subject, body });
   }
 }
 
-export function getEmailProviderStatus() {
-  const config = getEmailConfig();
+export async function getEmailProviderStatus() {
+  const config = await resolveEmailDeliveryConfig();
   return {
     provider: config.provider,
     configured: config.configured,
     from: config.from,
+    source: config.source,
   };
 }
