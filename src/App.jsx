@@ -1,5 +1,5 @@
 import { Suspense, lazy, Component, useEffect } from 'react';
-import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate, useNavigation, useParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 import PortalLayout from './layouts/PortalLayout';
@@ -228,6 +228,22 @@ function EmergencyPortalLayout() {
   return <PortalLayout key="emergency" portalId="emergency" title={`${APP_NAME_SHORT} Emergency`} />;
 }
 
+function AppOutlet() {
+  const location = useLocation();
+  const navigation = useNavigation();
+  const isNavigating = navigation.state === 'loading';
+
+  if (isNavigating) {
+    return <RouteLoader />;
+  }
+
+  return (
+    <Suspense fallback={<RouteLoader />}>
+      <Outlet key={location.key} />
+    </Suspense>
+  );
+}
+
 function AppRoot() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -255,9 +271,7 @@ function AppRoot() {
     <>
       <TopProgressBar />
       <ErrorBoundary resetKey={location.pathname}>
-        <Suspense fallback={<RouteLoader />}>
-          <Outlet />
-        </Suspense>
+        <AppOutlet />
       </ErrorBoundary>
 
       <Modal

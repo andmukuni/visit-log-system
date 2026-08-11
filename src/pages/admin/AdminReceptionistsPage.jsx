@@ -26,8 +26,15 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 import { useOrganisationPrerequisite } from '../../hooks/useOrganisationPrerequisite';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 import OrganisationRequiredBanner from '../../components/admin/OrganisationRequiredBanner';
 import StructureRelationHint from '../../components/admin/StructureRelationHint';
+import {
+  activeSitesForOrg,
+  hasStructurePrerequisites,
+  resolveDefaultOrganisationId,
+  zonesForOrg,
+} from '../../utils/adminStructureDefaults';
 
 const emptyForm = () => ({
   organisationId: '',
@@ -49,6 +56,7 @@ export default function AdminReceptionistsPage() {
     hasActiveOrganisation,
     loading: orgLoading,
   } = useOrganisationPrerequisite();
+  const { organisationId: selectedOrganisationId } = useAdminOrganisation();
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -162,9 +170,13 @@ export default function AdminReceptionistsPage() {
       .map((d) => ({ value: d.id, label: d.code ? `${d.name} (${d.code})` : d.name })),
   ], [departments, form.organisationId]);
 
-  const prerequisitesReady = orgOptions.length > 0
-    && sites.some((s) => s.status !== 'inactive')
-    && zones.length > 0;
+  const prerequisitesReady = hasStructurePrerequisites({
+    orgOptions,
+    sites,
+    zones,
+    preferredOrgId: selectedOrganisationId,
+    requireZones: true,
+  });
 
   const openCreate = () => {
     if (!canManageStructure) {
@@ -175,18 +187,25 @@ export default function AdminReceptionistsPage() {
       toast.error('Create an organisation first.');
       return;
     }
-    const defaultOrgId = orgOptions[0].value;
-    const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === defaultOrgId);
-    if (!siteForOrg.length) {
-      toast.error('Create a site/branch first.');
+    const defaultOrgId = resolveDefaultOrganisationId({
+      orgOptions,
+      sites,
+      zones,
+      preferredOrgId: selectedOrganisationId,
+      requireZones: true,
+    });
+    const siteForOrg = activeSitesForOrg(sites, defaultOrgId);
+    if (!defaultOrgId || !siteForOrg.length) {
+      toast.error('Create a site/branch under an organisation first.');
       return;
     }
-    if (!zones.length) {
+    const zonesForSite = zonesForOrg(zones, defaultOrgId, siteForOrg[0].id);
+    if (!zonesForSite.length) {
       toast.error('Create a zone first.');
       return;
     }
     const defaultSiteId = siteForOrg[0].id;
-    const zoneForSite = zones.find((z) => z.site_id === defaultSiteId) || zones[0];
+    const zoneForSite = zonesForSite[0];
     setEditing(null);
     setForm({
       ...emptyForm(),
@@ -398,11 +417,9 @@ export default function AdminReceptionistsPage() {
               emptyDescription={
                 !orgOptions.length
                   ? 'Create an Organisation first.'
-                  : !sites.some((s) => s.status !== 'inactive')
-                    ? 'Create a Site / Branch first.'
-                    : !zones.length
-                      ? 'Create a Zone under a Building first.'
-                      : 'Add a receptionist under an organisation, site and zone.'
+                  : !prerequisitesReady
+                    ? 'Add a Site / Branch and Zone under an organisation, or select that organisation in the header switcher.'
+                    : 'Add a receptionist under an organisation, site and zone.'
               }
               onRowClick={setSelected}
               activeRowId={selected?.id}

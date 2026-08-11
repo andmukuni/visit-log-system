@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useNavigation } from 'react-router-dom';
 import { LogOut, Menu, ShieldCheck } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
@@ -32,6 +32,22 @@ function getShellBreadcrumbs() {
 
 function isGateEntryKiosk(pathname) {
   return pathname.endsWith('/gate-entry');
+}
+
+function PortalOutlet() {
+  const location = useLocation();
+  const navigation = useNavigation();
+  const isNavigating = navigation.state === 'loading';
+
+  if (isNavigating) {
+    return <PortalOutletLoader />;
+  }
+
+  return (
+    <Suspense fallback={<PortalOutletLoader />}>
+      <Outlet key={location.pathname} />
+    </Suspense>
+  );
 }
 
 function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk }) {
@@ -150,9 +166,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto overscroll-y-contain"
           >
             <div className={`flex min-h-0 flex-1 flex-col ${isKiosk ? '' : 'p-4 pt-4 pb-6 sm:p-6 lg:px-8'}`}>
-              <Suspense fallback={<PortalOutletLoader />}>
-                <Outlet />
-              </Suspense>
+              <PortalOutlet />
             </div>
           </main>
 

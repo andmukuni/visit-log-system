@@ -14,8 +14,14 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 import { useOrganisationPrerequisite } from '../../hooks/useOrganisationPrerequisite';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 import OrganisationRequiredBanner from '../../components/admin/OrganisationRequiredBanner';
 import StructureRelationHint from '../../components/admin/StructureRelationHint';
+import {
+  activeSitesForOrg,
+  hasStructurePrerequisites,
+  resolveDefaultOrganisationId,
+} from '../../utils/adminStructureDefaults';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'No title' },
@@ -59,6 +65,7 @@ export default function AdminHostsPage() {
     hasActiveOrganisation,
     loading: orgLoading,
   } = useOrganisationPrerequisite();
+  const { organisationId: selectedOrganisationId } = useAdminOrganisation();
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -176,9 +183,13 @@ export default function AdminHostsPage() {
     ];
   }, [offices, form.organisationId, form.departmentId, form.siteId]);
 
-  const prerequisitesReady = orgOptions.length > 0
-    && departments.length > 0
-    && sites.some((s) => s.status !== 'inactive');
+  const prerequisitesReady = hasStructurePrerequisites({
+    orgOptions,
+    sites,
+    departments,
+    preferredOrgId: selectedOrganisationId,
+    requireDepartments: true,
+  });
 
   const openCreate = () => {
     if (!canManageStructure) {
@@ -189,15 +200,21 @@ export default function AdminHostsPage() {
       toast.error('Create an organisation first. Employees belong to an organisation.');
       return;
     }
-    const defaultOrgId = orgOptions[0].value;
+    const defaultOrgId = resolveDefaultOrganisationId({
+      orgOptions,
+      sites,
+      departments,
+      preferredOrgId: selectedOrganisationId,
+      requireDepartments: true,
+    });
     const deptForOrg = departments.filter((d) => d.organisation_id === defaultOrgId);
-    const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === defaultOrgId);
-    if (!deptForOrg.length) {
-      toast.error('Create a department first. Employees belong to a department and a site.');
+    const siteForOrg = activeSitesForOrg(sites, defaultOrgId);
+    if (!defaultOrgId || !deptForOrg.length) {
+      toast.error('Create a department under an organisation first.');
       return;
     }
     if (!siteForOrg.length) {
-      toast.error('Create a site/branch first. Employees are assigned to a site.');
+      toast.error('Create a site/branch under an organisation first.');
       return;
     }
     setEditing(null);

@@ -26,8 +26,14 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 import { useOrganisationPrerequisite } from '../../hooks/useOrganisationPrerequisite';
+import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 import OrganisationRequiredBanner from '../../components/admin/OrganisationRequiredBanner';
 import StructureRelationHint from '../../components/admin/StructureRelationHint';
+import {
+  activeSitesForOrg,
+  hasStructurePrerequisites,
+  resolveDefaultOrganisationId,
+} from '../../utils/adminStructureDefaults';
 
 const emptyForm = () => ({
   organisationId: '',
@@ -49,6 +55,7 @@ export default function AdminSecurityGuardsPage() {
     hasActiveOrganisation,
     loading: orgLoading,
   } = useOrganisationPrerequisite();
+  const { organisationId: selectedOrganisationId } = useAdminOrganisation();
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -162,8 +169,11 @@ export default function AdminSecurityGuardsPage() {
       .map((d) => ({ value: d.id, label: d.code ? `${d.name} (${d.code})` : d.name })),
   ], [departments, form.organisationId]);
 
-  const prerequisitesReady = orgOptions.length > 0
-    && sites.some((s) => s.status !== 'inactive');
+  const prerequisitesReady = hasStructurePrerequisites({
+    orgOptions,
+    sites,
+    preferredOrgId: selectedOrganisationId,
+  });
 
   const openCreate = () => {
     if (!canManageStructure) {
@@ -174,10 +184,14 @@ export default function AdminSecurityGuardsPage() {
       toast.error('Create an organisation first.');
       return;
     }
-    const defaultOrgId = orgOptions[0].value;
-    const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === defaultOrgId);
-    if (!siteForOrg.length) {
-      toast.error('Create a site/branch first.');
+    const defaultOrgId = resolveDefaultOrganisationId({
+      orgOptions,
+      sites,
+      preferredOrgId: selectedOrganisationId,
+    });
+    const siteForOrg = activeSitesForOrg(sites, defaultOrgId);
+    if (!defaultOrgId || !siteForOrg.length) {
+      toast.error('Create a site/branch under an organisation first.');
       return;
     }
     setEditing(null);

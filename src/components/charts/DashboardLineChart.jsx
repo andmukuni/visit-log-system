@@ -211,8 +211,8 @@ export default function DashboardLineChart({
   const chart = useMemo(() => {
     const width = 520;
     const height = 220;
-    const padLeft = 8;
-    const padRight = 12;
+    const padLeft = 20;
+    const padRight = 20;
     const padTop = 12;
     const padBottom = 28;
     const innerW = width - padLeft - padRight;
@@ -355,11 +355,11 @@ export default function DashboardLineChart({
           ))}
         </div>
 
-        <div className="relative min-w-0 flex-1 flex flex-col">
+        <div className="relative min-w-0 flex-1 flex flex-col overflow-visible">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${chart.width} ${chart.height}`}
-            className={`h-full min-h-[12rem] w-full flex-1 touch-none ${detailLink ? 'cursor-pointer' : ''}`}
+            className={`h-full min-h-[12rem] w-full flex-1 touch-none overflow-visible ${detailLink ? 'cursor-pointer' : ''}`}
             onMouseMove={handlePointer}
             onMouseLeave={() => setHoverIndex(null)}
             onClick={() => {
@@ -469,12 +469,15 @@ export default function DashboardLineChart({
 
             {series.map((row, index) => {
               const x = chart.primaryPoints[index]?.x ?? 0;
+              const isFirst = index === 0;
+              const isLast = index === series.length - 1;
+              const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
               return (
                 <text
-                  key={row.label}
+                  key={`${row.label}-${index}`}
                   x={x}
                   y={chart.height - 8}
-                  textAnchor="middle"
+                  textAnchor={textAnchor}
                   className="fill-gray-400 text-[11px]"
                 >
                   {row.label}

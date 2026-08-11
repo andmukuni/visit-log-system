@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const EMPTY_BREADCRUMBS = [];
 
@@ -26,7 +27,12 @@ function headersEqual(a, b) {
 }
 
 export function PageHeaderProvider({ children }) {
+  const location = useLocation();
   const [header, setHeaderState] = useState(EMPTY_HEADER);
+
+  useEffect(() => {
+    setHeaderState(EMPTY_HEADER);
+  }, [location.pathname]);
 
   const setHeader = useCallback((next) => {
     setHeaderState((prev) => {
