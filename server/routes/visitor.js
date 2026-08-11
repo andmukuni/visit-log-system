@@ -2111,6 +2111,28 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/organisations/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const scopedOrgId = hasPlatformWideAccess(req.adminClaims) ? null : scope?.organisation_id;
+      const targetId = req.params.id;
+
+      if (scopedOrgId && scopedOrgId !== targetId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this organisation.' });
+      }
+
+      const [[row]] = await pool.query(`${ORGANISATION_SELECT} WHERE o.id = ? LIMIT 1`, [targetId]);
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'Organisation not found.' });
+      }
+
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.post('/organisations', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2288,6 +2310,38 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/sites/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const siteId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT s.*,
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM stations st WHERE st.site_id = s.id) AS station_count,
+                (SELECT COUNT(*) FROM buildings b WHERE b.site_id = s.id) AS building_count,
+                (SELECT COUNT(*) FROM offices ofc WHERE ofc.site_id = s.id) AS office_count,
+                (SELECT COUNT(*) FROM hosts h WHERE h.site_id = s.id) AS employee_count
+         FROM sites s
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE s.id = ?
+         LIMIT 1`,
+        [siteId],
+      );
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'Site not found.' });
+      }
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this site.' });
+      }
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.patch('/sites/:id', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2403,6 +2457,36 @@ export function createOrgAdminRouter() {
         [id],
       );
       res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/stations/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const stationId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT st.*,
+                s.name AS site_name,
+                s.code AS site_code,
+                s.organisation_id,
+                o.name AS organisation_name
+         FROM stations st
+         JOIN sites s ON s.id = st.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE st.id = ?
+         LIMIT 1`,
+        [stationId],
+      );
+      if (!row) return res.status(404).json({ ok: false, message: 'Station not found.' });
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this station.' });
+      }
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -2610,6 +2694,39 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/zones/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const zoneId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT z.*,
+               b.name AS building_name,
+               b.site_id,
+               s.name AS site_name,
+               s.organisation_id,
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM offices ofc WHERE ofc.building_id = b.id) AS office_count
+         FROM zones z
+         JOIN buildings b ON b.id = z.building_id
+         JOIN sites s ON s.id = b.site_id
+         LEFT JOIN organisations o ON o.id = s.organisation_id
+         WHERE z.id = ?
+         LIMIT 1`,
+        [zoneId],
+      );
+      if (!row) return res.status(404).json({ ok: false, message: 'Zone not found.' });
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this zone.' });
+      }
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.patch('/zones/:id', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2738,6 +2855,36 @@ export function createOrgAdminRouter() {
         [id],
       );
       res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/departments/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const departmentId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT d.*,
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM offices ofc WHERE ofc.department_id = d.id) AS office_count,
+                (SELECT COUNT(*) FROM hosts h WHERE h.department_id = d.id) AS employee_count
+         FROM departments d
+         LEFT JOIN organisations o ON o.id = d.organisation_id
+         WHERE d.id = ?
+         LIMIT 1`,
+        [departmentId],
+      );
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'Department not found.' });
+      }
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this department.' });
+      }
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -3079,6 +3226,43 @@ export function createOrgAdminRouter() {
         [id],
       );
       res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/offices/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const officeId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT ofc.*,
+               d.name AS department_name,
+               d.code AS department_code,
+               o.name AS organisation_name,
+               b.name AS building_name,
+               z.name AS zone_name,
+               z.access_level AS zone_access_level,
+               s.name AS site_name,
+               (SELECT COUNT(*) FROM hosts h WHERE h.office_id = ofc.id) AS employee_count
+         FROM offices ofc
+         LEFT JOIN departments d ON d.id = ofc.department_id
+         LEFT JOIN organisations o ON o.id = ofc.organisation_id
+         LEFT JOIN buildings b ON b.id = ofc.building_id
+         LEFT JOIN zones z ON z.id = ofc.zone_id
+         LEFT JOIN sites s ON s.id = COALESCE(ofc.site_id, b.site_id)
+         WHERE ofc.id = ?
+         LIMIT 1`,
+        [officeId],
+      );
+      if (!row) return res.status(404).json({ ok: false, message: 'Office not found.' });
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this office.' });
+      }
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -3698,6 +3882,24 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/receptionists/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const receptionistId = req.params.id;
+
+      const row = await loadReceptionistRow(pool, receptionistId);
+      if (!row) return res.status(404).json({ ok: false, message: 'Receptionist not found.' });
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this receptionist.' });
+      }
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.patch('/receptionists/:id', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -3933,6 +4135,38 @@ export function createOrgAdminRouter() {
 
       const row = await loadSecurityGuardRow(pool, id);
       res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/security-guards/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const guardId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT g.*,
+               o.name AS organisation_name,
+               s.name AS site_name,
+               st.name AS station_name,
+               d.name AS department_name
+         FROM security_guards g
+         LEFT JOIN organisations o ON o.id = g.organisation_id
+         LEFT JOIN sites s ON s.id = g.site_id
+         LEFT JOIN stations st ON st.id = g.station_id
+         LEFT JOIN departments d ON d.id = g.department_id
+         WHERE g.id = ?
+         LIMIT 1`,
+        [guardId],
+      );
+      if (!row) return res.status(404).json({ ok: false, message: 'Security guard not found.' });
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this security guard.' });
+      }
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

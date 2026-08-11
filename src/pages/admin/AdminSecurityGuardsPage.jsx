@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   ShieldCheck,
@@ -49,6 +49,7 @@ const emptyForm = () => ({
 
 export default function AdminSecurityGuardsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const {
     organisations,
     hasOrganisation,
@@ -70,7 +71,6 @@ export default function AdminSecurityGuardsPage() {
   const [stations, setStations] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -273,7 +273,6 @@ export default function AdminSecurityGuardsPage() {
     try {
       await visitorApi.deleteSecurityGuard(deleteTarget.id);
       toast.success('Security Guard deleted.');
-      if (selected?.id === deleteTarget.id) setSelected(null);
       setDeleteTarget(null);
       await load();
     } catch (err) {
@@ -282,6 +281,11 @@ export default function AdminSecurityGuardsPage() {
       setDeleting(false);
     }
   };
+
+  const openShow = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/security-guards/${row.id}`);
+  }, [navigate]);
 
   const columns = useMemo(() => [
     {
@@ -313,7 +317,7 @@ export default function AdminSecurityGuardsPage() {
             iconSize={16}
             onClick={(e) => {
               e.stopPropagation();
-              setSelected(row);
+              openShow(row);
             }}
           />
           <IconButton
@@ -403,8 +407,7 @@ export default function AdminSecurityGuardsPage() {
                     ? 'Create a Site / Branch first.'
                     : 'Add a security guard under an organisation and site.'
               }
-              onRowClick={setSelected}
-              activeRowId={selected?.id}
+              onRowClick={openShow}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -415,46 +418,6 @@ export default function AdminSecurityGuardsPage() {
               pagination
             />
           </div>
-
-          {selected && (
-            <aside className="hidden w-full shrink-0 border-t border-gray-200 bg-white lg:flex lg:w-[300px] lg:flex-col lg:border-l lg:border-t-0">
-              <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">{selected.name}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{selected.email || 'No email'}</p>
-                </div>
-                <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="space-y-2 px-4 py-3 text-sm">
-                <StatusBadge status={selected.status || 'active'} />
-                <p className="text-xs text-gray-500">
-                  Portal login: <span className="font-semibold text-navy-900">{selected.user_id ? 'Enabled' : 'Not linked'}</span>
-                </p>
-                <p className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><span className="font-semibold">{selected.organisation_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><DoorOpen size={14} className="text-gray-400" /><span className="font-semibold">{selected.station_name || 'No station'}</span></p>
-                <p className="flex items-center gap-2"><Network size={14} className="text-gray-400" /><span className="font-semibold">{selected.department_name || '—'}</span></p>
-              </div>
-              <div className="mt-auto space-y-2 border-t border-gray-200 p-3">
-                <button
-                  type="button"
-                  onClick={() => openEdit(selected)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2 text-sm font-semibold text-[#1a73e8]"
-                >
-                  <Edit3 size={16} /> Edit Security Guard
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(selected)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
-              </div>
-            </aside>
-          )}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Building2,
   Download,
@@ -105,67 +105,6 @@ function DepartmentsKpiRow({ kpis = {} }) {
   );
 }
 
-function DepartmentDetailSidebar({ department, onClose, onEdit }) {
-  if (!department) return null;
-
-  return (
-    <aside className="hidden w-full shrink-0 flex-col border-t border-gray-200 bg-white lg:flex lg:w-[320px] lg:border-l lg:border-t-0">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-navy-900">{department.name}</p>
-          <p className="mt-0.5 text-xs text-gray-500">{department.code || 'No department code'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Close details"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="px-4 py-3 sm:px-5">
-        <section>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Belongs to
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={Building2} label="Organisation" value={department.organisation_name} />
-          </div>
-        </section>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Structure
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={DoorClosed} label="Offices" value={String(department.office_count ?? 0)} />
-            <DetailRow icon={Users} label="Employees" value={String(department.employee_count ?? 0)} />
-          </div>
-        </section>
-      </div>
-
-      <div className="flex shrink-0 gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
-        <button
-          type="button"
-          onClick={() => onEdit?.(department)}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:text-sm"
-        >
-          <Edit3 size={16} aria-hidden="true" />
-          Edit Department
-        </button>
-        <Link
-          to="/admin/offices"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800 sm:text-sm"
-        >
-          View Offices
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
 function exportDepartmentsCsv(rows) {
   const headers = ['Name', 'Code', 'Organisation', 'Offices', 'Employees'];
   const lines = rows.map((row) => [
@@ -191,6 +130,7 @@ function exportDepartmentsCsv(rows) {
 
 export default function AdminDepartmentsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const {
     organisations,
     hasOrganisation,
@@ -208,8 +148,6 @@ export default function AdminDepartmentsPage() {
   const [allRows, setAllRows] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -276,18 +214,17 @@ export default function AdminDepartmentsPage() {
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page, pageSize]);
 
-  useEffect(() => {
-    if (!selected) return;
-    const fresh = allRows.find((row) => row.id === selected.id);
-    if (fresh) setSelected(fresh);
-  }, [allRows, selected]);
-
   const orgOptions = useMemo(
     () => organisations
       .filter((org) => org.status === 'active')
       .map((org) => ({ value: org.id, label: org.name })),
     [organisations],
   );
+
+  const openShow = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/departments/${row.id}`);
+  }, [navigate]);
 
   const columns = useMemo(() => [
     {
@@ -325,8 +262,7 @@ export default function AdminDepartmentsPage() {
           iconSize={16}
           onClick={(e) => {
             e.stopPropagation();
-            setSelected(row);
-            if (window.innerWidth < 1024) setMobileDetailOpen(true);
+            openShow(row);
           }}
         />
       ),
@@ -387,10 +323,7 @@ export default function AdminDepartmentsPage() {
     }
   };
 
-  const handleSelect = useCallback((row) => {
-    setSelected(row);
-    if (window.innerWidth < 1024) setMobileDetailOpen(true);
-  }, []);
+  const handleSelect = openShow;
 
   const pageActions = (
     <button
@@ -477,8 +410,7 @@ export default function AdminDepartmentsPage() {
                   ? 'Create an organisation first. Departments are created under an organisation.'
                   : 'Add a department under your organisation.'
               }
-              onRowClick={handleSelect}
-              activeRowId={selected?.id}
+              onRowClick={openShow}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -489,57 +421,8 @@ export default function AdminDepartmentsPage() {
               pagination
             />
           </div>
-
-          {selected && (
-            <DepartmentDetailSidebar
-              department={selected}
-              onClose={() => setSelected(null)}
-              onEdit={openEdit}
-            />
-          )}
         </div>
       </div>
-
-      {mobileDetailOpen && selected && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white lg:hidden">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-navy-900">{selected.name}</p>
-              <p className="text-xs text-gray-500">{selected.code || 'Department details'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileDetailOpen(false)}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <div className="grid grid-cols-[16px_1fr] gap-x-3">
-              <DetailRow icon={Building2} label="Organisation" value={selected.organisation_name} />
-              <DetailRow icon={DoorClosed} label="Offices" value={String(selected.office_count ?? 0)} />
-              <DetailRow icon={Users} label="Employees" value={String(selected.employee_count ?? 0)} />
-            </div>
-          </div>
-          <div className="flex gap-2 border-t border-gray-200 p-4">
-            <button
-              type="button"
-              onClick={() => openEdit(selected)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2.5 text-sm font-semibold text-[#1a73e8]"
-            >
-              Edit Department
-            </button>
-            <Link
-              to="/admin/offices"
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white"
-            >
-              View Offices
-            </Link>
-          </div>
-        </div>
-      )}
 
       <Modal
         isOpen={modalOpen}

@@ -7,7 +7,6 @@ import {
   Eye,
   Plus,
   Search,
-  X,
   Edit3,
   Trash2,
   Users,
@@ -37,20 +36,6 @@ const emptyForm = () => ({
   status: 'active',
   organisationId: '',
 });
-
-function DetailRow({ icon: Icon, label, value }) {
-  return (
-    <>
-      <Icon size={16} className="mt-0.5 shrink-0 text-gray-400" aria-hidden="true" />
-      <div className="min-w-0 pb-2">
-        <p className="text-xs font-medium leading-none text-gray-500">{label}</p>
-        <p className="mt-1 text-sm font-semibold leading-snug text-navy-900 break-words">
-          {value || '—'}
-        </p>
-      </div>
-    </>
-  );
-}
 
 function PositionsKpiRow({ kpis = {} }) {
   const items = [
@@ -107,83 +92,6 @@ function PositionsKpiRow({ kpis = {} }) {
   );
 }
 
-function PositionDetailSidebar({ position, onClose, onShow, onEdit, onDelete }) {
-  if (!position) return null;
-
-  return (
-    <aside className="hidden w-full shrink-0 flex-col border-t border-gray-200 bg-white lg:flex lg:w-[320px] lg:border-l lg:border-t-0">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-navy-900">{position.name}</p>
-          <p className="mt-0.5 text-xs text-gray-500">{position.code || 'No position code'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Close details"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="px-4 py-3 sm:px-5">
-        <section>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Belongs to
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={Building2} label="Organisation" value={position.organisation_name} />
-          </div>
-        </section>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Details
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={Briefcase} label="Status" value={position.status === 'active' ? 'Active' : 'Inactive'} />
-            <DetailRow
-              icon={Users}
-              label="Assigned hosts"
-              value={`${Number(position.host_count || 0)} host${Number(position.host_count || 0) === 1 ? '' : 's'}`}
-            />
-          </div>
-        </section>
-      </div>
-
-      <div className="flex shrink-0 flex-col gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
-        <button
-          type="button"
-          onClick={() => onShow?.(position)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 bg-white px-2.5 py-2 text-xs font-semibold text-navy-800 transition-colors hover:bg-navy-50 sm:text-sm"
-        >
-          <Eye size={16} aria-hidden="true" />
-          View details
-        </button>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => onEdit?.(position)}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:text-sm"
-          >
-            <Edit3 size={16} aria-hidden="true" />
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete?.(position)}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 sm:text-sm"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            Delete
-          </button>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 function exportPositionsCsv(rows) {
   const headers = ['Name', 'Code', 'Status', 'Organisation'];
   const lines = rows.map((row) => [
@@ -226,8 +134,6 @@ export default function AdminPositionsPage() {
   const [allRows, setAllRows] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -295,12 +201,6 @@ export default function AdminPositionsPage() {
     const start = (page - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page, pageSize]);
-
-  useEffect(() => {
-    if (!selected) return;
-    const fresh = allRows.find((row) => row.id === selected.id);
-    if (fresh) setSelected(fresh);
-  }, [allRows, selected]);
 
   const orgOptions = useMemo(
     () => organisations
@@ -435,21 +335,12 @@ export default function AdminPositionsPage() {
     }
   };
 
-  const handleSelect = useCallback((row) => {
-    setSelected(row);
-    if (window.innerWidth < 1024) setMobileDetailOpen(true);
-  }, []);
-
   const handleDelete = async () => {
     if (!deleteTarget?.id) return;
     setDeleting(true);
     try {
       const result = await visitorApi.deletePosition(deleteTarget.id);
       toast.success(result?.message || 'Position deleted.');
-      if (selected?.id === deleteTarget.id) {
-        setSelected(null);
-        setMobileDetailOpen(false);
-      }
       setDeleteTarget(null);
       await load();
     } catch (err) {
@@ -488,140 +379,70 @@ export default function AdminPositionsPage() {
       <PositionsKpiRow kpis={kpis} />
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1">
-            <div className="border-b border-gray-200">
-              <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
-                {TABS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8] sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-b border-gray-200 px-4 py-2 sm:px-5 sm:py-2.5">
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <label className="relative block min-w-0 flex-1">
-                  <Search
-                    size={15}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder="Search by position name, code or organisation..."
-                    className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => exportPositionsCsv(filteredRows)}
-                  className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm lg:self-center"
-                >
-                  <Download size={14} aria-hidden="true" />
-                  Export
-                </button>
-              </div>
-            </div>
-
-            <DataTable
-              embedded
-              columns={columns}
-              data={pageRows}
-              loading={loading}
-              emptyTitle={!canManageStructure ? 'No organisation yet' : 'No positions found.'}
-              emptyDescription={
-                !canManageStructure
-                  ? 'Create an organisation first. Positions are created under an organisation.'
-                  : 'Add a position under your organisation.'
-              }
-              onRowClick={handleSelect}
-              activeRowId={selected?.id}
-              serverPagination
-              page={page}
-              pageSize={pageSize}
-              totalItems={total}
-              onPageChange={(value) => updateParams({ page: value })}
-              onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
-              pageSizeOptions={[7, 10, 25, 50]}
-              pagination
-            />
+        <div className="border-b border-gray-200">
+          <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                className="relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8] sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm"
+              >
+                {label}
+              </button>
+            ))}
           </div>
-
-          {selected && (
-            <PositionDetailSidebar
-              position={selected}
-              onClose={() => setSelected(null)}
-              onShow={openPosition}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-            />
-          )}
         </div>
-      </div>
 
-      {mobileDetailOpen && selected && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white lg:hidden">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-navy-900">{selected.name}</p>
-              <p className="text-xs text-gray-500">{selected.code || 'Position details'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileDetailOpen(false)}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <div className="grid grid-cols-[16px_1fr] gap-x-3">
-              <DetailRow icon={Building2} label="Organisation" value={selected.organisation_name} />
-              <DetailRow icon={Briefcase} label="Status" value={selected.status === 'active' ? 'Active' : 'Inactive'} />
-              <DetailRow
-                icon={Users}
-                label="Assigned hosts"
-                value={`${Number(selected.host_count || 0)} host${Number(selected.host_count || 0) === 1 ? '' : 's'}`}
+        <div className="border-b border-gray-200 px-4 py-2 sm:px-5 sm:py-2.5">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <label className="relative block min-w-0 flex-1">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                aria-hidden="true"
               />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 border-t border-gray-200 p-4">
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search by position name, code or organisation..."
+                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
+              />
+            </label>
+
             <button
               type="button"
-              onClick={() => openPosition(selected)}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2.5 text-sm font-semibold text-navy-800"
+              onClick={() => exportPositionsCsv(filteredRows)}
+              className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm lg:self-center"
             >
-              View details
+              <Download size={14} aria-hidden="true" />
+              Export
             </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => openEdit(selected)}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2.5 text-sm font-semibold text-[#1a73e8]"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(selected)}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2.5 text-sm font-semibold text-rose-700"
-              >
-                Delete
-              </button>
-            </div>
           </div>
         </div>
-      )}
+
+        <DataTable
+          embedded
+          columns={columns}
+          data={pageRows}
+          loading={loading}
+          emptyTitle={!canManageStructure ? 'No organisation yet' : 'No positions found.'}
+          emptyDescription={
+            !canManageStructure
+              ? 'Create an organisation first. Positions are created under an organisation.'
+              : 'Add a position under your organisation.'
+          }
+          onRowClick={openPosition}
+          serverPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={total}
+          onPageChange={(value) => updateParams({ page: value })}
+          onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
+          pageSizeOptions={[7, 10, 25, 50]}
+          pagination
+        />
+      </div>
 
       <Modal
         isOpen={modalOpen}

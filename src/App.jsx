@@ -24,17 +24,26 @@ const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const DemoAccessControlPage = lazy(() => import('./pages/admin/DemoAccessControlPage'));
 const AdminOrgPages = lazy(() => import('./pages/admin/AdminOrgPages.jsx'));
 const AdminSitesPage = lazy(() => import('./pages/admin/AdminSitesPage.jsx'));
+const AdminSiteDetailPage = lazy(() => import('./pages/admin/AdminSiteDetailPage.jsx'));
 const AdminZonesPage = lazy(() => import('./pages/admin/AdminZonesPage.jsx'));
+const AdminZoneDetailPage = lazy(() => import('./pages/admin/AdminZoneDetailPage.jsx'));
 const AdminOrganisationsPage = lazy(() => import('./pages/admin/AdminOrganisationsPage.jsx'));
+const AdminOrganisationDetailPage = lazy(() => import('./pages/admin/AdminOrganisationDetailPage.jsx'));
 const AdminDepartmentsPage = lazy(() => import('./pages/admin/AdminDepartmentsPage.jsx'));
+const AdminDepartmentDetailPage = lazy(() => import('./pages/admin/AdminDepartmentDetailPage.jsx'));
 const AdminStationsPage = lazy(() => import('./pages/admin/AdminStationsPage.jsx'));
+const AdminStationDetailPage = lazy(() => import('./pages/admin/AdminStationDetailPage.jsx'));
 const AdminOfficesPage = lazy(() => import('./pages/admin/AdminOfficesPage.jsx'));
+const AdminOfficeDetailPage = lazy(() => import('./pages/admin/AdminOfficeDetailPage.jsx'));
 const AdminPositionsPage = lazy(() => import('./pages/admin/AdminPositionsPage.jsx'));
 const AdminPositionDetailPage = lazy(() => import('./pages/admin/AdminPositionDetailPage.jsx'));
 const AdminHostsPage = lazy(() => import('./pages/admin/AdminHostsPage.jsx'));
 const AdminHostDetailPage = lazy(() => import('./pages/admin/AdminHostDetailPage.jsx'));
 const AdminReceptionistsPage = lazy(() => import('./pages/admin/AdminReceptionistsPage.jsx'));
+const AdminReceptionistDetailPage = lazy(() => import('./pages/admin/AdminReceptionistDetailPage.jsx'));
 const AdminSecurityGuardsPage = lazy(() => import('./pages/admin/AdminSecurityGuardsPage.jsx'));
+const AdminSecurityGuardDetailPage = lazy(() => import('./pages/admin/AdminSecurityGuardDetailPage.jsx'));
+const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage.jsx'));
 
 const StationDashboardPage = lazy(() => import('./pages/station/StationDashboardPage'));
 const GateEntryPage = lazy(() => import('./pages/station/GateEntryPage'));
@@ -371,10 +380,26 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: 'organisations/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminOrganisationDetailPage />
+              </Suspense>
+            ),
+          },
+          {
             path: 'sites',
             element: (
               <Suspense fallback={<RouteLoader />}>
                 <AdminSitesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'sites/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminSiteDetailPage />
               </Suspense>
             ),
           },
@@ -387,10 +412,26 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: 'zones/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminZoneDetailPage />
+              </Suspense>
+            ),
+          },
+          {
             path: 'stations',
             element: (
               <Suspense fallback={<RouteLoader />}>
                 <AdminStationsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'stations/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminStationDetailPage />
               </Suspense>
             ),
           },
@@ -403,10 +444,26 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: 'departments/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminDepartmentDetailPage />
+              </Suspense>
+            ),
+          },
+          {
             path: 'offices',
             element: (
               <Suspense fallback={<RouteLoader />}>
                 <AdminOfficesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'offices/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminOfficeDetailPage />
               </Suspense>
             ),
           },
@@ -451,10 +508,26 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: 'receptionists/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminReceptionistDetailPage />
+              </Suspense>
+            ),
+          },
+          {
             path: 'security-guards',
             element: (
               <Suspense fallback={<RouteLoader />}>
                 <AdminSecurityGuardsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'security-guards/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminSecurityGuardDetailPage />
               </Suspense>
             ),
           },
@@ -468,6 +541,14 @@ export const router = createBrowserRouter([
           { path: 'badges', element: <LazyAdminOrgPage page="badges" /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },
           { path: 'users', element: <DemoUsersPage /> },
+          {
+            path: 'users/:id',
+            element: (
+              <Suspense fallback={<RouteLoader />}>
+                <AdminUserDetailPage />
+              </Suspense>
+            ),
+          },
           { path: 'settings', element: <AdminSettingsPage /> },
           { path: 'access-control', element: <DemoAccessControlPage /> },
           { path: '*', element: <PlaceholderPage title="Administration" portalLabel="Administration" /> },

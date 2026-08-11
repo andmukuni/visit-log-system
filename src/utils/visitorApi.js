@@ -125,6 +125,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getOrganisation: (id) => apiFetch(`/admin/org/organisations/${id}`),
   createOrganisation: (body) => apiFetch('/admin/org/organisations', { method: 'POST', body: JSON.stringify(body) }),
   updateOrganisation: (id, body) => apiFetch(`/admin/org/organisations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getSites: async () => {
@@ -141,6 +142,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getSite: (id) => apiFetch(`/admin/org/sites/${id}`),
   createSite: (body) => apiFetch('/admin/org/sites', { method: 'POST', body: JSON.stringify(body) }),
   updateSite: (id, body) => apiFetch(`/admin/org/sites/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getZones: async () => {
@@ -156,6 +158,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getZone: (id) => apiFetch(`/admin/org/zones/${id}`),
   createZone: (body) => apiFetch('/admin/org/zones', { method: 'POST', body: JSON.stringify(body) }),
   updateZone: (id, body) => apiFetch(`/admin/org/zones/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getBuildings: () => apiFetch('/admin/org/buildings'),
@@ -173,6 +176,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getStation: (id) => apiFetch(`/admin/org/stations/${id}`),
   createStation: (body) => apiFetch('/admin/org/stations', { method: 'POST', body: JSON.stringify(body) }),
   updateStation: (id, body) => apiFetch(`/admin/org/stations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getDepartments: async () => {
@@ -188,6 +192,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getDepartment: (id) => apiFetch(`/admin/org/departments/${id}`),
   createDepartment: (body) => apiFetch('/admin/org/departments', { method: 'POST', body: JSON.stringify(body) }),
   updateDepartment: (id, body) => apiFetch(`/admin/org/departments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getOffices: async () => {
@@ -203,6 +208,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getOffice: (id) => apiFetch(`/admin/org/offices/${id}`),
   createOffice: (body) => apiFetch('/admin/org/offices', { method: 'POST', body: JSON.stringify(body) }),
   updateOffice: (id, body) => apiFetch(`/admin/org/offices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getPositions: async () => {
@@ -294,6 +300,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getReceptionist: (id) => apiFetch(`/admin/org/receptionists/${id}`),
   createReceptionist: (body) => apiFetch('/admin/org/receptionists', { method: 'POST', body: JSON.stringify(body) }),
   updateReceptionist: (id, body) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteReceptionist: (id) => apiFetch(`/admin/org/receptionists/${id}`, { method: 'DELETE' }),
@@ -310,6 +317,7 @@ export const visitorApi = {
     rows.stats = json.stats || null;
     return rows;
   },
+  getSecurityGuard: (id) => apiFetch(`/admin/org/security-guards/${id}`),
   createSecurityGuard: (body) => apiFetch('/admin/org/security-guards', { method: 'POST', body: JSON.stringify(body) }),
   updateSecurityGuard: (id, body) => apiFetch(`/admin/org/security-guards/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSecurityGuard: (id) => apiFetch(`/admin/org/security-guards/${id}`, { method: 'DELETE' }),

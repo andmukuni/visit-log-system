@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   Download,
@@ -162,66 +162,6 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
-function UserDetailSidebar({ user, onClose, onEdit }) {
-  if (!user) return null;
-
-  return (
-    <aside className="hidden w-full shrink-0 flex-col border-t border-gray-200 bg-white lg:flex lg:w-[320px] lg:border-l lg:border-t-0">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-navy-900">{user.name || 'Unnamed user'}</p>
-          <p className="mt-0.5 truncate text-xs text-gray-500">{user.email || 'No email'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Close details"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-2">
-          <StatusBadge status={user.email_verified ? 'confirmed' : 'pending'} />
-        </div>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Account
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={Mail} label="Email" value={user.email} />
-            <DetailRow icon={Users} label="Joined" value={formatDate(user.created_at)} />
-          </div>
-        </section>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Access
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={Shield} label="Portal role" value={user.role_name || 'No portal role'} />
-            <DetailRow icon={KeyRound} label="Legacy role" value={user.role || 'user'} />
-          </div>
-        </section>
-      </div>
-
-      <div className="mt-auto flex shrink-0 items-center justify-end gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
-        <button
-          type="button"
-          onClick={() => onEdit?.(user)}
-          aria-label="Edit role"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#1a73e8] bg-white text-[#1a73e8] transition-colors hover:bg-sky-50"
-        >
-          <Edit3 size={18} aria-hidden="true" />
-        </button>
-      </div>
-    </aside>
-  );
-}
-
 function exportUsersCsv(rows) {
   const headers = ['Name', 'Email', 'Portal role', 'Legacy role', 'Verified', 'Joined'];
   const lines = rows.map((row) => [
@@ -248,6 +188,7 @@ function exportUsersCsv(rows) {
 
 export default function DemoUsersPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tab = searchParams.get('tab') || 'all';
@@ -260,8 +201,6 @@ export default function DemoUsersPage() {
   const [allRows, setAllRows] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -354,12 +293,6 @@ export default function DemoUsersPage() {
     noRole: kpis.noRole,
   }), [kpis]);
 
-  useEffect(() => {
-    if (!selected) return;
-    const fresh = allRows.find((row) => row.id === selected.id);
-    if (fresh) setSelected(fresh);
-  }, [allRows, selected]);
-
   const openEdit = (user) => {
     setEditing(user);
     setRoleId(user.role_id || '');
@@ -375,7 +308,6 @@ export default function DemoUsersPage() {
         body: JSON.stringify({ roleId: roleId || null }),
       });
       setAllRows((prev) => prev.map((row) => (row.id === editing.id ? json.data : row)));
-      setSelected(json.data);
       toast.success(`Role updated for ${editing.name || editing.email}.`);
       setModalOpen(false);
       setEditing(null);
@@ -386,10 +318,10 @@ export default function DemoUsersPage() {
     }
   };
 
-  const handleSelect = useCallback((row) => {
-    setSelected(row);
-    if (window.innerWidth < 1024) setMobileDetailOpen(true);
-  }, []);
+  const openShow = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/users/${row.id}`);
+  }, [navigate]);
 
   const columns = useMemo(() => [
     {
@@ -429,13 +361,12 @@ export default function DemoUsersPage() {
           iconSize={16}
           onClick={(e) => {
             e.stopPropagation();
-            setSelected(row);
-            if (window.innerWidth < 1024) setMobileDetailOpen(true);
+            openShow(row);
           }}
         />
       ),
     },
-  ], []);
+  ], [openShow]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">
@@ -524,8 +455,7 @@ export default function DemoUsersPage() {
               loading={loading}
               emptyTitle="No users match your filters."
               emptyDescription="Try adjusting your search or filters."
-              onRowClick={handleSelect}
-              activeRowId={selected?.id}
+              onRowClick={openShow}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -536,54 +466,8 @@ export default function DemoUsersPage() {
               pagination
             />
           </div>
-
-          {selected && (
-            <UserDetailSidebar
-              user={selected}
-              onClose={() => setSelected(null)}
-              onEdit={openEdit}
-            />
-          )}
         </div>
       </div>
-
-      {mobileDetailOpen && selected && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white lg:hidden">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-navy-900">{selected.name || 'User'}</p>
-              <p className="text-xs text-gray-500">{selected.email || 'User details'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileDetailOpen(false)}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <StatusBadge status={selected.email_verified ? 'confirmed' : 'pending'} />
-            <div className="mt-4 grid grid-cols-[16px_1fr] gap-x-3">
-              <DetailRow icon={Mail} label="Email" value={selected.email} />
-              <DetailRow icon={Shield} label="Portal role" value={selected.role_name || 'No portal role'} />
-              <DetailRow icon={KeyRound} label="Legacy role" value={selected.role || 'user'} />
-              <DetailRow icon={Users} label="Joined" value={formatDate(selected.created_at)} />
-            </div>
-          </div>
-          <div className="flex items-center justify-end gap-2 border-t border-gray-200 p-4">
-            <button
-              type="button"
-              onClick={() => openEdit(selected)}
-              aria-label="Edit role"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#1a73e8] text-[#1a73e8]"
-            >
-              <Edit3 size={18} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
 
       <Modal
         isOpen={modalOpen}

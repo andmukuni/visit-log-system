@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DoorOpen, Eye, MapPin, Plus, Search, X, Edit3 } from 'lucide-react';
 import {
   PageHeader,
@@ -26,6 +26,7 @@ const emptyForm = () => ({
 
 export default function AdminStationsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { hasOrganisation, hasActiveOrganisation, loading: orgLoading } = useOrganisationPrerequisite();
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,7 +40,6 @@ export default function AdminStationsPage() {
   const [sites, setSites] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -162,6 +162,11 @@ export default function AdminStationsPage() {
     }
   };
 
+  const openShow = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/stations/${row.id}`);
+  }, [navigate]);
+
   const columns = useMemo(() => [
     {
       key: 'name',
@@ -193,7 +198,7 @@ export default function AdminStationsPage() {
           iconSize={16}
           onClick={(e) => {
             e.stopPropagation();
-            setSelected(row);
+            openShow(row);
           }}
         />
       ),
@@ -269,8 +274,7 @@ export default function AdminStationsPage() {
                   ? 'Create a Site / Branch first. Stations belong to a site.'
                   : 'Add a reception desk or gate on a site.'
               }
-              onRowClick={setSelected}
-              activeRowId={selected?.id}
+              onRowClick={openShow}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -281,34 +285,6 @@ export default function AdminStationsPage() {
               pagination
             />
           </div>
-
-          {selected && (
-            <aside className="hidden w-full shrink-0 border-t border-gray-200 bg-white lg:flex lg:w-[300px] lg:flex-col lg:border-l lg:border-t-0">
-              <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">{selected.name}</p>
-                  <p className="mt-0.5 text-xs capitalize text-gray-500">{selected.type}</p>
-                </div>
-                <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="space-y-3 px-4 py-3 text-sm">
-                <StatusBadge status={selected.status || 'active'} />
-                <p><span className="text-gray-500">Site:</span> <span className="font-semibold text-navy-900">{selected.site_name || '—'}</span></p>
-                <p className="text-xs text-gray-500">Stations belong to a site — not a department.</p>
-              </div>
-              <div className="mt-auto border-t border-gray-200 p-3">
-                <button
-                  type="button"
-                  onClick={() => openEdit(selected)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2 text-sm font-semibold text-[#1a73e8]"
-                >
-                  <Edit3 size={16} /> Edit Station
-                </button>
-              </div>
-            </aside>
-          )}
         </div>
       </div>
 

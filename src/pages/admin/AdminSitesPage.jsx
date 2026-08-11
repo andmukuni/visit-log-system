@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Building2,
   ChevronDown,
@@ -94,75 +94,6 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
-function SiteDetailSidebar({ site, onClose, onEdit }) {
-  if (!site) return null;
-
-  return (
-    <aside className="hidden w-full shrink-0 flex-col border-t border-gray-200 bg-white lg:flex lg:w-[320px] lg:border-l lg:border-t-0">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-navy-900">{site.name}</p>
-          <p className="mt-0.5 text-xs text-gray-500">{site.code || 'No site code'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Close details"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-2">
-          <StatusBadge status={site.status || 'active'} />
-        </div>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Location
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={MapPin} label="Address" value={site.address} />
-            <DetailRow icon={Building2} label="Organisation" value={site.organisation_name} />
-          </div>
-        </section>
-
-        <section className="mt-4 sm:mt-5">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 sm:text-[11px]">
-            Capacity
-          </h3>
-          <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
-            <DetailRow icon={DoorOpen} label="Stations & Gates" value={String(site.station_count ?? 0)} />
-            <DetailRow icon={Layers3} label="Buildings" value={String(site.building_count ?? 0)} />
-            <DetailRow icon={Building2} label="Offices" value={String(site.office_count ?? 0)} />
-            <DetailRow icon={Users} label="Employees" value={String(site.employee_count ?? 0)} />
-          </div>
-        </section>
-      </div>
-
-      <div className="flex shrink-0 gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
-        <button
-          type="button"
-          onClick={() => onEdit?.(site)}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:text-sm"
-        >
-          <Edit3 size={16} aria-hidden="true" />
-          Edit Site
-        </button>
-        <Link
-          to="/admin/stations"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800 sm:text-sm"
-        >
-          <DoorOpen size={16} aria-hidden="true" />
-          View Stations
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
 function exportSitesCsv(rows) {
   const headers = ['Name', 'Code', 'Address', 'Status', 'Stations', 'Buildings', 'Offices', 'Employees'];
   const lines = rows.map((row) => [
@@ -191,6 +122,7 @@ function exportSitesCsv(rows) {
 
 export default function AdminSitesPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { hasOrganisation, hasActiveOrganisation, loading: orgLoading } = useOrganisationPrerequisite();
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -204,8 +136,6 @@ export default function AdminSitesPage() {
   const [searchInput, setSearchInput] = useState(search);
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -273,11 +203,10 @@ export default function AdminSitesPage() {
     inactive: allRows.filter((r) => r.status !== 'active').length,
   }), [allRows]);
 
-  useEffect(() => {
-    if (!selected) return;
-    const fresh = allRows.find((row) => row.id === selected.id);
-    if (fresh) setSelected(fresh);
-  }, [allRows, selected]);
+  const openShow = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/sites/${row.id}`);
+  }, [navigate]);
 
   const columns = useMemo(() => [
     {
@@ -320,8 +249,7 @@ export default function AdminSitesPage() {
           iconSize={16}
           onClick={(e) => {
             e.stopPropagation();
-            setSelected(row);
-            if (window.innerWidth < 1024) setMobileDetailOpen(true);
+            openShow(row);
           }}
         />
       ),
@@ -373,10 +301,7 @@ export default function AdminSitesPage() {
     }
   };
 
-  const handleSelect = useCallback((row) => {
-    setSelected(row);
-    if (window.innerWidth < 1024) setMobileDetailOpen(true);
-  }, []);
+  const handleSelect = openShow;
 
   const pageActions = (
     <button
@@ -486,8 +411,7 @@ export default function AdminSitesPage() {
                   ? 'Create an organisation first. Sites cannot exist without an organisation.'
                   : 'Try adjusting your search or filters.'
               }
-              onRowClick={handleSelect}
-              activeRowId={selected?.id}
+              onRowClick={openShow}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -498,61 +422,8 @@ export default function AdminSitesPage() {
               pagination
             />
           </div>
-
-          {selected && (
-            <SiteDetailSidebar
-              site={selected}
-              onClose={() => setSelected(null)}
-              onEdit={openEdit}
-            />
-          )}
         </div>
       </div>
-
-      {mobileDetailOpen && selected && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white lg:hidden">
-          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-navy-900">{selected.name}</p>
-              <p className="text-xs text-gray-500">{selected.code || 'Site details'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileDetailOpen(false)}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <StatusBadge status={selected.status || 'active'} />
-            <div className="mt-4 grid grid-cols-[16px_1fr] gap-x-3">
-              <DetailRow icon={MapPin} label="Address" value={selected.address} />
-              <DetailRow icon={DoorOpen} label="Stations" value={String(selected.station_count ?? 0)} />
-              <DetailRow icon={Users} label="Employees" value={String(selected.employee_count ?? 0)} />
-              <DetailRow icon={Building2} label="Offices" value={String(selected.office_count ?? 0)} />
-            </div>
-          </div>
-          <div className="flex gap-2 border-t border-gray-200 p-4">
-            <button
-              type="button"
-              onClick={() => openEdit(selected)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2.5 text-sm font-semibold text-[#1a73e8]"
-            >
-              <Edit3 size={16} aria-hidden="true" />
-              Edit Site
-            </button>
-            <Link
-              to="/admin/stations"
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white"
-            >
-              <DoorOpen size={16} aria-hidden="true" />
-              View Stations
-            </Link>
-          </div>
-        </div>
-      )}
 
       <Modal
         isOpen={modalOpen}

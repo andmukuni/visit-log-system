@@ -105,6 +105,34 @@ export function createAdminRouter() {
     }
   });
 
+  router.get('/users/:id', async (req, res) => {
+    try {
+      const userId = String(req.params.id || '').trim();
+      if (!userId) {
+        return res.status(400).json({ ok: false, message: 'User id is required.' });
+      }
+      const [[row]] = await pool.query(
+        `SELECT u.id, u.name, u.email, u.role, u.email_verified, u.created_at,
+                GROUP_CONCAT(DISTINCT ar.slug) AS role_slugs,
+                GROUP_CONCAT(DISTINCT ar.name) AS role_names,
+                MIN(ar.id) AS primary_role_id
+         FROM users u
+         LEFT JOIN user_admin_roles uar ON uar.user_id = u.id
+         LEFT JOIN admin_roles ar ON ar.id = uar.role_id
+         WHERE u.id = ?
+         GROUP BY u.id, u.name, u.email, u.role, u.email_verified, u.created_at
+         LIMIT 1`,
+        [userId],
+      );
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'User not found.' });
+      }
+      res.json({ ok: true, data: mapUserRow(row) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.patch('/users/:id/role', async (req, res) => {
     try {
       const actorId = req.adminClaims?.sub;
