@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Briefcase,
   Building2,
   DoorClosed,
   Edit3,
@@ -72,6 +73,7 @@ export default function AdminHostDetailPage() {
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
   const [offices, setOffices] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(null);
@@ -83,16 +85,18 @@ export default function AdminHostDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const [row, deptRows, siteRows, officeRows] = await Promise.all([
+      const [row, deptRows, siteRows, officeRows, positionRows] = await Promise.all([
         visitorApi.getHost(id),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
         visitorApi.getOffices(),
+        visitorApi.getPositions(),
       ]);
       setHost(row || null);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
       setOffices(Array.isArray(officeRows) ? officeRows : []);
+      setPositions(Array.isArray(positionRows) ? positionRows : []);
     } catch (err) {
       setHost(null);
       toast.error(err?.message || 'Unable to load host.');
@@ -137,6 +141,22 @@ export default function AdminHostDetailPage() {
     ];
   }, [offices, form]);
 
+  const positionOptions = useMemo(() => {
+    if (!form) return [{ value: '', label: 'No position (optional)' }];
+    const list = positions.filter((p) => {
+      if (form.organisationId && p.organisation_id && p.organisation_id !== form.organisationId) return false;
+      if (p.status === 'inactive' && p.id !== form.positionId) return false;
+      return true;
+    });
+    return [
+      { value: '', label: 'No position (optional)' },
+      ...list.map((p) => ({
+        value: p.id,
+        label: p.code ? `${p.name} (${p.code})` : p.name,
+      })),
+    ];
+  }, [positions, form]);
+
   const openEdit = () => {
     if (!host) return;
     setForm({
@@ -148,6 +168,7 @@ export default function AdminHostDetailPage() {
       departmentId: host.department_id || '',
       siteId: host.site_id || '',
       officeId: host.office_id || '',
+      positionId: host.position_id || '',
       status: host.status || 'active',
       availability: host.availability === 'unavailable' ? 'unavailable' : 'available',
       portalRole: host.portal_role || 'host',
@@ -184,6 +205,7 @@ export default function AdminHostDetailPage() {
         departmentId: form.departmentId,
         siteId: form.siteId,
         officeId: form.officeId || null,
+        positionId: form.positionId || null,
         status: form.status,
         availability: form.availability,
         portalRole: form.portalRole || 'host',
@@ -341,6 +363,7 @@ export default function AdminHostDetailPage() {
             <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-400">Placement</h3>
             <div className="mt-2.5 grid gap-2.5">
               <DetailItem icon={Building2} label="Organisation" value={host.organisation_name} />
+              <DetailItem icon={Briefcase} label="Position" value={host.position_name} />
               <DetailItem icon={Network} label="Department" value={host.department_name} />
               <DetailItem icon={MapPin} label="Site / Branch" value={host.site_name} />
               <DetailItem
@@ -410,6 +433,15 @@ export default function AdminHostDetailPage() {
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Jane Banda"
+            />
+            <FormField
+              label="Position"
+              name="positionId"
+              type="select"
+              value={form.positionId}
+              onChange={(e) => setForm((prev) => ({ ...prev, positionId: e.target.value }))}
+              options={positionOptions}
+              helpText="Optional job title from Admin → Positions."
             />
             <FormField
               label="Email"

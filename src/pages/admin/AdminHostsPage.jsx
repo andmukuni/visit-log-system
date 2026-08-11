@@ -50,6 +50,7 @@ const emptyForm = () => ({
   departmentId: '',
   siteId: '',
   officeId: '',
+  positionId: '',
   status: 'active',
   availability: 'available',
   portalRole: 'host',
@@ -85,6 +86,7 @@ export default function AdminHostsPage() {
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
   const [offices, setOffices] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -105,16 +107,18 @@ export default function AdminHostsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, deptRows, siteRows, officeRows] = await Promise.all([
+      const [rows, deptRows, siteRows, officeRows, positionRows] = await Promise.all([
         visitorApi.getHosts(),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
         visitorApi.getOffices(),
+        visitorApi.getPositions(),
       ]);
       setAllRows(Array.isArray(rows) ? rows : []);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
       setOffices(Array.isArray(officeRows) ? officeRows : []);
+      setPositions(Array.isArray(positionRows) ? positionRows : []);
       setKpis(rows?.stats || { total: rows?.length || 0 });
     } catch (err) {
       setAllRows([]);
@@ -196,6 +200,20 @@ export default function AdminHostsPage() {
     ];
   }, [offices, form.organisationId, form.departmentId, form.siteId]);
 
+  const positionOptions = useMemo(() => {
+    const list = positions.filter((p) => {
+      if (form.organisationId && p.organisation_id && p.organisation_id !== form.organisationId) return false;
+      return p.status !== 'inactive';
+    });
+    return [
+      { value: '', label: 'No position (optional)' },
+      ...list.map((p) => ({
+        value: p.id,
+        label: p.code ? `${p.name} (${p.code})` : p.name,
+      })),
+    ];
+  }, [positions, form.organisationId]);
+
   const prerequisitesReady = hasStructurePrerequisites({
     orgOptions,
     sites,
@@ -270,6 +288,7 @@ export default function AdminHostsPage() {
         departmentId: form.departmentId,
         siteId: form.siteId,
         officeId: form.officeId || null,
+        positionId: form.positionId || null,
         status: form.status,
         availability: form.availability,
         portalRole: form.portalRole || 'host',
@@ -307,6 +326,11 @@ export default function AdminHostsPage() {
       ),
     },
     { key: 'organisation_name', label: 'Organisation' },
+    {
+      key: 'position_name',
+      label: 'Position',
+      render: (value) => value || '—',
+    },
     { key: 'department_name', label: 'Department' },
     { key: 'site_name', label: 'Site / Branch' },
     {
@@ -479,6 +503,7 @@ export default function AdminHostsPage() {
                 departmentId: deptForOrg[0]?.id || '',
                 siteId: siteForOrg[0]?.id || '',
                 officeId: '',
+                positionId: '',
               }));
             }}
             options={orgOptions}
@@ -500,6 +525,15 @@ export default function AdminHostsPage() {
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="Jane Banda"
+          />
+          <FormField
+            label="Position"
+            name="positionId"
+            type="select"
+            value={form.positionId}
+            onChange={(e) => setForm((prev) => ({ ...prev, positionId: e.target.value }))}
+            options={positionOptions}
+            helpText="Optional job title from Admin → Positions."
           />
           <FormField
             label="Email"

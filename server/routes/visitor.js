@@ -49,6 +49,22 @@ function hasPlatformWideAccess(claims = {}) {
   return isSuperAdmin(claims) || perms.some((p) => String(p).startsWith('platform.'));
 }
 
+/** Optional host position must belong to the same organisation when set. */
+async function resolveHostPositionId(pool, organisationId, positionId) {
+  const id = String(positionId || '').trim() || null;
+  if (!id) return { ok: true, positionId: null };
+  const [[row]] = await pool.query(
+    `SELECT id FROM positions
+     WHERE id = ? AND organisation_id = ?
+     LIMIT 1`,
+    [id, organisationId],
+  );
+  if (!row) {
+    return { ok: false, status: 400, message: 'Select a valid position for this organisation.' };
+  }
+  return { ok: true, positionId: row.id };
+}
+
 /**
  * Resolve organisation filter for org-admin read APIs.
  * Platform-wide admins may pass organisation_id / "all"; scoped admins stay locked to their org.
@@ -3088,6 +3104,7 @@ export function createOrgAdminRouter() {
                ofc.name AS office_name,
                s.name AS site_name,
                o.name AS organisation_name,
+               p.name AS position_name,
                (
                  SELECT ar.slug
                  FROM user_admin_roles uar
@@ -3108,6 +3125,7 @@ export function createOrgAdminRouter() {
         LEFT JOIN departments od ON od.id = ofc.department_id
         LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
         LEFT JOIN organisations o ON o.id = h.organisation_id
+        LEFT JOIN positions p ON p.id = h.position_id
       `;
       const [rawRows] = orgId
         ? await pool.query(`${hostSelect} WHERE h.organisation_id = ? ORDER BY h.name`, [orgId])
@@ -3150,6 +3168,7 @@ export function createOrgAdminRouter() {
                 ofc.name AS office_name,
                 s.name AS site_name,
                 o.name AS organisation_name,
+                p.name AS position_name,
                 (
                   SELECT ar.slug
                   FROM user_admin_roles uar
@@ -3170,6 +3189,7 @@ export function createOrgAdminRouter() {
          LEFT JOIN departments od ON od.id = ofc.department_id
          LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
          LEFT JOIN organisations o ON o.id = h.organisation_id
+         LEFT JOIN positions p ON p.id = h.position_id
          WHERE h.id = ?
          LIMIT 1`,
         [hostId],
@@ -3206,6 +3226,7 @@ export function createOrgAdminRouter() {
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
       const officeId = String(req.body?.officeId || req.body?.office_id || '').trim() || null;
+      const positionRaw = String(req.body?.positionId || req.body?.position_id || '').trim() || null;
       const title = String(req.body?.title || req.body?.salutation || '').trim() || null;
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase() || null;
@@ -3260,6 +3281,11 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      const position = await resolveHostPositionId(pool, orgId, positionRaw);
+      if (!position.ok) {
+        return res.status(position.status).json({ ok: false, message: position.message });
+      }
+
       let linkedUserId = null;
       if (email) {
         linkedUserId = await syncHostPortalUser(pool, {
@@ -3278,9 +3304,9 @@ export function createOrgAdminRouter() {
 
       const id = generateId('host');
       await pool.query(
-        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, title, name, email, phone, status, availability)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, departmentId, siteId, placement.officeId, linkedUserId, title, name, email, phone, status, availability],
+        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, position_id, user_id, title, name, email, phone, status, availability)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, departmentId, siteId, placement.officeId, position.positionId, linkedUserId, title, name, email, phone, status, availability],
       );
 
       const [[row]] = await pool.query(
@@ -3289,12 +3315,14 @@ export function createOrgAdminRouter() {
                 ofc.office_number,
                 ofc.name AS office_name,
                 s.name AS site_name,
-                o.name AS organisation_name
+                o.name AS organisation_name,
+                p.name AS position_name
          FROM hosts h
          LEFT JOIN departments d ON d.id = h.department_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN sites s ON s.id = h.site_id
          LEFT JOIN organisations o ON o.id = h.organisation_id
+         LEFT JOIN positions p ON p.id = h.position_id
          WHERE h.id = ?`,
         [id],
       );
@@ -3337,6 +3365,9 @@ export function createOrgAdminRouter() {
         ? String(req.body.officeId || req.body.office_id || '').trim()
         : existing.office_id;
       const officeId = officeRaw || null;
+      const positionRaw = req.body?.positionId != null || req.body?.position_id != null
+        ? String(req.body.positionId || req.body.position_id || '').trim() || null
+        : existing.position_id || null;
       const title = req.body?.title != null || req.body?.salutation != null
         ? String(req.body.title || req.body.salutation || '').trim() || null
         : existing.title || null;
@@ -3386,6 +3417,11 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      const position = await resolveHostPositionId(pool, existing.organisation_id, positionRaw);
+      if (!position.ok) {
+        return res.status(position.status).json({ ok: false, message: position.message });
+      }
+
       let linkedUserId = existing.user_id || null;
       if (email) {
         linkedUserId = await syncHostPortalUser(pool, {
@@ -3405,9 +3441,9 @@ export function createOrgAdminRouter() {
 
       await pool.query(
         `UPDATE hosts
-         SET department_id = ?, site_id = ?, office_id = ?, user_id = ?, title = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
+         SET department_id = ?, site_id = ?, office_id = ?, position_id = ?, user_id = ?, title = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
          WHERE id = ?`,
-        [departmentId, siteId, placement.officeId, linkedUserId, title, name, email, phone, status, availability, hostId],
+        [departmentId, siteId, placement.officeId, position.positionId, linkedUserId, title, name, email, phone, status, availability, hostId],
       );
 
       const [[row]] = await pool.query(
@@ -3416,12 +3452,14 @@ export function createOrgAdminRouter() {
                 ofc.office_number,
                 ofc.name AS office_name,
                 s.name AS site_name,
-                o.name AS organisation_name
+                o.name AS organisation_name,
+                p.name AS position_name
          FROM hosts h
          LEFT JOIN departments d ON d.id = h.department_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN sites s ON s.id = h.site_id
          LEFT JOIN organisations o ON o.id = h.organisation_id
+         LEFT JOIN positions p ON p.id = h.position_id
          WHERE h.id = ?`,
         [hostId],
       );

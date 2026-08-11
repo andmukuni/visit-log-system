@@ -235,6 +235,13 @@ export async function ensureVisitorSchema() {
   await ensureColumn(pool, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
   // Additive only — existing host rows stay intact (NULL title until set).
   await ensureColumn(pool, 'hosts', 'title', 'ADD COLUMN title VARCHAR(40) NULL');
+  // Additive only — optional job position from positions catalogue.
+  await ensureColumn(pool, 'hosts', 'position_id', 'ADD COLUMN position_id VARCHAR(90) NULL');
+  try {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_hosts_position ON hosts (position_id)');
+  } catch {
+    // Index may already exist under another name.
+  }
   await ensureColumn(
     pool,
     'hosts',
