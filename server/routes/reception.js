@@ -11,7 +11,7 @@ import {
   registerVehicleAtReceptionDesk,
 } from '../receptionDeskEntry.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
-import { isDojahUnavailableError } from '../services/dojahService.js';
+import { getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
 import {
   buildWeeklyTrend,
   fetchSecurityEventsByType,

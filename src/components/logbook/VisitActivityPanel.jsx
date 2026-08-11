@@ -74,13 +74,26 @@ function VisitJourney({ status }) {
   );
 }
 
-export default function VisitActivityPanel({ visitId, fetchVisit, summary = null }) {
+export default function VisitActivityPanel({
+  visitId,
+  fetchVisit,
+  summary = null,
+  detail: controlledDetail = undefined,
+  loading: controlledLoading = undefined,
+  error: controlledError = undefined,
+  header = null,
+  hideVisitorCard = false,
+  sidebarExtra = null,
+  layout = 'grid',
+}) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const isControlled = controlledDetail !== undefined;
+
   const load = useCallback(async () => {
-    if (!visitId) return;
+    if (isControlled || !visitId) return;
     setLoading(true);
     setError('');
     try {
@@ -91,37 +104,51 @@ export default function VisitActivityPanel({ visitId, fetchVisit, summary = null
     } finally {
       setLoading(false);
     }
-  }, [visitId, fetchVisit]);
+  }, [visitId, fetchVisit, isControlled]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (loading) {
+  const resolvedLoading = isControlled ? Boolean(controlledLoading) : loading;
+  const resolvedError = isControlled ? (controlledError || '') : error;
+  const resolvedDetail = isControlled ? controlledDetail : detail;
+
+  if (resolvedLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner size={32} />
-      </div>
+      <>
+        {header}
+        <div className="flex justify-center py-16">
+          <Spinner size={32} />
+        </div>
+      </>
     );
   }
 
-  if (error) {
+  if (resolvedError) {
     return (
-      <Card title="Unable to load visit">
-        <p className="text-sm text-red-600">{error}</p>
-      </Card>
+      <>
+        {header}
+        <Card title="Unable to load visit">
+          <p className="text-sm text-red-600">{resolvedError}</p>
+        </Card>
+      </>
     );
   }
 
-  const visit = detail?.visit || summary || {};
-  const events = detail?.events || [];
-  const approvals = detail?.approvals || [];
-  const history = detail?.visitorHistory || [];
+  const visit = resolvedDetail?.visit || summary || {};
+  const events = resolvedDetail?.events || [];
+  const approvals = resolvedDetail?.approvals || [];
+  const history = resolvedDetail?.visitorHistory || [];
   const reference = visit.pass_code || visit.reference_number || summary?.reference_number || '—';
+  const isStack = layout === 'stack';
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-      <div className="space-y-6 xl:col-span-1">
+    <>
+      {header}
+      <div className={`grid grid-cols-1 gap-6 ${isStack ? '' : 'xl:grid-cols-3'}`}>
+      <div className={`space-y-6 ${isStack ? '' : 'xl:col-span-1'}`}>
+        {!hideVisitorCard && (
         <Card title="Visitor">
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <StatusBadge status={visit.status || summary?.status} />
@@ -134,19 +161,24 @@ export default function VisitActivityPanel({ visitId, fetchVisit, summary = null
           <DetailRow icon={Users} label="Company" value={visit.company || summary?.company} />
           <DetailRow icon={ClipboardList} label="Reference / pass code" value={reference} />
         </Card>
+        )}
 
         <Card title="Visit details">
           <DetailRow icon={User} label="Host / employee" value={visit.host_name || summary?.host_name} />
           <DetailRow icon={Building2} label="Organisation" value={visit.organisation_name || summary?.organisation_name} />
           <DetailRow icon={MapPin} label="Site" value={visit.site_name || summary?.site_name} />
           <DetailRow icon={ClipboardList} label="Category" value={visit.category_name || summary?.category_name} />
+          <DetailRow icon={ClipboardList} label="Expected" value={visit.expected_at ? formatDateTime(visit.expected_at) : '—'} />
+          <DetailRow icon={ClipboardList} label="Badge" value={visit.badge_number || '—'} />
           <DetailRow icon={ClipboardList} label="Registered" value={formatDateTime(visit.created_at || summary?.created_at)} />
           <DetailRow icon={ClipboardList} label="Check-in" value={visit.checked_in_at || visit.check_in_at || summary?.check_in_at ? formatDateTime(visit.checked_in_at || visit.check_in_at || summary?.check_in_at) : '—'} />
           <DetailRow icon={ClipboardList} label="Check-out" value={visit.checked_out_at || visit.check_out_at || summary?.check_out_at ? formatDateTime(visit.checked_out_at || visit.check_out_at || summary?.check_out_at) : '—'} />
         </Card>
+
+        {sidebarExtra}
       </div>
 
-      <div className="space-y-6 xl:col-span-2">
+      <div className={`space-y-6 ${isStack ? '' : 'xl:col-span-2'}`}>
         <Card title="Purpose of visit">
           <p className="text-sm leading-relaxed text-navy-900">
             {visit.purpose || summary?.purpose || 'No purpose recorded for this visit.'}
@@ -214,5 +246,6 @@ export default function VisitActivityPanel({ visitId, fetchVisit, summary = null
         )}
       </div>
     </div>
+    </>
   );
 }

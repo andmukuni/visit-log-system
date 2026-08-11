@@ -47,7 +47,7 @@ export default function ReceptionCheckInPage() {
   const [queueVisit, setQueueVisit] = useState(null);
   const [queuing, setQueuing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [tab, setTab] = useState(TABS.ready);
+  const [tab, setTab] = useState(TABS.register);
 
   const loadRef = useCallback(async () => {
     setLoading(true);
@@ -109,15 +109,15 @@ export default function ReceptionCheckInPage() {
 
   const tabOptions = useMemo(() => [
     {
+      value: TABS.register,
+      label: 'Register & check in',
+      icon: UserPlus,
+    },
+    {
       value: TABS.ready,
       label: 'Ready for check-in',
       icon: LogIn,
       count: pendingCount,
-    },
-    {
-      value: TABS.register,
-      label: 'Register & check in',
-      icon: UserPlus,
     },
     {
       value: TABS.atReception,

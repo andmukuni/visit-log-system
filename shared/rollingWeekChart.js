@@ -9,20 +9,13 @@ function formatLocalIso(date) {
 export function rollingWeekDates(endDate = new Date()) {
   const end = new Date(endDate);
   end.setHours(12, 0, 0, 0);
-  const todayIso = formatLocalIso(end);
-  const yesterday = new Date(end);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayIso = formatLocalIso(yesterday);
 
   const dates = [];
   for (let offset = 6; offset >= 0; offset -= 1) {
     const d = new Date(end);
     d.setDate(d.getDate() - offset);
     const iso = formatLocalIso(d);
-    let label;
-    if (iso === todayIso) label = 'Today';
-    else if (iso === yesterdayIso) label = 'Yesterday';
-    else label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
+    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
     dates.push({ iso, label });
   }
   return dates;

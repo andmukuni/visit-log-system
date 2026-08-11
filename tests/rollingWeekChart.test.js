@@ -7,8 +7,8 @@ test('rollingWeekDates returns 7 chronological days ending on the anchor date', 
   assert.equal(dates.length, 7);
   assert.equal(dates[0].iso, '2026-08-05');
   assert.equal(dates[6].iso, '2026-08-11');
-  assert.equal(dates[6].label, 'Today');
-  assert.equal(dates[5].label, 'Yesterday');
+  assert.equal(dates[5].label, 'Mon 10');
+  assert.equal(dates[6].label, 'Tue 11');
 });
 
 test('buildRollingWeekTrend maps counts to dated chart rows', () => {
@@ -16,6 +16,6 @@ test('buildRollingWeekTrend maps counts to dated chart rows', () => {
   assert.equal(trend.length, 7);
   assert.equal(trend[0].visits, 1);
   assert.equal(trend[6].visits, 3);
-  assert.equal(trend[6].label, 'Today');
+  assert.equal(trend[6].label, 'Tue 11');
   assert.equal(trend[6].date, '2026-08-11');
 });
