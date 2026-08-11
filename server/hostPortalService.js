@@ -5,7 +5,23 @@ import { getAppBaseUrl } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
 
 const HOST_ROLE_SLUG = 'host';
+const HOST_PORTAL_ROLE_SLUGS = ['host', 'ceo', 'dceo'];
 const RESET_TTL_HOURS = 24;
+
+export function normalizeHostPortalRole(value) {
+  const slug = String(value || '').trim().toLowerCase().replace(/[.\s_-]+/g, '');
+  if (slug === 'ceo') return 'ceo';
+  if (slug === 'dceo' || slug === 'deputyceo' || slug === 'deputychiefexecutiveofficer') return 'dceo';
+  if (slug === 'host' || slug === 'generalemployee' || slug === 'employee' || slug === 'general') return 'host';
+  return 'host';
+}
+
+export function hostPortalRoleLabel(slug) {
+  const normalized = normalizeHostPortalRole(slug);
+  if (normalized === 'ceo') return 'CEO';
+  if (normalized === 'dceo') return 'Deputy CEO';
+  return 'General Employee';
+}
 
 function generateId(prefix) {
   return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -35,6 +51,54 @@ function hashResetToken(token) {
  * Ensure a host has a login user with Host portal access and org scope.
  * @returns {Promise<string|null>} user id
  */
+/**
+ * Assign exactly one host-portal role (host | ceo | dceo) for the linked user.
+ * CEO / DCEO replace General Employee so calendar titles stay in sync.
+ */
+export async function syncHostPortalRole(pool, userId, portalRole = HOST_ROLE_SLUG, active = true) {
+  if (!userId) return null;
+  const targetSlug = normalizeHostPortalRole(portalRole);
+  const placeholders = HOST_PORTAL_ROLE_SLUGS.map(() => '?').join(', ');
+  const [roleRows] = await pool.query(
+    `SELECT id, slug FROM admin_roles WHERE slug IN (${placeholders})`,
+    HOST_PORTAL_ROLE_SLUGS,
+  );
+  const bySlug = new Map(roleRows.map((row) => [row.slug, row.id]));
+
+  for (const slug of HOST_PORTAL_ROLE_SLUGS) {
+    const roleId = bySlug.get(slug);
+    if (!roleId) continue;
+    if (active && slug === targetSlug) {
+      await pool.query(
+        'INSERT IGNORE INTO user_admin_roles (user_id, role_id) VALUES (?, ?)',
+        [userId, roleId],
+      );
+    } else {
+      await pool.query(
+        'DELETE FROM user_admin_roles WHERE user_id = ? AND role_id = ?',
+        [userId, roleId],
+      );
+    }
+  }
+
+  return targetSlug;
+}
+
+export async function resolveHostPortalRole(pool, userId) {
+  if (!userId) return 'host';
+  const placeholders = HOST_PORTAL_ROLE_SLUGS.map(() => '?').join(', ');
+  const [[row]] = await pool.query(
+    `SELECT ar.slug
+     FROM user_admin_roles uar
+     INNER JOIN admin_roles ar ON ar.id = uar.role_id
+     WHERE uar.user_id = ? AND ar.slug IN (${placeholders})
+     ORDER BY FIELD(ar.slug, 'ceo', 'dceo', 'host')
+     LIMIT 1`,
+    [userId, ...HOST_PORTAL_ROLE_SLUGS],
+  );
+  return normalizeHostPortalRole(row?.slug || 'host');
+}
+
 export async function syncHostPortalUser(pool, {
   userId = null,
   name,
@@ -46,6 +110,7 @@ export async function syncHostPortalUser(pool, {
   officeId = null,
   password = null,
   active = true,
+  portalRole = HOST_ROLE_SLUG,
 }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) return null;
@@ -93,23 +158,7 @@ export async function syncHostPortalUser(pool, {
     [nextUserId, organisationId, siteId || null, departmentId || null, officeId || null],
   );
 
-  const [[roleRow]] = await pool.query(
-    'SELECT id FROM admin_roles WHERE slug = ? LIMIT 1',
-    [HOST_ROLE_SLUG],
-  );
-  if (roleRow?.id) {
-    if (active) {
-      await pool.query(
-        'INSERT IGNORE INTO user_admin_roles (user_id, role_id) VALUES (?, ?)',
-        [nextUserId, roleRow.id],
-      );
-    } else {
-      await pool.query(
-        'DELETE FROM user_admin_roles WHERE user_id = ? AND role_id = ?',
-        [nextUserId, roleRow.id],
-      );
-    }
-  }
+  await syncHostPortalRole(pool, nextUserId, portalRole, active);
 
   return nextUserId;
 }
@@ -154,6 +203,7 @@ export async function sendHostPasswordResetEmail(pool, {
     throw err;
   }
 
+  const existingPortalRole = await resolveHostPortalRole(pool, host.user_id || null);
   const linkedUserId = await syncHostPortalUser(pool, {
     userId: host.user_id || null,
     name: host.name,
@@ -164,6 +214,7 @@ export async function sendHostPasswordResetEmail(pool, {
     departmentId: host.department_id,
     officeId: host.office_id,
     active: host.status !== 'inactive',
+    portalRole: existingPortalRole,
   });
 
   if (!linkedUserId) {

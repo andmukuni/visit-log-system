@@ -40,6 +40,15 @@ export function createKioskRouter() {
     }
   });
 
+  // Host/executive bookings often land as `expected` (self-approved). Invite confirm
+  // must accept those pre-arrival statuses, not only pending/approved.
+  const ACTIVE_INVITE_STATUSES = [
+    'pre_registered',
+    'pending_approval',
+    'approved',
+    'expected',
+  ];
+
   router.get('/invite/:token', async (req, res) => {
     try {
       const [[visit]] = await pool.query(
@@ -57,7 +66,14 @@ export function createKioskRouter() {
 
       if (!visit) return res.status(404).json({ ok: false, message: 'Invitation not found or expired.' });
 
-      res.json({ ok: true, data: visit });
+      res.json({
+        ok: true,
+        data: {
+          ...visit,
+          invite_active: ACTIVE_INVITE_STATUSES.includes(String(visit.status || '')),
+          already_confirmed: Boolean(visit.privacy_ack_at),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -77,8 +93,16 @@ export function createKioskRouter() {
         [req.params.token],
       );
       if (!visit) return res.status(404).json({ ok: false, message: 'Invitation not found.' });
-      if (!['pre_registered', 'pending_approval', 'approved'].includes(visit.status)) {
+      if (!ACTIVE_INVITE_STATUSES.includes(String(visit.status || ''))) {
         return res.status(400).json({ ok: false, message: 'This invitation is no longer active.' });
+      }
+
+      // Already confirmed — return the pass code instead of failing.
+      if (visit.privacy_ack_at) {
+        return res.json({
+          ok: true,
+          data: { passCode: visit.pass_code, status: visit.status, alreadyConfirmed: true },
+        });
       }
 
       if (fullName?.trim()) {

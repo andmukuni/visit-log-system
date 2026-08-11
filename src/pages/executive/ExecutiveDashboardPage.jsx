@@ -70,8 +70,9 @@ export default function ExecutiveDashboardPage() {
   const executive = dashboard?.executive || {};
   const kpis = dashboard?.kpis || {};
   const dashboardTitle = useMemo(() => {
-    if (executive?.title) return `${executive.title} Dashboard`;
-    return 'Executive Dashboard';
+    const title = String(executive?.title || '').trim().toLowerCase().replace(/[.\s_-]+/g, '');
+    const isExecutiveLeader = title === 'ceo' || title === 'dceo' || title === 'deputyceo';
+    return isExecutiveLeader ? 'Executive Calendar' : 'Calendar';
   }, [executive?.title]);
 
   const handleViewModeChange = useCallback((nextMode) => {

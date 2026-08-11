@@ -36,6 +36,12 @@ const TITLE_OPTIONS = [
   { value: 'Rev', label: 'Rev' },
 ];
 
+const PORTAL_ROLE_OPTIONS = [
+  { value: 'host', label: 'General Employee' },
+  { value: 'ceo', label: 'CEO' },
+  { value: 'dceo', label: 'Deputy CEO' },
+];
+
 const emptyForm = () => ({
   organisationId: '',
   title: '',
@@ -47,6 +53,7 @@ const emptyForm = () => ({
   officeId: '',
   status: 'active',
   availability: 'available',
+  portalRole: 'host',
   password: '',
 });
 
@@ -134,7 +141,17 @@ export default function AdminHostsPage() {
     const q = search.trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter((row) =>
-      [row.title, row.name, row.email, row.organisation_name, row.department_name, row.site_name, row.office_number]
+      [
+        row.title,
+        row.name,
+        row.email,
+        row.organisation_name,
+        row.department_name,
+        row.site_name,
+        row.office_number,
+        row.portal_role_label,
+        row.portal_role,
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
@@ -240,6 +257,7 @@ export default function AdminHostsPage() {
       officeId: row.office_id || '',
       status: row.status || 'active',
       availability: row.availability === 'unavailable' ? 'unavailable' : 'available',
+      portalRole: row.portal_role || 'host',
       password: '',
     });
     setModalOpen(true);
@@ -262,6 +280,10 @@ export default function AdminHostsPage() {
       toast.error('Email is required to set a host password.');
       return;
     }
+    if ((form.portalRole === 'ceo' || form.portalRole === 'dceo') && !form.email.trim()) {
+      toast.error('Email is required for CEO or Deputy CEO.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -274,6 +296,7 @@ export default function AdminHostsPage() {
         officeId: form.officeId || null,
         status: form.status,
         availability: form.availability,
+        portalRole: form.portalRole || 'host',
         password: form.password || undefined,
       };
       if (editing?.id) {
@@ -337,6 +360,13 @@ export default function AdminHostsPage() {
       key: 'office_number',
       label: 'Office',
       render: (value) => (value ? `#${value}` : '—'),
+    },
+    {
+      key: 'portal_role_label',
+      label: 'Role',
+      render: (_, row) => row.portal_role_label
+        || PORTAL_ROLE_OPTIONS.find((option) => option.value === row.portal_role)?.label
+        || 'General Employee',
     },
     {
       key: 'status',
@@ -491,6 +521,14 @@ export default function AdminHostsPage() {
                     {selected.availability === 'unavailable' ? 'Not available' : 'Available'}
                   </span>
                 </p>
+                <p className="text-xs text-gray-500">
+                  Role:{' '}
+                  <span className="font-semibold text-navy-900">
+                    {selected.portal_role_label
+                      || PORTAL_ROLE_OPTIONS.find((option) => option.value === selected.portal_role)?.label
+                      || 'General Employee'}
+                  </span>
+                </p>
                 <p className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><span className="font-semibold">{selected.organisation_name || '—'}</span></p>
                 <p className="flex items-center gap-2"><Network size={14} className="text-gray-400" /><span className="font-semibold">{selected.department_name || '—'}</span></p>
                 <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
@@ -640,6 +678,15 @@ export default function AdminHostsPage() {
               { value: 'unavailable', label: 'Not available' },
             ]}
             helpText="Shown on reception Host Queue. Only admins can change this."
+          />
+          <FormField
+            label="Role"
+            name="portalRole"
+            type="select"
+            value={form.portalRole}
+            onChange={(e) => setForm((prev) => ({ ...prev, portalRole: e.target.value }))}
+            options={PORTAL_ROLE_OPTIONS}
+            helpText="CEO and Deputy CEO see Executive Calendar; General Employee sees Calendar."
           />
           <FormField
             label={editing ? 'Change password' : 'Temporary password'}

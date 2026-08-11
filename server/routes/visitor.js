@@ -35,7 +35,13 @@ import {
 } from '../hostAvailability.js';
 import { loadReceptionistRow, syncReceptionistPortalUser, parseReceptionistZoneIds, validateReceptionistZones, syncReceptionistZones, attachReceptionistZones, loadReceptionistZones } from '../receptionistService.js';
 import { loadSecurityGuardRow, syncSecurityGuardPortalUser } from '../securityGuardService.js';
-import { sendHostPasswordResetEmail, syncHostPortalUser } from '../hostPortalService.js';
+import {
+  hostPortalRoleLabel,
+  normalizeHostPortalRole,
+  resolveHostPortalRole,
+  sendHostPasswordResetEmail,
+  syncHostPortalUser,
+} from '../hostPortalService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
 
 function hasPlatformWideAccess(claims = {}) {
@@ -2959,7 +2965,16 @@ export function createOrgAdminRouter() {
                ofc.office_number,
                ofc.name AS office_name,
                s.name AS site_name,
-               o.name AS organisation_name
+               o.name AS organisation_name,
+               (
+                 SELECT ar.slug
+                 FROM user_admin_roles uar
+                 INNER JOIN admin_roles ar ON ar.id = uar.role_id
+                 WHERE uar.user_id = h.user_id
+                   AND ar.slug IN ('ceo', 'dceo', 'host')
+                 ORDER BY FIELD(ar.slug, 'ceo', 'dceo', 'host')
+                 LIMIT 1
+               ) AS portal_role
         FROM hosts h
         LEFT JOIN offices ofc ON ofc.id = h.office_id
         LEFT JOIN departments d ON d.id = h.department_id
@@ -2967,9 +2982,18 @@ export function createOrgAdminRouter() {
         LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
         LEFT JOIN organisations o ON o.id = h.organisation_id
       `;
-      const [rows] = orgId
+      const [rawRows] = orgId
         ? await pool.query(`${hostSelect} WHERE h.organisation_id = ? ORDER BY h.name`, [orgId])
         : await pool.query(`${hostSelect} ORDER BY o.name, h.name`);
+
+      const rows = rawRows.map((row) => {
+        const portalRole = normalizeHostPortalRole(row.portal_role || 'host');
+        return {
+          ...row,
+          portal_role: portalRole,
+          portal_role_label: hostPortalRoleLabel(portalRole),
+        };
+      });
 
       const stats = {
         total: rows.length,
@@ -3002,6 +3026,9 @@ export function createOrgAdminRouter() {
       const status = String(req.body?.status || 'active').trim() || 'active';
       const availability = normalizeHostAvailability(req.body?.availability);
       const password = String(req.body?.password || '').trim() || null;
+      const portalRole = normalizeHostPortalRole(
+        req.body?.portalRole || req.body?.portal_role || req.body?.role || 'host',
+      );
 
       if (!name) return res.status(400).json({ ok: false, message: 'Host name is required.' });
       if (!orgId) {
@@ -3018,6 +3045,12 @@ export function createOrgAdminRouter() {
       }
       if (password && !email) {
         return res.status(400).json({ ok: false, message: 'Email is required to set a host password.' });
+      }
+      if ((portalRole === 'ceo' || portalRole === 'dceo') && !email) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Email is required to assign CEO or Deputy CEO portal access.',
+        });
       }
       if (password) {
         const security = await getSecuritySettings();
@@ -3052,6 +3085,7 @@ export function createOrgAdminRouter() {
           officeId: placement.officeId,
           password,
           active: status !== 'inactive',
+          portalRole,
         });
       }
 
@@ -3077,7 +3111,17 @@ export function createOrgAdminRouter() {
          WHERE h.id = ?`,
         [id],
       );
-      res.status(201).json({ ok: true, data: row });
+      const resolvedRole = linkedUserId
+        ? await resolveHostPortalRole(pool, linkedUserId)
+        : portalRole;
+      res.status(201).json({
+        ok: true,
+        data: {
+          ...row,
+          portal_role: resolvedRole,
+          portal_role_label: hostPortalRoleLabel(resolvedRole),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -3119,10 +3163,20 @@ export function createOrgAdminRouter() {
         ? normalizeHostAvailability(req.body.availability)
         : normalizeHostAvailability(existing.availability);
       const password = String(req.body?.password || '').trim() || null;
+      const existingPortalRole = await resolveHostPortalRole(pool, existing.user_id || null);
+      const portalRole = req.body?.portalRole != null || req.body?.portal_role != null || req.body?.role != null
+        ? normalizeHostPortalRole(req.body.portalRole || req.body.portal_role || req.body.role)
+        : existingPortalRole;
 
       if (!name) return res.status(400).json({ ok: false, message: 'Host name is required.' });
       if (password && !email) {
         return res.status(400).json({ ok: false, message: 'Email is required to set a host password.' });
+      }
+      if ((portalRole === 'ceo' || portalRole === 'dceo') && !email) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Email is required to assign CEO or Deputy CEO portal access.',
+        });
       }
       if (password) {
         const security = await getSecuritySettings();
@@ -3158,6 +3212,7 @@ export function createOrgAdminRouter() {
           officeId: placement.officeId,
           password,
           active: status !== 'inactive',
+          portalRole,
         });
       }
 
@@ -3183,7 +3238,17 @@ export function createOrgAdminRouter() {
          WHERE h.id = ?`,
         [hostId],
       );
-      res.json({ ok: true, data: row });
+      const resolvedRole = linkedUserId
+        ? await resolveHostPortalRole(pool, linkedUserId)
+        : portalRole;
+      res.json({
+        ok: true,
+        data: {
+          ...row,
+          portal_role: resolvedRole,
+          portal_role_label: hostPortalRoleLabel(resolvedRole),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

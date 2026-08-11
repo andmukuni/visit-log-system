@@ -27,6 +27,10 @@ export default function VisitInvitePage() {
         email: data.email || '',
         company: data.company || '',
       });
+      if (data.already_confirmed && data.pass_code) {
+        setPassCode(data.pass_code);
+        setConfirmed(true);
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -74,13 +78,24 @@ export default function VisitInvitePage() {
     );
   }
 
+  if (visit.invite_active === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8 text-center">
+        <div>
+          <h1 className="text-xl font-bold mb-2">Invitation no longer active</h1>
+          <p className="text-white/60">This visit has already been completed or cancelled.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (confirmed) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8">
         <div className="max-w-md text-center bg-white/5 rounded-2xl p-10 border border-green-500/30">
           <h1 className="text-2xl font-bold text-green-300 mb-4">Registration confirmed</h1>
           <p className="text-white/80 mb-4">Show this pass code at reception when you arrive:</p>
-          <p className="text-4xl font-mono font-bold tracking-widest">{passCode}</p>
+          <p className="text-4xl font-mono font-bold tracking-widest">{passCode || visit.pass_code}</p>
         </div>
       </div>
     );
@@ -134,18 +149,16 @@ export default function VisitInvitePage() {
           <span>I accept the privacy notice and consent to visitor data processing.</span>
         </label>
 
-        <div className="flex justify-center">
-          <LoadingButton
-            loading={submitting}
-            onClick={confirm}
-            icon={Check}
-            iconOnly
-            aria-label="Confirm registration"
-            variant="primary"
-            size="lg"
-            className="bg-white text-gray-900 hover:bg-gray-100 border-white"
-          />
-        </div>
+        <LoadingButton
+          loading={submitting}
+          onClick={confirm}
+          icon={Check}
+          variant="primary"
+          size="lg"
+          className="w-full bg-white text-gray-900 hover:bg-gray-100 border-white"
+        >
+          Confirm registration
+        </LoadingButton>
       </div>
     </div>
   );
