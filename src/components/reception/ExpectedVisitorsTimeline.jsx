@@ -225,7 +225,7 @@ function ArrivalCard({ row }) {
             {row.company ? ` · ${row.company}` : ''}
             {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
           </p>
-          <p className="mt-1 truncate text-xs text-navy-600" title={row.purpose || row.title || ''}>
+          <p className="mt-1 truncate text-xs text-navy-600">
             {row.purpose || row.title || '—'}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">

@@ -260,7 +260,7 @@ export default function GateCheckInPanel({
                       </div>
                       <div className="min-w-0">
                         <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Purpose of visit</span>
-                        <p className="truncate text-sm text-navy-700" title={row.purpose || row.appointment_title || ''}>
+                        <p className="truncate text-sm text-navy-700">
                           {row.purpose || row.appointment_title || '—'}
                         </p>
                       </div>
@@ -293,7 +293,6 @@ export default function GateCheckInPanel({
                           disabled={busy}
                           onClick={() => void handleCheckIn(row.id)}
                           className="shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
-                          title={checkInAction.label}
                         />
                       </div>
                     </li>

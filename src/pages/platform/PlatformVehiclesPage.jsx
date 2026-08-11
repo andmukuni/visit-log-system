@@ -144,7 +144,6 @@ function VehicleDetailSidebar({ vehicle, onClose, onEdit, onDelete }) {
         <button
           type="button"
           onClick={() => onEdit?.(vehicle)}
-          title="Edit vehicle"
           aria-label="Edit vehicle"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#1a73e8] bg-white text-[#1a73e8] transition-colors hover:bg-sky-50"
         >
@@ -153,7 +152,6 @@ function VehicleDetailSidebar({ vehicle, onClose, onEdit, onDelete }) {
         <button
           type="button"
           onClick={() => onDelete?.(vehicle)}
-          title="Delete vehicle"
           aria-label="Delete vehicle"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
         >
@@ -481,7 +479,6 @@ export default function PlatformVehiclesPage() {
             <button
               type="button"
               onClick={() => openEdit(selected)}
-              title="Edit vehicle"
               aria-label="Edit vehicle"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#1a73e8] text-[#1a73e8]"
             >
@@ -490,7 +487,6 @@ export default function PlatformVehiclesPage() {
             <button
               type="button"
               onClick={() => setDeleteTarget(selected)}
-              title="Delete vehicle"
               aria-label="Delete vehicle"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-red-200 text-red-600"
             >
@@ -593,7 +589,6 @@ export default function PlatformVehiclesPage() {
         isOpen={Boolean(deleteTarget)}
         onClose={() => !deleting && setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Delete vehicle"
         message={
           deleteTarget
             ? `Delete "${deleteTarget.plate_number}"? Vehicles currently on site must be checked out before deletion.`

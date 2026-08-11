@@ -1,4 +1,3 @@
-import Tooltip from './Tooltip';
 import Button from './Button';
 import Spinner from './Spinner';
 
@@ -14,7 +13,7 @@ export default function IconButton({
   ...props
 }) {
   const ariaLabel = label || tooltip;
-  const button = (
+  return (
     <Button
       variant={variant}
       size={size}
@@ -27,10 +26,4 @@ export default function IconButton({
       {loading ? <Spinner size={iconSize} /> : Icon ? <Icon size={iconSize} /> : null}
     </Button>
   );
-
-  if (tooltip || label) {
-    return <Tooltip content={tooltip || label}>{button}</Tooltip>;
-  }
-
-  return button;
 }

@@ -276,7 +276,6 @@ export default function AdminHostDetailPage() {
             <button
               type="button"
               disabled={!host.email}
-              title={!host.email ? 'Add an email address first' : 'Email a password reset link'}
               onClick={() => setResetOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-md border border-navy-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-navy-800 shadow-sm hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
             >

@@ -11,8 +11,6 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
-import Tooltip from './Tooltip';
-
 const colorMap = {
   upcoming: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
   ongoing: { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/20', icon: CircleDot },
@@ -128,20 +126,13 @@ export default function StatusBadge({ status, size = 'sm', iconOnly = false }) {
       md: 'text-sm px-2.5 py-1 gap-1.5',
     };
 
-  const badge = (
+  return (
     <span
       className={`inline-flex max-w-full items-center rounded-full font-medium ring-1 ring-inset whitespace-nowrap ${colors.bg} ${colors.text} ${colors.ring} ${sizeClasses[size]}`}
-      title={iconOnly ? displayLabel : undefined}
       aria-label={displayLabel}
     >
       <Icon size={iconOnly ? (size === 'sm' ? 14 : 16) : iconSize} className="shrink-0" aria-hidden="true" />
       {!iconOnly ? <span className="truncate">{displayLabel}</span> : null}
     </span>
   );
-
-  if (iconOnly) {
-    return <Tooltip content={displayLabel} side="top">{badge}</Tooltip>;
-  }
-
-  return badge;
 }

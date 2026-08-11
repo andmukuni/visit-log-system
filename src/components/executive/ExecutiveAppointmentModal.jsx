@@ -390,7 +390,6 @@ export default function ExecutiveAppointmentModal({
 
                   <div
                     className="inline-flex h-10 shrink-0 items-center self-start rounded-xl border border-navy-200 bg-white px-3 text-xs font-semibold text-navy-500 sm:self-end"
-                    title={Intl.DateTimeFormat().resolvedOptions().timeZone}
                   >
                     {timezoneLabel}
                   </div>

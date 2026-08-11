@@ -209,7 +209,6 @@ function OrganisationDetailSidebar({ organisation, onClose, onEdit }) {
         <button
           type="button"
           onClick={() => onEdit?.(organisation)}
-          title="Edit organisation"
           aria-label="Edit organisation"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#1a73e8] bg-white text-[#1a73e8] transition-colors hover:bg-sky-50"
         >
@@ -607,7 +606,6 @@ export default function AdminOrganisationsPage() {
             <button
               type="button"
               onClick={() => openEdit(selected)}
-              title="Edit organisation"
               aria-label="Edit organisation"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#1a73e8] text-[#1a73e8]"
             >

@@ -17,7 +17,6 @@ export default function ThemeToggle({ variant = 'icon' }) {
         type="button"
         onClick={toggleTheme}
         className="inline-flex items-center justify-center h-9 w-9 rounded-lg text-navy-500 hover:bg-navy-100 hover:text-navy-700 dark:text-navy-300 dark:hover:bg-navy-800 dark:hover:text-white transition-colors"
-        title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       >
         <Icon size={17} />
@@ -40,7 +39,6 @@ export default function ThemeToggle({ variant = 'icon' }) {
                   ? 'bg-cyan-600 text-white shadow-sm'
                   : 'text-navy-600 dark:text-navy-300 hover:bg-navy-50 dark:hover:bg-navy-800'
               }`}
-              title={label}
               aria-label={`${label} theme`}
               aria-pressed={active}
             >
@@ -59,7 +57,6 @@ export default function ThemeToggle({ variant = 'icon' }) {
       type="button"
       onClick={toggleTheme}
       className="inline-flex items-center justify-center h-9 w-9 rounded-lg text-navy-200 hover:text-cyan-400 hover:bg-navy-800/60 transition-colors"
-      title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       <Icon size={17} />

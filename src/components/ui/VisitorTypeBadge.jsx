@@ -46,7 +46,6 @@ export default function VisitorTypeBadge({
     return (
       <span
         className={`inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${config.bg} ${config.text} ${config.ring} h-3.5 w-3.5 ${className}`}
-        title={config.label}
         aria-label={config.label}
       >
         <Icon size={8} aria-hidden="true" />

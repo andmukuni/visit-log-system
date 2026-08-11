@@ -23,7 +23,7 @@ export default function WeeklyBarChart({ title = 'Activity', subtitle = 'This we
               <div
                 className="w-full max-w-[2rem] rounded-t-2xl bg-orange-400 transition-all duration-500"
                 style={{ height: `${Math.max(12, (value / max) * 100)}%` }}
-                title={`${value} visits`}
+                aria-label={`${value} visits`}
               />
             </div>
             <span className="text-[10px] font-medium text-gray-400">{DAY_LABELS[idx]}</span>

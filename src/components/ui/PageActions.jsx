@@ -4,7 +4,6 @@ import {
 } from 'lucide-react';
 import IconButton from './IconButton';
 import LoadingButton from './LoadingButton';
-import Tooltip from './Tooltip';
 
 export function RefreshAction({ onClick, loading, label = 'Refresh' }) {
   return (
@@ -24,13 +23,9 @@ export function AddAction({ to, onClick, label = 'Add' }) {
     <LoadingButton variant="primary" icon={Plus} iconOnly aria-label={label} onClick={onClick} />
   );
   if (to) {
-    return (
-      <Tooltip content={label}>
-        <Link to={to} aria-label={label}>{btn}</Link>
-      </Tooltip>
-    );
+    return <Link to={to} aria-label={label}>{btn}</Link>;
   }
-  return <Tooltip content={label}>{btn}</Tooltip>;
+  return btn;
 }
 
 export function ExportAction({ onClick, label = 'Export' }) {

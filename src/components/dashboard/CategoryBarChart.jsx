@@ -26,7 +26,7 @@ export default function CategoryBarChart({
               <div
                 className={`w-full max-w-[2rem] rounded-t-2xl ${barClass} transition-all duration-500`}
                 style={{ height: `${Math.max(12, (Number(item.value || 0) / max) * 100)}%` }}
-                title={`${item.label}: ${item.value}`}
+                aria-label={`${item.label}: ${item.value}`}
               />
             </div>
             <span className="text-[10px] font-medium text-gray-400 truncate w-full text-center">{item.label}</span>

@@ -148,7 +148,6 @@ function OrganisationDetailSidebar({ organisation, onClose, onEdit, onDelete }) 
         <button
           type="button"
           onClick={() => onEdit?.(organisation)}
-          title="Edit organisation"
           aria-label="Edit organisation"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#1a73e8] bg-white text-[#1a73e8] transition-colors hover:bg-sky-50"
         >
@@ -157,7 +156,6 @@ function OrganisationDetailSidebar({ organisation, onClose, onEdit, onDelete }) 
         <button
           type="button"
           onClick={() => onDelete?.(organisation)}
-          title="Delete organisation"
           aria-label="Delete organisation"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
         >
@@ -459,7 +457,6 @@ export default function PlatformOrganisationsPage() {
             <button
               type="button"
               onClick={() => openEdit(selected)}
-              title="Edit organisation"
               aria-label="Edit organisation"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#1a73e8] text-[#1a73e8]"
             >
@@ -468,7 +465,6 @@ export default function PlatformOrganisationsPage() {
             <button
               type="button"
               onClick={() => setDeleteTarget(selected)}
-              title="Delete organisation"
               aria-label="Delete organisation"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-red-200 text-red-600"
             >
@@ -543,7 +539,6 @@ export default function PlatformOrganisationsPage() {
         isOpen={Boolean(deleteTarget)}
         onClose={() => !deleting && setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Delete organisation"
         message={
           deleteTarget
             ? `Delete "${deleteTarget.name}"? This cannot be undone. Organisations with sites, users, or visits must be suspended instead.`

@@ -140,7 +140,6 @@ export default function ExecutiveCalendarEventCard({
             <div className="flex min-w-0 flex-1 items-start gap-0.5">
               <p
                 className={`min-w-0 flex-1 text-gray-900 ${density.nameWeight} ${density.name} ${density.nameClamp}`}
-                title={name}
               >
                 {name}
               </p>

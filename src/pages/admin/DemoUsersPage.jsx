@@ -212,7 +212,6 @@ function UserDetailSidebar({ user, onClose, onEdit }) {
         <button
           type="button"
           onClick={() => onEdit?.(user)}
-          title="Edit role"
           aria-label="Edit role"
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#1a73e8] bg-white text-[#1a73e8] transition-colors hover:bg-sky-50"
         >
@@ -577,7 +576,6 @@ export default function DemoUsersPage() {
             <button
               type="button"
               onClick={() => openEdit(selected)}
-              title="Edit role"
               aria-label="Edit role"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#1a73e8] text-[#1a73e8]"
             >

@@ -474,7 +474,6 @@ export default function ReceptionCheckInPage() {
                               </span>
                               <p
                                 className="truncate text-sm text-navy-700"
-                                title={row.purpose || row.appointment_title || ''}
                               >
                                 {row.purpose || row.appointment_title || '—'}
                               </p>

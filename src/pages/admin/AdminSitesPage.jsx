@@ -383,7 +383,6 @@ export default function AdminSitesPage() {
       type="button"
       onClick={openCreate}
       disabled={!canManageStructure || orgLoading}
-      title={!canManageStructure ? 'Create an organisation first' : undefined}
       className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
     >
       <Plus size={14} strokeWidth={2.5} aria-hidden="true" />

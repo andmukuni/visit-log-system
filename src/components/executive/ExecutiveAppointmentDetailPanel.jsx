@@ -216,7 +216,6 @@ export default function ExecutiveAppointmentDetailPanel({
                 to={`/host/register/${appointment.visit_id}`}
                 className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                 aria-label="Open full visit page"
-                title="Open full page"
               >
                 <ExternalLink size={18} />
               </Link>
