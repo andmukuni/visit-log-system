@@ -220,6 +220,29 @@ export const visitorApi = {
   },
   createPosition: (body) => apiFetch('/admin/org/positions', { method: 'POST', body: JSON.stringify(body) }),
   updatePosition: (id, body) => apiFetch(`/admin/org/positions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getPosition: async (id) => {
+    const res = await fetch(`${API_BASE}/admin/org/positions/${id}`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    return json.data;
+  },
+  deletePosition: async (id) => {
+    const res = await fetch(`${API_BASE}/admin/org/positions/${id}`, {
+      method: 'DELETE',
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    return json;
+  },
   getHosts: async () => {
     const res = await fetch(`${API_BASE}/admin/org/hosts`, {
       headers: { ...getAdminAuthHeaders() },

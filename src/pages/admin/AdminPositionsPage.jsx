@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Briefcase,
@@ -9,6 +9,8 @@ import {
   Search,
   X,
   Edit3,
+  Trash2,
+  Users,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -18,6 +20,7 @@ import {
   Modal,
   FormField,
   LoadingButton,
+  ConfirmDialog,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
@@ -104,7 +107,7 @@ function PositionsKpiRow({ kpis = {} }) {
   );
 }
 
-function PositionDetailSidebar({ position, onClose, onEdit }) {
+function PositionDetailSidebar({ position, onClose, onShow, onEdit, onDelete }) {
   if (!position) return null;
 
   return (
@@ -140,19 +143,42 @@ function PositionDetailSidebar({ position, onClose, onEdit }) {
           </h3>
           <div className="mt-1.5 grid grid-cols-[16px_1fr] gap-x-3 sm:mt-2">
             <DetailRow icon={Briefcase} label="Status" value={position.status === 'active' ? 'Active' : 'Inactive'} />
+            <DetailRow
+              icon={Users}
+              label="Assigned hosts"
+              value={`${Number(position.host_count || 0)} host${Number(position.host_count || 0) === 1 ? '' : 's'}`}
+            />
           </div>
         </section>
       </div>
 
-      <div className="flex shrink-0 gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-gray-200 px-4 py-2.5 sm:px-5">
         <button
           type="button"
-          onClick={() => onEdit?.(position)}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:text-sm"
+          onClick={() => onShow?.(position)}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 bg-white px-2.5 py-2 text-xs font-semibold text-navy-800 transition-colors hover:bg-navy-50 sm:text-sm"
         >
-          <Edit3 size={16} aria-hidden="true" />
-          Edit Position
+          <Eye size={16} aria-hidden="true" />
+          View details
         </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onEdit?.(position)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] bg-white px-2.5 py-2 text-xs font-semibold text-[#1a73e8] transition-colors hover:bg-sky-50 sm:text-sm"
+          >
+            <Edit3 size={16} aria-hidden="true" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete?.(position)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 sm:text-sm"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            Delete
+          </button>
+        </div>
       </div>
     </aside>
   );
@@ -182,6 +208,7 @@ function exportPositionsCsv(rows) {
 
 export default function AdminPositionsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const {
     organisations,
     hasOrganisation,
@@ -206,6 +233,8 @@ export default function AdminPositionsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -280,6 +309,35 @@ export default function AdminPositionsPage() {
     [organisations],
   );
 
+  const openPosition = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/positions/${row.id}`);
+  }, [navigate]);
+
+  const openCreate = () => {
+    if (!canManageStructure) {
+      toast.error('Create an organisation first. Positions are created under an organisation.');
+      return;
+    }
+    setEditing(null);
+    setForm({
+      ...emptyForm(),
+      organisationId: orgOptions[0]?.value || '',
+    });
+    setModalOpen(true);
+  };
+
+  const openEdit = useCallback((position) => {
+    setEditing(position);
+    setForm({
+      name: position.name || '',
+      code: position.code || '',
+      status: position.status || 'active',
+      organisationId: position.organisation_id || '',
+    });
+    setModalOpen(true);
+  }, []);
+
   const columns = useMemo(() => [
     {
       key: 'name',
@@ -297,6 +355,11 @@ export default function AdminPositionsPage() {
       render: (value) => <span className="text-sm text-gray-700">{value || '—'}</span>,
     },
     {
+      key: 'host_count',
+      label: 'Hosts',
+      render: (value) => Number(value || 0),
+    },
+    {
       key: 'status',
       label: 'Status',
       render: (value) => <StatusBadge status={value || 'active'} />,
@@ -305,43 +368,39 @@ export default function AdminPositionsPage() {
       key: 'actions',
       label: '',
       render: (_, row) => (
-        <IconButton
-          icon={Eye}
-          label="View position"
-          iconSize={16}
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelected(row);
-            if (window.innerWidth < 1024) setMobileDetailOpen(true);
-          }}
-        />
+        <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Eye}
+            label="View position"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPosition(row);
+            }}
+          />
+          <IconButton
+            icon={Edit3}
+            label="Edit position"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+          />
+          <IconButton
+            icon={Trash2}
+            label="Delete position"
+            iconSize={16}
+            className="text-rose-600 hover:bg-rose-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+          />
+        </div>
       ),
     },
-  ], []);
-
-  const openCreate = () => {
-    if (!canManageStructure) {
-      toast.error('Create an organisation first. Positions are created under an organisation.');
-      return;
-    }
-    setEditing(null);
-    setForm({
-      ...emptyForm(),
-      organisationId: orgOptions[0]?.value || '',
-    });
-    setModalOpen(true);
-  };
-
-  const openEdit = (position) => {
-    setEditing(position);
-    setForm({
-      name: position.name || '',
-      code: position.code || '',
-      status: position.status || 'active',
-      organisationId: position.organisation_id || '',
-    });
-    setModalOpen(true);
-  };
+  ], [openEdit, openPosition]);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -380,6 +439,25 @@ export default function AdminPositionsPage() {
     setSelected(row);
     if (window.innerWidth < 1024) setMobileDetailOpen(true);
   }, []);
+
+  const handleDelete = async () => {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    try {
+      const result = await visitorApi.deletePosition(deleteTarget.id);
+      toast.success(result?.message || 'Position deleted.');
+      if (selected?.id === deleteTarget.id) {
+        setSelected(null);
+        setMobileDetailOpen(false);
+      }
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete position.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const pageActions = (
     <button
@@ -482,7 +560,9 @@ export default function AdminPositionsPage() {
             <PositionDetailSidebar
               position={selected}
               onClose={() => setSelected(null)}
+              onShow={openPosition}
               onEdit={openEdit}
+              onDelete={setDeleteTarget}
             />
           )}
         </div>
@@ -508,16 +588,37 @@ export default function AdminPositionsPage() {
             <div className="grid grid-cols-[16px_1fr] gap-x-3">
               <DetailRow icon={Building2} label="Organisation" value={selected.organisation_name} />
               <DetailRow icon={Briefcase} label="Status" value={selected.status === 'active' ? 'Active' : 'Inactive'} />
+              <DetailRow
+                icon={Users}
+                label="Assigned hosts"
+                value={`${Number(selected.host_count || 0)} host${Number(selected.host_count || 0) === 1 ? '' : 's'}`}
+              />
             </div>
           </div>
-          <div className="flex gap-2 border-t border-gray-200 p-4">
+          <div className="flex flex-col gap-2 border-t border-gray-200 p-4">
             <button
               type="button"
-              onClick={() => openEdit(selected)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2.5 text-sm font-semibold text-[#1a73e8]"
+              onClick={() => openPosition(selected)}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2.5 text-sm font-semibold text-navy-800"
             >
-              Edit Position
+              View details
             </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => openEdit(selected)}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2.5 text-sm font-semibold text-[#1a73e8]"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(selected)}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2.5 text-sm font-semibold text-rose-700"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -590,6 +691,25 @@ export default function AdminPositionsPage() {
           />
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Delete position?"
+        confirmLabel="Delete"
+        variant="danger"
+        message={
+          deleteTarget
+            ? (
+              Number(deleteTarget.host_count || 0) > 0
+                ? `Delete “${deleteTarget.name}”? It will be cleared from ${deleteTarget.host_count} host${Number(deleteTarget.host_count) === 1 ? '' : 's'}.`
+                : `Delete “${deleteTarget.name}”? This cannot be undone.`
+            )
+            : 'Are you sure you want to proceed?'
+        }
+      />
     </div>
   );
 }

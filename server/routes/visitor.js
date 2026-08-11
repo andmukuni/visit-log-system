@@ -2786,7 +2786,8 @@ export function createOrgAdminRouter() {
       const orgId = scope?.organisation_id;
       const selectSql = `
         SELECT p.*,
-               o.name AS organisation_name
+               o.name AS organisation_name,
+               (SELECT COUNT(*) FROM hosts h WHERE h.position_id = p.id) AS host_count
         FROM positions p
         LEFT JOIN organisations o ON o.id = p.organisation_id
       `;
@@ -2802,6 +2803,36 @@ export function createOrgAdminRouter() {
       };
 
       res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/positions/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const positionId = req.params.id;
+
+      const [[row]] = await pool.query(
+        `SELECT p.*,
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM hosts h WHERE h.position_id = p.id) AS host_count
+         FROM positions p
+         LEFT JOIN organisations o ON o.id = p.organisation_id
+         WHERE p.id = ?
+         LIMIT 1`,
+        [positionId],
+      );
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'Position not found.' });
+      }
+      if (orgId && row.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this position.' });
+      }
+
+      res.json({ ok: true, data: row });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -2837,7 +2868,8 @@ export function createOrgAdminRouter() {
 
       const [[row]] = await pool.query(
         `SELECT p.*,
-                o.name AS organisation_name
+                o.name AS organisation_name,
+                0 AS host_count
          FROM positions p
          LEFT JOIN organisations o ON o.id = p.organisation_id
          WHERE p.id = ?`,
@@ -2882,13 +2914,51 @@ export function createOrgAdminRouter() {
 
       const [[row]] = await pool.query(
         `SELECT p.*,
-                o.name AS organisation_name
+                o.name AS organisation_name,
+                (SELECT COUNT(*) FROM hosts h WHERE h.position_id = p.id) AS host_count
          FROM positions p
          LEFT JOIN organisations o ON o.id = p.organisation_id
          WHERE p.id = ?`,
         [positionId],
       );
       res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/positions/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const positionId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM positions WHERE id = ? LIMIT 1', [positionId]);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: 'Position not found.' });
+      }
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this position.' });
+      }
+
+      const [[usage]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM hosts WHERE position_id = ?',
+        [positionId],
+      );
+      const hostCount = Number(usage?.count || 0);
+      if (hostCount > 0) {
+        await pool.query('UPDATE hosts SET position_id = NULL WHERE position_id = ?', [positionId]);
+      }
+
+      await pool.query('DELETE FROM positions WHERE id = ?', [positionId]);
+      res.json({
+        ok: true,
+        message: hostCount > 0
+          ? `Position deleted. Cleared from ${hostCount} host${hostCount === 1 ? '' : 's'}.`
+          : 'Position deleted.',
+        data: { id: positionId, hostsCleared: hostCount },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
