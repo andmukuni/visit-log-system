@@ -14,7 +14,7 @@ import {
   RefreshAction,
   AddAction,
 } from '../../components/ui';
-import { formatVisitHostLabel } from '../../components/visitors/visitorDetailUtils';
+import { formatVisitHostName, getVisitHostPosition } from '../../components/visitors/visitorDetailUtils';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
@@ -59,7 +59,16 @@ export default function VisitorLogsPage() {
     {
       key: 'host_name',
       label: 'Host',
-      render: (_, row) => formatVisitHostLabel(row, { empty: '—' }),
+      render: (_, row) => {
+        const name = formatVisitHostName(row, { empty: '—' });
+        const position = getVisitHostPosition(row);
+        return (
+          <div className="min-w-0">
+            <p className="truncate text-sm text-navy-900">{name}</p>
+            {position ? <p className="truncate text-xs text-navy-500">{position}</p> : null}
+          </div>
+        );
+      },
     },
     { key: 'category_name', label: 'Category' },
     {

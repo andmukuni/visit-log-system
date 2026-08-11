@@ -6,6 +6,7 @@ export { default as PortalKpiCard, kpiAccent, kpiTone } from './PortalKpiCard';
 export { default as KpiGrid } from './KpiGrid';
 export { default as DataTable, TablePagination } from './DataTable';
 export { default as FormField } from './FormField';
+export { default as SearchableSelect } from './SearchableSelect';
 export { default as Modal } from './Modal';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as StatusBadge } from './StatusBadge';

@@ -529,10 +529,11 @@ export default function AdminHostsPage() {
           <FormField
             label="Position"
             name="positionId"
-            type="select"
+            type="searchable-select"
             value={form.positionId}
             onChange={(e) => setForm((prev) => ({ ...prev, positionId: e.target.value }))}
             options={positionOptions}
+            placeholder="Search positions…"
             helpText="Optional job title from Admin → Positions."
           />
           <FormField

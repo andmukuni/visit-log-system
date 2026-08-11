@@ -7,12 +7,13 @@ import {
 } from 'lucide-react';
 import { StatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
-import { formatVisitHostLabel, visitorInitials } from './visitorDetailUtils';
+import { formatVisitHostName, getVisitHostPosition, visitorInitials } from './visitorDetailUtils';
 
 export default function VisitorDetailHero({ visit, footer = null, compact = false }) {
   if (!visit) return null;
 
   const passCode = visit.pass_code || visit.reference_number || '—';
+  const hostPosition = getVisitHostPosition(visit);
 
   return (
     <section className={`overflow-hidden rounded-2xl border border-navy-100 bg-gradient-to-br from-white via-white to-cyan-50/50 shadow-sm ${compact ? '' : 'mb-6'}`}>
@@ -56,10 +57,17 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
                 </span>
               ) : null}
             </div>
-            <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-navy-800">
-              <User size={14} className="shrink-0 text-cyan-700" aria-hidden="true" />
-              Host: {formatVisitHostLabel(visit)}
-            </p>
+            <div className="mt-2">
+              <p className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-800">
+                <User size={14} className="shrink-0 text-cyan-700" aria-hidden="true" />
+                Host: {formatVisitHostName(visit)}
+              </p>
+              {hostPosition ? (
+                <p className="mt-0.5 pl-[1.375rem] text-xs text-navy-500">
+                  {hostPosition}
+                </p>
+              ) : null}
+            </div>
             {visit.site_name ? (
               <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-navy-500">
                 <MapPin size={12} className="shrink-0" aria-hidden="true" />

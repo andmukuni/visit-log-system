@@ -1,3 +1,5 @@
+import SearchableSelect from './SearchableSelect';
+
 export default function FormField({
   label,
   name,
@@ -27,6 +29,21 @@ export default function FormField({
   } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
   const renderInput = () => {
+    if (type === 'searchable-select') {
+      return (
+        <SearchableSelect
+          id={name}
+          name={name}
+          value={value}
+          onChange={onChange}
+          options={options}
+          required={required}
+          disabled={disabled}
+          placeholder={placeholder || 'Search…'}
+        />
+      );
+    }
+
     if (type === 'select') {
       return (
         <select
