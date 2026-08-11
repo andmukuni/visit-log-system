@@ -8,7 +8,6 @@ import {
   Spinner,
   RefreshAction,
   ActionToolbar,
-  ViewAllAction,
   StatusBadge,
 } from '../../components/ui';
 import { DashboardOverviewLayout, RollCallBanner, metricTarget } from '../../components/dashboard';
@@ -174,7 +173,6 @@ export default function SecurityDashboardPage() {
           <Card
             title="Recent activity"
             subtitle="Latest visitor and security events"
-            actions={<ViewAllAction to="/security/audit" label="View all activity" />}
           >
             <DataTable
               embedded
