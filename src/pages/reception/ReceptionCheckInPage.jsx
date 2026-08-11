@@ -8,6 +8,7 @@ import {
   IconButton,
   StatusBadge,
   UnderlineTabs,
+  TablePagination,
 } from '../../components/ui';
 import GateCheckInPanel from '../station/GateCheckInPanel';
 import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
@@ -65,6 +66,8 @@ export default function ReceptionCheckInPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [expectedVisitors, setExpectedVisitors] = useState([]);
   const [expectedLoading, setExpectedLoading] = useState(false);
+  const [expectedPage, setExpectedPage] = useState(1);
+  const [expectedPageSize, setExpectedPageSize] = useState(10);
   const [tab, setTab] = useState(TABS.register);
 
   const loadRef = useCallback(async () => {
@@ -101,12 +104,21 @@ export default function ReceptionCheckInPage() {
       const end = addDaysKey(start, 7);
       const rows = await receptionApi.getCalendar({ start, end });
       setExpectedVisitors(Array.isArray(rows) ? rows : []);
+      setExpectedPage(1);
     } catch {
       setExpectedVisitors([]);
+      setExpectedPage(1);
     } finally {
       setExpectedLoading(false);
     }
   }, []);
+
+  const expectedTotalPages = Math.max(1, Math.ceil(expectedVisitors.length / expectedPageSize));
+  const safeExpectedPage = Math.min(expectedPage, expectedTotalPages);
+  const pagedExpectedVisitors = useMemo(() => {
+    const start = (safeExpectedPage - 1) * expectedPageSize;
+    return expectedVisitors.slice(start, start + expectedPageSize);
+  }, [expectedVisitors, expectedPageSize, safeExpectedPage]);
 
   useEffect(() => {
     loadRef();
@@ -287,86 +299,98 @@ export default function ReceptionCheckInPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-navy-100">
-                  <div className="min-w-[720px]">
-                    <div className="hidden grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
-                      <span>Visitor</span>
-                      <span>Host</span>
-                      <span>When</span>
-                      <span>Phone / NRC</span>
-                      <span>Status</span>
-                      <span className="text-right">Action</span>
-                    </div>
-                    <ul className="divide-y divide-navy-100">
-                      {expectedVisitors.map((row) => {
-                        const visitId = row.visit_id || row.id;
-                        const whenLabel = row.scheduled_at
-                          ? `${formatDate(row.scheduled_at)} · ${formatTime(row.scheduled_at)}`
-                          : '—';
-                        return (
-                          <li
-                            key={`${visitId}-${row.scheduled_at || row.id}`}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`View ${row.visitor_name || 'visitor'}`}
-                            onClick={() => navigate(`/reception/visitors/${visitId}`)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                navigate(`/reception/visitors/${visitId}`);
-                              }
-                            }}
-                            className="grid cursor-pointer grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-navy-50/70 focus-visible:bg-navy-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500 sm:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] sm:items-center sm:gap-3"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-base font-semibold text-navy-900">
-                                {row.visitor_name || 'Visitor'}
-                              </p>
-                              <p className="mt-0.5 truncate text-sm text-navy-500">
-                                {row.purpose || row.title || row.site_name || '—'}
-                              </p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-navy-700">{row.host_name || '—'}</p>
-                              <p className="mt-0.5 truncate text-xs text-navy-400">
-                                {row.department_name || row.site_name || ''}
-                              </p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm text-navy-700">{whenLabel}</p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-navy-700">{row.phone || '—'}</p>
-                              <p className="mt-0.5 truncate text-xs text-navy-400">
-                                NRC {row.id_number_masked || '—'}
-                              </p>
-                            </div>
-                            <div>
-                              <StatusBadge status={row.visit_status || row.status || 'expected'} />
-                            </div>
-                            <div
-                              className="flex items-center justify-end"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
+                <div className="overflow-hidden rounded-xl border border-navy-100">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[720px]">
+                      <div className="hidden grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+                        <span>Visitor</span>
+                        <span>Host</span>
+                        <span>When</span>
+                        <span>Phone / NRC</span>
+                        <span>Status</span>
+                        <span className="text-right">Action</span>
+                      </div>
+                      <ul className="divide-y divide-navy-100">
+                        {pagedExpectedVisitors.map((row) => {
+                          const visitId = row.visit_id || row.id;
+                          const whenLabel = row.scheduled_at
+                            ? `${formatDate(row.scheduled_at)} · ${formatTime(row.scheduled_at)}`
+                            : '—';
+                          return (
+                            <li
+                              key={`${visitId}-${row.scheduled_at || row.id}`}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`View ${row.visitor_name || 'visitor'}`}
+                              onClick={() => navigate(`/reception/visitors/${visitId}`)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  navigate(`/reception/visitors/${visitId}`);
+                                }
+                              }}
+                              className="grid cursor-pointer grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-navy-50/70 focus-visible:bg-navy-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500 sm:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] sm:items-center sm:gap-3"
                             >
-                              <Link
-                                to={`/reception/visitors/${visitId}`}
-                                aria-label={`View ${row.visitor_name || 'visitor'}`}
+                              <div className="min-w-0">
+                                <p className="truncate text-base font-semibold text-navy-900">
+                                  {row.visitor_name || 'Visitor'}
+                                </p>
+                                <p className="mt-0.5 truncate text-sm text-navy-500">
+                                  {row.purpose || row.title || row.site_name || '—'}
+                                </p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm text-navy-700">{row.host_name || '—'}</p>
+                                <p className="mt-0.5 truncate text-xs text-navy-400">
+                                  {row.department_name || row.site_name || ''}
+                                </p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm text-navy-700">{whenLabel}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm text-navy-700">{row.phone || '—'}</p>
+                                <p className="mt-0.5 truncate text-xs text-navy-400">
+                                  NRC {row.id_number_masked || '—'}
+                                </p>
+                              </div>
+                              <div>
+                                <StatusBadge status={row.visit_status || row.status || 'expected'} />
+                              </div>
+                              <div
+                                className="flex items-center justify-end"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
                               >
-                                <IconButton
-                                  icon={Eye}
-                                  label="View"
-                                  tooltip="View"
-                                  size="sm"
-                                  variant="ghost"
-                                />
-                              </Link>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                <Link
+                                  to={`/reception/visitors/${visitId}`}
+                                  aria-label={`View ${row.visitor_name || 'visitor'}`}
+                                >
+                                  <IconButton
+                                    icon={Eye}
+                                    label="View"
+                                    tooltip="View"
+                                    size="sm"
+                                    variant="ghost"
+                                  />
+                                </Link>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
                   </div>
+                  <TablePagination
+                    page={safeExpectedPage}
+                    pageSize={expectedPageSize}
+                    totalItems={expectedVisitors.length}
+                    onPageChange={setExpectedPage}
+                    onPageSizeChange={(size) => {
+                      setExpectedPageSize(size);
+                      setExpectedPage(1);
+                    }}
+                  />
                 </div>
               )}
             </FormSection>
