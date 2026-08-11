@@ -205,6 +205,21 @@ export const visitorApi = {
   },
   createOffice: (body) => apiFetch('/admin/org/offices', { method: 'POST', body: JSON.stringify(body) }),
   updateOffice: (id, body) => apiFetch(`/admin/org/offices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getPositions: async () => {
+    const res = await fetch(`${API_BASE}/admin/org/positions`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    const rows = Array.isArray(json.data) ? json.data : [];
+    rows.stats = json.stats || null;
+    return rows;
+  },
+  createPosition: (body) => apiFetch('/admin/org/positions', { method: 'POST', body: JSON.stringify(body) }),
+  updatePosition: (id, body) => apiFetch(`/admin/org/positions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getHosts: async () => {
     const res = await fetch(`${API_BASE}/admin/org/hosts`, {
       headers: { ...getAdminAuthHeaders() },
@@ -217,6 +232,17 @@ export const visitorApi = {
     const rows = Array.isArray(json.data) ? json.data : [];
     rows.stats = json.stats || null;
     return rows;
+  },
+  getHost: async (id) => {
+    const res = await fetch(`${API_BASE}/admin/org/hosts/${encodeURIComponent(id)}`, {
+      headers: { ...getAdminAuthHeaders() },
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.message || 'Request failed');
+    }
+    return json.data;
   },
   createHost: (body) => apiFetch('/admin/org/hosts', { method: 'POST', body: JSON.stringify(body) }),
   updateHost: (id, body) => apiFetch(`/admin/org/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

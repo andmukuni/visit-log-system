@@ -93,8 +93,10 @@ export default function VisitInvitePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8">
         <div className="max-w-md text-center bg-white/5 rounded-2xl p-10 border border-green-500/30">
-          <h1 className="text-2xl font-bold text-green-300 mb-4">Registration confirmed</h1>
-          <p className="text-white/80 mb-4">Show this pass code at reception when you arrive:</p>
+          <h1 className="text-2xl font-bold text-green-300 mb-4">
+            {visit.already_confirmed ? 'Visit confirmed' : 'Registration confirmed'}
+          </h1>
+          <p className="text-white/80 mb-4">Show this pass code at the gate or reception when you arrive:</p>
           <p className="text-4xl font-mono font-bold tracking-widest">{passCode || visit.pass_code}</p>
         </div>
       </div>

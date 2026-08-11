@@ -1,7 +1,28 @@
 import { generateId } from './visitorSchema.js';
+import { writeVisitEvent } from './auditService.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { sendSms } from './adapters/smsAdapter.js';
 import { getAppBaseUrl, getDeliveryConfig } from './adapters/deliveryConfig.js';
+
+const GATE_RECEPTION_ROLE_SLUGS = [
+  'gate_security',
+  'main_reception',
+  'executive_reception',
+  'receptionist',
+];
+
+function formatExpectedAt(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 function renderTemplate(template = '', vars = {}) {
   return String(template).replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
@@ -205,6 +226,7 @@ async function resolveHostUserId(pool, hostId) {
 const VISITOR_TEMPLATE_EVENTS = new Set([
   'pre_registered',
   'approved',
+  'host_booking',
   'rejected',
 ]);
 
@@ -217,10 +239,12 @@ export async function notifyVisitEvent(pool, {
   const [[visit]] = await pool.query(
     `SELECT vis.*, v.full_name AS visitor_name, v.phone AS visitor_phone, v.email AS visitor_email,
             h.name AS host_name, h.user_id AS host_user_id,
+            s.name AS site_name,
             COALESCE(vc.classification, 'standard') AS classification
      FROM visits vis
      INNER JOIN visitors v ON v.id = vis.visitor_id
      LEFT JOIN hosts h ON h.id = vis.host_id
+     LEFT JOIN sites s ON s.id = vis.site_id
      LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
      WHERE vis.id = ?`,
     [visitId],
@@ -237,6 +261,8 @@ export async function notifyVisitEvent(pool, {
     pass_code: visit.pass_code,
     invite_url: inviteUrl,
     status: visit.status,
+    expected_at: formatExpectedAt(visit.expected_at),
+    site_name: visit.site_name || '',
     ...extra,
   };
 
@@ -246,6 +272,7 @@ export async function notifyVisitEvent(pool, {
   const templateMap = {
     pending_approval: 'visit.pending_approval',
     approved: 'visit.approved',
+    host_booking: 'visit.host_booking',
     rejected: 'visit.rejected',
     checked_in: 'visit.checked_in',
     reception_check_in: 'visit.checked_in',
@@ -299,6 +326,112 @@ export async function notifyVisitEvent(pool, {
       channels: ['email', 'sms'],
     });
   }
+}
+
+async function resolveGateAndReceptionUsers(pool, { organisationId, siteId = null }) {
+  const rolePlaceholders = GATE_RECEPTION_ROLE_SLUGS.map(() => '?').join(', ');
+  const params = [...GATE_RECEPTION_ROLE_SLUGS, organisationId];
+  let siteClause = '';
+  if (siteId) {
+    siteClause = ' AND (us.site_id IS NULL OR us.site_id = ?)';
+    params.push(siteId);
+  }
+
+  const [rows] = await pool.query(
+    `SELECT DISTINCT u.id, u.email, u.phone, u.name
+     FROM users u
+     INNER JOIN user_admin_roles uar ON uar.user_id = u.id
+     INNER JOIN admin_roles ar ON ar.id = uar.role_id
+     INNER JOIN user_scopes us ON us.user_id = u.id
+     WHERE ar.slug IN (${rolePlaceholders})
+       AND us.organisation_id = ?
+       ${siteClause}`,
+    params,
+  );
+  return rows;
+}
+
+/**
+ * Notify gate + reception staff about visits arriving within the lead window
+ * (default 1 hour). Idempotent per visit via visit_events.pre_arrival_reminder.
+ */
+export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
+  const leadMinutes = Math.max(
+    5,
+    Number(process.env.PRE_ARRIVAL_LEAD_MINUTES || 60) || 60,
+  );
+
+  const [visits] = await pool.query(
+    `SELECT vis.id, vis.organisation_id, vis.site_id, vis.pass_code,
+            v.full_name AS visitor_name,
+            h.name AS host_name,
+            s.name AS site_name,
+            COALESCE(vis.expected_at, a.scheduled_at) AS arrival_at
+     FROM visits vis
+     INNER JOIN visitors v ON v.id = vis.visitor_id
+     LEFT JOIN hosts h ON h.id = vis.host_id
+     LEFT JOIN appointments a ON a.visit_id = vis.id
+     LEFT JOIN sites s ON s.id = vis.site_id
+     WHERE vis.status IN ('expected', 'approved')
+       AND COALESCE(vis.expected_at, a.scheduled_at) IS NOT NULL
+       AND COALESCE(vis.expected_at, a.scheduled_at) > NOW()
+       AND COALESCE(vis.expected_at, a.scheduled_at) <= DATE_ADD(NOW(), INTERVAL ? MINUTE)
+       AND NOT EXISTS (
+         SELECT 1 FROM visit_events ve
+         WHERE ve.visit_id = vis.id AND ve.event_type = 'pre_arrival_reminder'
+       )
+     ORDER BY COALESCE(vis.expected_at, a.scheduled_at) ASC
+     LIMIT ?`,
+    [leadMinutes, limit],
+  );
+
+  let notified = 0;
+  for (const visit of visits) {
+    const staff = await resolveGateAndReceptionUsers(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+    });
+
+    const vars = {
+      visitor_name: visit.visitor_name,
+      host_name: visit.host_name || 'Host',
+      pass_code: visit.pass_code,
+      expected_at: formatExpectedAt(visit.arrival_at),
+      site_name: visit.site_name || '',
+    };
+
+    for (const user of staff) {
+      await sendFromTemplate(pool, {
+        organisationId: visit.organisation_id,
+        userId: user.id,
+        recipient: {
+          email: user.email || null,
+          phone: user.phone || null,
+        },
+        templateKey: 'visit.pre_arrival_alert',
+        vars,
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:staff:${user.id}`,
+        metadata: {
+          visitId: visit.id,
+          eventType: 'pre_arrival_reminder',
+          audience: 'gate_reception',
+        },
+        channels: ['in_app', 'email', 'sms'],
+      });
+    }
+
+    await writeVisitEvent(pool, {
+      visitId: visit.id,
+      eventType: 'pre_arrival_reminder',
+      details: {
+        arrivalAt: visit.arrival_at,
+        staffNotified: staff.length,
+      },
+    });
+    notified += 1;
+  }
+
+  return { scanned: visits.length, notified };
 }
 
 export async function retryFailedDeliveries(pool, { limit = 25 } = {}) {

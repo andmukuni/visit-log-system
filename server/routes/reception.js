@@ -157,7 +157,11 @@ export function createReceptionRouter() {
 
       const expectedToday = await countVisits(
         `AND vis.status IN ('expected', 'approved', 'pre_registered')
-         AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()`,
+         AND DATE(COALESCE(
+           vis.expected_at,
+           (SELECT a.scheduled_at FROM appointments a WHERE a.visit_id = vis.id LIMIT 1),
+           vis.created_at
+         )) = CURDATE()`,
       );
       const pendingApprovals = await countVisits(
         `AND vis.status IN ('pending_approval', 'pre_registered')`,

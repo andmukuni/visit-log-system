@@ -388,9 +388,12 @@ export function createHostRouter() {
         confidentialNotes,
       });
 
+      // Host-created visits that skip approval are already confirmed expected arrivals.
+      const alreadyConfirmed = status === 'expected' || status === 'approved';
+
       await pool.query(
-        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, confidential_notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, confidential_notes, approved_at, privacy_ack_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${alreadyConfirmed ? 'NOW()' : 'NULL'}, ${alreadyConfirmed ? 'NOW()' : 'NULL'})`,
         [
           visitId,
           ctx.scope.organisation_id,
@@ -435,10 +438,20 @@ export function createHostRouter() {
         visitId,
         eventType: 'pre_registered',
         actorUserId: userId,
-        details: { status, source: 'host_invite' },
+        details: { status, source: 'host_invite', alreadyConfirmed },
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+      if (alreadyConfirmed) {
+        await writeVisitEvent(pool, {
+          visitId,
+          eventType: 'approved',
+          actorUserId: userId,
+          details: { status, source: 'host_invite', selfApproved: true, alreadyConfirmed: true },
+        });
+        await notifyVisitEvent(pool, { visitId, eventType: 'host_booking', actorUserId: userId });
+      } else {
+        await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+      }
 
       await writeAuditLog(pool, {
         organisationId: ctx.scope.organisation_id,

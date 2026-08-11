@@ -79,6 +79,10 @@ describe('organisation placement hierarchy', () => {
     assert.ok(ADMIN_PERMISSIONS.some((p) => p.key === 'admin.offices'));
   });
 
+  it('includes admin.positions permission for position management', () => {
+    assert.ok(ADMIN_PERMISSIONS.some((p) => p.key === 'admin.positions'));
+  });
+
   it('maps employee through office → department → organisation fields', () => {
     // Contract for resolveEmployeePlacement / hosts listing joins.
     const placement = {

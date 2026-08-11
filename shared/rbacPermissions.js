@@ -41,6 +41,7 @@ const ADMIN_PORTAL_PERMISSIONS = [
   { key: 'admin.stations', name: 'Manage stations & gates', group: 'Administration' },
   { key: 'admin.departments', name: 'Manage departments', group: 'Administration' },
   { key: 'admin.offices', name: 'Manage offices', group: 'Administration' },
+  { key: 'admin.positions', name: 'Manage positions', group: 'Administration' },
   { key: 'admin.hosts', name: 'Manage employees & hosts', group: 'Administration' },
   { key: 'admin.receptionists', name: 'Manage receptionists', group: 'Administration' },
   { key: 'admin.security_guards', name: 'Manage security guards', group: 'Administration' },

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Building2, DoorClosed, Eye, KeyRound, Mail, MapPin, Network, Plus, Search, UserCheck, X, Edit3 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { DoorClosed, Eye, Network, Plus, Search, UserCheck } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
@@ -9,7 +9,6 @@ import {
   Modal,
   FormField,
   LoadingButton,
-  ConfirmDialog,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
@@ -66,6 +65,7 @@ function formatHostDisplayName(row) {
 
 export default function AdminHostsPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const {
     organisations,
     hasOrganisation,
@@ -87,13 +87,9 @@ export default function AdminHostsPage() {
   const [offices, setOffices] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [sendingReset, setSendingReset] = useState(false);
-  const [resetTarget, setResetTarget] = useState(null);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -234,7 +230,6 @@ export default function AdminHostsPage() {
       toast.error('Create a site/branch under an organisation first.');
       return;
     }
-    setEditing(null);
     setForm({
       ...emptyForm(),
       organisationId: defaultOrgId,
@@ -244,31 +239,12 @@ export default function AdminHostsPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (row) => {
-    setEditing(row);
-    setForm({
-      organisationId: row.organisation_id || '',
-      title: row.title || '',
-      name: row.name || '',
-      email: row.email || '',
-      phone: row.phone || '',
-      departmentId: row.department_id || '',
-      siteId: row.site_id || '',
-      officeId: row.office_id || '',
-      status: row.status || 'active',
-      availability: row.availability === 'unavailable' ? 'unavailable' : 'available',
-      portalRole: row.portal_role || 'host',
-      password: '',
-    });
-    setModalOpen(true);
-  };
-
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error('Host name is required.');
       return;
     }
-    if (!editing && !form.organisationId) {
+    if (!form.organisationId) {
       toast.error('Organisation is required.');
       return;
     }
@@ -286,7 +262,7 @@ export default function AdminHostsPage() {
     }
     setSaving(true);
     try {
-      const payload = {
+      const created = await visitorApi.createHost({
         title: form.title || null,
         name: form.name,
         email: form.email,
@@ -298,18 +274,14 @@ export default function AdminHostsPage() {
         availability: form.availability,
         portalRole: form.portalRole || 'host',
         password: form.password || undefined,
-      };
-      if (editing?.id) {
-        await visitorApi.updateHost(editing.id, payload);
-        toast.success(form.password ? 'Host updated and password changed.' : 'Host updated.');
-      } else {
-        await visitorApi.createHost({
-          ...payload,
-          organisationId: form.organisationId,
-        });
-        toast.success('Host created.');
-      }
+        organisationId: form.organisationId,
+      });
+      toast.success('Host created.');
       setModalOpen(false);
+      if (created?.id) {
+        navigate(`/admin/hosts/${created.id}`);
+        return;
+      }
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not save host.');
@@ -318,29 +290,10 @@ export default function AdminHostsPage() {
     }
   };
 
-  const handleSendPasswordReset = async () => {
-    if (!resetTarget?.id) return;
-    setSendingReset(true);
-    try {
-      const result = await visitorApi.sendHostPasswordReset(resetTarget.id);
-      toast.success(result?.message || `Password reset email sent to ${resetTarget.email}.`);
-      const targetId = resetTarget.id;
-      setResetTarget(null);
-      const rows = await visitorApi.getHosts();
-      setAllRows(Array.isArray(rows) ? rows : []);
-      setKpis(rows?.stats || { total: rows?.length || 0 });
-      if (selected?.id === targetId) {
-        setSelected(rows.find((row) => row.id === targetId) || selected);
-      }
-      if (editing?.id === targetId) {
-        setEditing(rows.find((row) => row.id === targetId) || editing);
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Could not send password reset email.');
-    } finally {
-      setSendingReset(false);
-    }
-  };
+  const openHost = useCallback((row) => {
+    if (!row?.id) return;
+    navigate(`/admin/hosts/${row.id}`);
+  }, [navigate]);
 
   const columns = useMemo(() => [
     {
@@ -402,12 +355,12 @@ export default function AdminHostsPage() {
           iconSize={16}
           onClick={(e) => {
             e.stopPropagation();
-            setSelected(row);
+            openHost(row);
           }}
         />
       ),
     },
-  ], []);
+  ], [openHost]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">
@@ -454,113 +407,49 @@ export default function AdminHostsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1">
-            <div className="border-b border-gray-200 px-4 py-2 sm:px-5">
-              <label className="relative block">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="search"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search name, email, department, site..."
-                  className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
-                />
-              </label>
-            </div>
-            <DataTable
-              embedded
-              columns={columns}
-              data={pageRows}
-              loading={loading}
-              emptyTitle={!prerequisitesReady ? 'Prerequisites missing' : 'No employees found.'}
-              emptyDescription={
-                !orgOptions.length
-                  ? 'Create an Organisation first. Employees belong to an organisation.'
-                  : !departments.length
-                    ? 'Create a Department first, then assign employees to department + site.'
-                    : !sites.some((s) => s.status !== 'inactive')
-                      ? 'Create a Site / Branch first, then assign employees.'
-                      : 'Add an employee under an organisation, department and site.'
-              }
-              onRowClick={setSelected}
-              activeRowId={selected?.id}
-              serverPagination
-              page={page}
-              pageSize={pageSize}
-              totalItems={filteredRows.length}
-              onPageChange={(value) => updateParams({ page: value })}
-              onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
-              pageSizeOptions={[7, 10, 25, 50]}
-              pagination
+        <div className="border-b border-gray-200 px-4 py-2 sm:px-5">
+          <label className="relative block">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search name, email, department, site..."
+              className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
             />
-          </div>
-
-          {selected && (
-            <aside className="hidden w-full shrink-0 border-t border-gray-200 bg-white lg:flex lg:w-[300px] lg:flex-col lg:border-l lg:border-t-0">
-              <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">{formatHostDisplayName(selected)}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{selected.email || 'No email'}</p>
-                </div>
-                <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="space-y-2 px-4 py-3 text-sm">
-                <StatusBadge status={selected.status || 'active'} />
-                <p className="text-xs text-gray-500">
-                  Portal login:{' '}
-                  <span className="font-semibold text-navy-900">
-                    {selected.user_id ? 'Enabled' : selected.email ? 'Email on file' : 'Not linked'}
-                  </span>
-                </p>
-                <p className="text-xs text-gray-500">
-                  Reception availability:{' '}
-                  <span className="font-semibold text-navy-900">
-                    {selected.availability === 'unavailable' ? 'Not available' : 'Available'}
-                  </span>
-                </p>
-                <p className="text-xs text-gray-500">
-                  Role:{' '}
-                  <span className="font-semibold text-navy-900">
-                    {selected.portal_role_label
-                      || PORTAL_ROLE_OPTIONS.find((option) => option.value === selected.portal_role)?.label
-                      || 'General Employee'}
-                  </span>
-                </p>
-                <p className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><span className="font-semibold">{selected.organisation_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><Network size={14} className="text-gray-400" /><span className="font-semibold">{selected.department_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-400" /><span className="font-semibold">{selected.site_name || '—'}</span></p>
-                <p className="flex items-center gap-2"><DoorClosed size={14} className="text-gray-400" /><span className="font-semibold">{selected.office_number ? `#${selected.office_number}` : 'No office'}</span></p>
-              </div>
-              <div className="mt-auto space-y-2 border-t border-gray-200 p-3">
-                <button
-                  type="button"
-                  onClick={() => openEdit(selected)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#1a73e8] px-3 py-2 text-sm font-semibold text-[#1a73e8]"
-                >
-                  <Edit3 size={16} /> Edit Host
-                </button>
-                <button
-                  type="button"
-                  disabled={!selected.email}
-                  title={!selected.email ? 'Add an email address first' : 'Email a password reset link'}
-                  onClick={() => setResetTarget(selected)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2 text-sm font-semibold text-navy-800 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Mail size={16} /> Send password reset
-                </button>
-              </div>
-            </aside>
-          )}
+          </label>
         </div>
+        <DataTable
+          embedded
+          columns={columns}
+          data={pageRows}
+          loading={loading}
+          emptyTitle={!prerequisitesReady ? 'Prerequisites missing' : 'No employees found.'}
+          emptyDescription={
+            !orgOptions.length
+              ? 'Create an Organisation first. Employees belong to an organisation.'
+              : !departments.length
+                ? 'Create a Department first, then assign employees to department + site.'
+                : !sites.some((s) => s.status !== 'inactive')
+                  ? 'Create a Site / Branch first, then assign employees.'
+                  : 'Add an employee under an organisation, department and site.'
+          }
+          onRowClick={openHost}
+          serverPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filteredRows.length}
+          onPageChange={(value) => updateParams({ page: value })}
+          onPageSizeChange={(value) => updateParams({ pageSize: value, page: 1 })}
+          pageSizeOptions={[7, 10, 25, 50]}
+          pagination
+        />
       </div>
 
       <Modal
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
-        title={editing ? 'Edit Host' : 'New Host'}
+        title="New Host"
         subtitle="Organisation → Host → Department + Site (+ optional Office)"
         size="md"
         footer={(
@@ -569,7 +458,7 @@ export default function AdminHostsPage() {
               Cancel
             </button>
             <LoadingButton loading={saving} onClick={handleSave}>
-              {editing ? 'Save changes' : 'Create host'}
+              Create host
             </LoadingButton>
           </div>
         )}
@@ -581,7 +470,6 @@ export default function AdminHostsPage() {
             type="select"
             required
             value={form.organisationId}
-            disabled={Boolean(editing)}
             onChange={(e) => {
               const organisationId = e.target.value;
               const deptForOrg = departments.filter((d) => d.organisation_id === organisationId);
@@ -595,7 +483,7 @@ export default function AdminHostsPage() {
               }));
             }}
             options={orgOptions}
-            helpText={editing ? 'Organisation cannot be changed after create.' : 'Required. Host belongs to this organisation.'}
+            helpText="Required. Host belongs to this organisation."
           />
           <FormField
             label="Title"
@@ -689,43 +577,16 @@ export default function AdminHostsPage() {
             helpText="CEO and Deputy CEO see Executive Calendar; General Employee sees Calendar."
           />
           <FormField
-            label={editing ? 'Change password' : 'Temporary password'}
+            label="Temporary password"
             name="password"
             type="password"
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder={editing ? 'Leave blank to keep current' : 'Optional'}
-            helpText={
-              editing
-                ? 'Set a new password for the host login, or leave blank. You can also email a reset link from the host details panel.'
-                : 'Optional. Creates Host portal login when email is set. Prefer “Send password reset” so the host chooses their own password.'
-            }
+            placeholder="Optional"
+            helpText="Optional. Creates Host portal login when email is set. Prefer sending a password reset from the host details page."
           />
-          {editing?.email ? (
-            <button
-              type="button"
-              onClick={() => setResetTarget(editing)}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-navy-200 px-3 py-2 text-sm font-semibold text-navy-800 hover:bg-navy-50"
-            >
-              <KeyRound size={16} /> Send password reset email
-            </button>
-          ) : null}
         </div>
       </Modal>
-
-      <ConfirmDialog
-        isOpen={Boolean(resetTarget)}
-        onClose={() => !sendingReset && setResetTarget(null)}
-        onConfirm={handleSendPasswordReset}
-        loading={sendingReset}
-        title="Send password reset?"
-        message={
-          resetTarget
-            ? `Email a password reset link to ${resetTarget.name} (${resetTarget.email}). The link expires in 24 hours.`
-            : 'Are you sure you want to proceed?'
-        }
-        confirmLabel="Send email"
-      />
     </div>
   );
 }

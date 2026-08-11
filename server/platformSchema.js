@@ -126,6 +126,20 @@ const DEFAULT_TEMPLATES = [
     sms: `${SMS_SENDER_PREFIX}: Visit approved. Pass code {{pass_code}}. {{invite_url}}`,
   },
   {
+    key: 'visit.host_booking',
+    subject: 'Visit confirmed',
+    inApp: 'Host booking confirmed for {{visitor_name}}.',
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} is confirmed.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Visit confirmed. Pass code {{pass_code}}. Expected {{expected_at}}. {{invite_url}}`,
+  },
+  {
+    key: 'visit.pre_arrival_alert',
+    subject: 'Expected arrival in 1 hour',
+    inApp: '{{visitor_name}} is expected in about 1 hour (host: {{host_name}}). Pass code {{pass_code}}.',
+    email: `Expected arrival in about 1 hour\n\nVisitor: {{visitor_name}}\nHost: {{host_name}}\nSite: {{site_name}}\nExpected: {{expected_at}}\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: Expected in ~1h — {{visitor_name}} ({{host_name}}). Code {{pass_code}}.`,
+  },
+  {
     key: 'visit.rejected',
     subject: 'Visit rejected',
     inApp: 'The visit for {{visitor_name}} was rejected.',
@@ -217,7 +231,18 @@ export async function seedPlatformData() {
          WHERE organisation_id = ? AND template_key = ? AND channel = ? LIMIT 1`,
         [org.id, tpl.key, channel],
       );
-      if (existing) continue;
+      if (existing) {
+        // Keep pre-arrival copy in sync when lead time messaging changes.
+        if (tpl.key === 'visit.pre_arrival_alert') {
+          await pool.query(
+            `UPDATE notification_templates
+             SET subject = ?, body_template = ?
+             WHERE id = ?`,
+            [tpl.subject, body, existing.id],
+          );
+        }
+        continue;
+      }
 
       await pool.query(
         `INSERT INTO notification_templates (id, organisation_id, template_key, channel, subject, body_template, enabled)

@@ -78,13 +78,14 @@ export const PORTAL_NAVIGATION = {
     { key: 'log-book', name: 'Log Book', to: '/admin/log-book', permissions: ['admin.visitors', 'admin.vehicles', 'admin.dashboard'], section: 'primary' },
     { key: 'workflows', name: 'Approval Workflows', to: '/admin/workflows', permission: 'admin.workflows', section: 'primary' },
     { key: 'badges', name: 'Badge Inventory', to: '/admin/badges', permission: 'admin.badges', section: 'primary' },
-    // Hierarchy setup order: Org → Site → Building/Zone → Station → Dept → Office → People → visitor policy
+    // Hierarchy setup order: Org → Site → Building/Zone → Station → Dept → Office → Positions → People → visitor policy
     { key: 'organisations', name: 'Organisations', to: '/admin/organisations', permission: 'admin.organisations', section: 'organisation', badgeKey: 'organisations' },
     { key: 'sites', name: 'Sites & Branches', to: '/admin/sites', permission: 'admin.sites', section: 'organisation', badgeKey: 'sites' },
     { key: 'zones', name: 'Buildings & Zones', to: '/admin/zones', permission: 'admin.zones', section: 'organisation', badgeKey: 'zones' },
     { key: 'stations', name: 'Stations & Gates', to: '/admin/stations', permission: 'admin.stations', section: 'organisation', badgeKey: 'stations' },
     { key: 'departments', name: 'Departments', to: '/admin/departments', permission: 'admin.departments', section: 'organisation', badgeKey: 'departments' },
     { key: 'offices', name: 'Offices', to: '/admin/offices', permission: 'admin.offices', section: 'organisation', badgeKey: 'offices' },
+    { key: 'positions', name: 'Positions', to: '/admin/positions', permission: 'admin.positions', section: 'organisation', badgeKey: 'positions' },
     { key: 'hosts', name: 'Hosts', to: '/admin/hosts', permission: 'admin.hosts', section: 'organisation', badgeKey: 'hosts' },
     { key: 'receptionists', name: 'Receptionists', to: '/admin/receptionists', permission: 'admin.receptionists', section: 'organisation', badgeKey: 'receptionists' },
     { key: 'security-guards', name: 'Security Guards', to: '/admin/security-guards', permission: 'admin.security_guards', section: 'organisation', badgeKey: 'security_guards' },

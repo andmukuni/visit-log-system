@@ -538,7 +538,7 @@ export function createExecutiveRouter() {
         idNumber: nrc,
       });
 
-      // Executive self-scheduling is host-approved; reception/secretary bookings use other routes.
+      // Host/executive calendar bookings are already confirmed by the host — no visitor ack needed.
       const status = 'expected';
 
       const visitId = generateId('visit');
@@ -547,8 +547,8 @@ export function createExecutiveRouter() {
       const meetingTitle = title?.trim() || purpose?.trim() || `Meeting with ${visitorName.trim()}`;
 
       await pool.query(
-        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at, privacy_ack_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           visitId,
           ctx.scope.organisation_id,
@@ -585,9 +585,9 @@ export function createExecutiveRouter() {
         visitId,
         eventType: 'approved',
         actorUserId: userId,
-        details: { status, source: 'executive_calendar', selfApproved: true },
+        details: { status, source: 'executive_calendar', selfApproved: true, alreadyConfirmed: true },
       });
-      await notifyVisitEvent(pool, { visitId, eventType: 'approved', actorUserId: userId });
+      await notifyVisitEvent(pool, { visitId, eventType: 'host_booking', actorUserId: userId });
 
       await writeAuditLog(pool, {
         organisationId: ctx.scope.organisation_id,

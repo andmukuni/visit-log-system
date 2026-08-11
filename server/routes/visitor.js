@@ -1979,6 +1979,7 @@ export function createOrgAdminRouter() {
         stations,
         departments,
         offices,
+        positions,
         hosts,
         receptionists,
         security_guards,
@@ -2022,6 +2023,11 @@ export function createOrgAdminRouter() {
           'SELECT COUNT(*) AS count FROM offices',
         ),
         countOne(
+          'SELECT COUNT(*) AS count FROM positions WHERE organisation_id = ?',
+          [orgId],
+          'SELECT COUNT(*) AS count FROM positions',
+        ),
+        countOne(
           'SELECT COUNT(*) AS count FROM hosts WHERE organisation_id = ?',
           [orgId],
           'SELECT COUNT(*) AS count FROM hosts',
@@ -2048,6 +2054,7 @@ export function createOrgAdminRouter() {
           stations,
           departments,
           offices,
+          positions,
           hosts,
           receptionists,
           security_guards,
@@ -2756,6 +2763,121 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/positions', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const selectSql = `
+        SELECT p.*,
+               o.name AS organisation_name
+        FROM positions p
+        LEFT JOIN organisations o ON o.id = p.organisation_id
+      `;
+      const [rows] = orgId
+        ? await pool.query(`${selectSql} WHERE p.organisation_id = ? ORDER BY p.name`, [orgId])
+        : await pool.query(`${selectSql} ORDER BY o.name, p.name`);
+
+      const stats = {
+        total: rows.length,
+        active: rows.filter((row) => row.status === 'active').length,
+        inactive: rows.filter((row) => row.status !== 'active').length,
+        organisations: new Set(rows.map((row) => row.organisation_id).filter(Boolean)).size,
+      };
+
+      res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Position belongs directly to an organisation (job title / role label).
+  router.post('/positions', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id
+        || String(req.body?.organisationId || req.body?.organisation_id || '').trim()
+        || null;
+      const orgGate = await requireOrganisationForStructure(orgId);
+      if (!orgGate.ok) {
+        return res.status(orgGate.status).json({ ok: false, message: orgGate.message });
+      }
+
+      const name = String(req.body?.name || '').trim();
+      const code = String(req.body?.code || '').trim().toUpperCase() || null;
+      const status = String(req.body?.status || 'active').trim().toLowerCase() === 'inactive'
+        ? 'inactive'
+        : 'active';
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Position name is required.' });
+      }
+
+      const id = generateId('pos');
+      await pool.query(
+        `INSERT INTO positions (id, organisation_id, name, code, status) VALUES (?, ?, ?, ?, ?)`,
+        [id, orgId, name, code, status],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT p.*,
+                o.name AS organisation_name
+         FROM positions p
+         LEFT JOIN organisations o ON o.id = p.organisation_id
+         WHERE p.id = ?`,
+        [id],
+      );
+      res.status(201).json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/positions/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const positionId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM positions WHERE id = ? LIMIT 1', [positionId]);
+      if (!existing) {
+        return res.status(404).json({ ok: false, message: 'Position not found.' });
+      }
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this position.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const code = req.body?.code != null
+        ? String(req.body.code).trim().toUpperCase() || null
+        : existing.code;
+      const status = req.body?.status != null
+        ? (String(req.body.status).trim().toLowerCase() === 'inactive' ? 'inactive' : 'active')
+        : existing.status;
+      if (!name) {
+        return res.status(400).json({ ok: false, message: 'Position name is required.' });
+      }
+
+      await pool.query(
+        'UPDATE positions SET name = ?, code = ?, status = ? WHERE id = ?',
+        [name, code, status, positionId],
+      );
+
+      const [[row]] = await pool.query(
+        `SELECT p.*,
+                o.name AS organisation_name
+         FROM positions p
+         LEFT JOIN organisations o ON o.id = p.organisation_id
+         WHERE p.id = ?`,
+        [positionId],
+      );
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/offices', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -3009,6 +3131,66 @@ export function createOrgAdminRouter() {
       };
 
       res.json({ ok: true, data: rows, stats });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/hosts/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const hostId = req.params.id;
+
+      const [[raw]] = await pool.query(
+        `SELECT h.*,
+                COALESCE(d.name, od.name) AS department_name,
+                ofc.office_number,
+                ofc.name AS office_name,
+                s.name AS site_name,
+                o.name AS organisation_name,
+                (
+                  SELECT ar.slug
+                  FROM user_admin_roles uar
+                  INNER JOIN admin_roles ar ON ar.id = uar.role_id
+                  WHERE uar.user_id = h.user_id
+                    AND ar.slug IN ('ceo', 'dceo', 'host')
+                  ORDER BY CASE ar.slug
+                    WHEN 'ceo' THEN 1
+                    WHEN 'dceo' THEN 2
+                    WHEN 'host' THEN 3
+                    ELSE 4
+                  END
+                  LIMIT 1
+                ) AS portal_role
+         FROM hosts h
+         LEFT JOIN offices ofc ON ofc.id = h.office_id
+         LEFT JOIN departments d ON d.id = h.department_id
+         LEFT JOIN departments od ON od.id = ofc.department_id
+         LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
+         LEFT JOIN organisations o ON o.id = h.organisation_id
+         WHERE h.id = ?
+         LIMIT 1`,
+        [hostId],
+      );
+
+      if (!raw) {
+        return res.status(404).json({ ok: false, message: 'Host not found.' });
+      }
+      if (orgId && raw.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this host.' });
+      }
+
+      const portalRole = normalizeHostPortalRole(raw.portal_role || 'host');
+      res.json({
+        ok: true,
+        data: {
+          ...raw,
+          portal_role: portalRole,
+          portal_role_label: hostPortalRoleLabel(portalRole),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

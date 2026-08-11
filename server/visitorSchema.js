@@ -195,6 +195,18 @@ export async function ensureVisitorSchema() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS positions (
+      id VARCHAR(90) PRIMARY KEY,
+      organisation_id VARCHAR(90) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      code VARCHAR(40),
+      status VARCHAR(30) DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_positions_org (organisation_id)
+    )
+  `);
+
   // Office → Organisation + Department + Building (site inherited from building).
   await ensureOfficeSchema(pool);
 

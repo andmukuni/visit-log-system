@@ -35,7 +35,7 @@ import { createAdminSettingsRouter } from './routes/adminSettings.js';
 import { createKioskRouter } from './routes/kiosk.js';
 import pool from './db.js';
 import { waitForDatabase } from './waitForDatabase.js';
-import { retryFailedDeliveries } from './notificationService.js';
+import { retryFailedDeliveries, notifyPreArrivalReminders } from './notificationService.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
 
@@ -259,6 +259,7 @@ async function main() {
   await waitForDatabase();
   await bootstrapDatabase();
   startNotificationRetryWorker();
+  startPreArrivalReminderWorker();
   await startHttpServer();
 }
 
@@ -274,6 +275,23 @@ function startNotificationRetryWorker() {
       console.error('[notifications] Retry worker error:', error.message);
     }
   }, retryIntervalMs);
+}
+
+function startPreArrivalReminderWorker() {
+  const intervalMs = Number(process.env.PRE_ARRIVAL_REMINDER_INTERVAL_MS || 60_000);
+  const tick = async () => {
+    try {
+      const result = await notifyPreArrivalReminders(pool);
+      if (result.notified > 0) {
+        console.log(`[notifications] Pre-arrival reminders sent for ${result.notified} visit(s)`);
+      }
+    } catch (error) {
+      console.error('[notifications] Pre-arrival reminder worker error:', error.message);
+    }
+  };
+  // Run soon after boot, then on interval.
+  setTimeout(tick, 5_000);
+  setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
 }
 
 main().catch((error) => {
