@@ -44,6 +44,7 @@ const AdminReceptionistDetailPage = lazy(() => import('./pages/admin/AdminRecept
 const AdminSecurityGuardsPage = lazy(() => import('./pages/admin/AdminSecurityGuardsPage.jsx'));
 const AdminSecurityGuardDetailPage = lazy(() => import('./pages/admin/AdminSecurityGuardDetailPage.jsx'));
 const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage.jsx'));
+const AdminAuditPage = lazy(() => import('./pages/admin/AdminAuditPage'));
 
 const StationDashboardPage = lazy(() => import('./pages/station/StationDashboardPage'));
 const GateEntryPage = lazy(() => import('./pages/station/GateEntryPage'));
@@ -540,6 +541,7 @@ export const router = createBrowserRouter([
           { path: 'vehicle-visits', element: <Navigate to="/admin/log-book?tab=vehicle" replace /> },
           { path: 'badges', element: <LazyAdminOrgPage page="badges" /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },
+          { path: 'audit', element: <AdminAuditPage /> },
           { path: 'users', element: <DemoUsersPage /> },
           {
             path: 'users/:id',

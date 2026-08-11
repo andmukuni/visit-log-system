@@ -94,7 +94,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'reports', name: 'Reports', to: '/admin/reports', permission: 'admin.reports', section: 'system' },
     { key: 'privacy', name: 'Privacy & Retention', to: '/admin/privacy', permission: 'admin.privacy', section: 'system' },
     { key: 'integrations', name: 'Integrations', to: '/admin/integrations', permission: 'admin.integrations', section: 'system' },
-    { key: 'audit', name: 'Audit Logs', to: '/admin/audit', permission: 'admin.audit', section: 'system' },
+    { key: 'audit', name: 'Audit Trail', to: '/admin/audit', permission: 'admin.audit', section: 'system' },
     { key: 'roles', name: 'Roles & Permissions', to: '/admin/access-control', permission: 'admin.rbac', section: 'settings' },
     { key: 'users', name: 'Users', to: '/admin/users', permission: 'admin.users', section: 'settings', badgeKey: 'users' },
     { key: 'settings', name: 'Settings', to: '/admin/settings', permission: 'admin.settings', section: 'settings' },

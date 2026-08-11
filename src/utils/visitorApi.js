@@ -112,6 +112,14 @@ export const visitorApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visits/${id}${qs ? `?${qs}` : ''}`);
   },
+  getOrgAudit: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, value]) => value != null && value !== ''),
+      ),
+    ).toString();
+    return apiFetch(`/admin/org/audit${qs ? `?${qs}` : ''}`);
+  },
   getOrganisations: async () => {
     const res = await fetch(`${API_BASE}/admin/org/organisations`, {
       headers: { ...getAdminAuthHeaders() },

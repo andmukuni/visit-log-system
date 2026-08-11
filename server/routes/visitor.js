@@ -4787,5 +4787,68 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.get('/audit', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+      const offset = (page - 1) * limit;
+      const orgId = filter.organisationId;
+      const params = [];
+      let where = 'WHERE 1=1';
+
+      if (orgId) {
+        where += ' AND al.organisation_id = ?';
+        params.push(orgId);
+      }
+
+      if (req.query.action) {
+        where += ' AND al.action LIKE ?';
+        params.push(`%${String(req.query.action).trim()}%`);
+      }
+      if (req.query.result) {
+        where += ' AND al.result = ?';
+        params.push(String(req.query.result).trim());
+      }
+      if (req.query.dateFrom) {
+        where += ' AND al.created_at >= ?';
+        params.push(String(req.query.dateFrom));
+      }
+      if (req.query.dateTo) {
+        where += ' AND al.created_at <= ?';
+        params.push(`${String(req.query.dateTo)} 23:59:59`);
+      }
+
+      const [[countRow]] = await pool.query(
+        `SELECT COUNT(*) AS count FROM audit_logs al ${where}`,
+        params,
+      );
+
+      const [rows] = await pool.query(
+        `SELECT al.*, u.name AS actor_name, u.email AS actor_email, o.name AS organisation_name
+         FROM audit_logs al
+         LEFT JOIN users u ON u.id = al.actor_user_id
+         LEFT JOIN organisations o ON o.id = al.organisation_id
+         ${where}
+         ORDER BY al.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset],
+      );
+
+      res.json({
+        ok: true,
+        data: { rows, total: Number(countRow?.count || 0), page, limit },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   return router;
 }

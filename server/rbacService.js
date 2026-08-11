@@ -279,6 +279,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/org/visitors')) return 'admin.visitors';
   if (path.includes('/org/vehicles')) return 'admin.vehicles';
   if (path.includes('/org/visits')) return 'admin.visitors';
+  if (path.includes('/org/audit')) return 'admin.audit';
 
   if (path.includes('/users')) return 'admin.users';
   if (path.includes('/roles')) return 'admin.users';
