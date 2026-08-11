@@ -17,6 +17,8 @@ const initialForm = () => ({
   visitorName: '',
   company: '',
   phone: '',
+  phoneCountry: 'ZM',
+  idNumber: '',
   email: '',
   purpose: '',
   siteId: '',
@@ -129,6 +131,14 @@ export default function ExecutiveNewAppointmentPage() {
   const handleSave = useCallback(async (payload) => {
     if (!payload.visitorName?.trim()) {
       toast.error('Visitor name is required.');
+      return;
+    }
+    if (!payload.phone?.trim()) {
+      toast.error('Mobile phone number is required.');
+      return;
+    }
+    if (!payload.idNumber?.trim()) {
+      toast.error('NRC is required.');
       return;
     }
     setSaving(true);

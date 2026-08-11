@@ -10,7 +10,30 @@ import { generateInviteToken } from '../platformSchema.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
-import { createAppointmentForVisit, upsertHostContact } from '../accessSchema.js';
+import { createAppointmentForVisit, upsertHostContact, upsertVisitorContactDetails } from '../accessSchema.js';
+
+function normalizeNrc(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 6) return digits;
+  if (digits.length <= 8) return `${digits.slice(0, 6)}/${digits.slice(6)}`;
+  return `${digits.slice(0, 6)}/${digits.slice(6, 8)}/${digits.slice(8)}`;
+}
+
+function isCompleteNrc(value) {
+  return /^\d{6}\/\d{2}\/\d{1}$/.test(normalizeNrc(value));
+}
+
+function maskNrc(value) {
+  const nrc = normalizeNrc(value);
+  if (!isCompleteNrc(nrc)) return null;
+  return `${nrc.slice(0, 2)}****/${nrc.slice(7, 9)}/${nrc.slice(10)}`;
+}
+
+function normalizePhoneRequired(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 9) return '';
+  return String(value || '').trim();
+}
 import { formatVisitListResponse, formatVisitResponse, applyVisitListMasking, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
   canAssignVipClassification,
@@ -414,10 +437,20 @@ export function createExecutiveRouter() {
         purpose,
         scheduledAt,
         siteId,
+        idType,
+        idNumber,
       } = req.body || {};
 
       if (!visitorName?.trim()) {
         return res.status(400).json({ ok: false, message: 'Visitor name is required.' });
+      }
+      const phoneNorm = normalizePhoneRequired(phone);
+      if (!phoneNorm) {
+        return res.status(400).json({ ok: false, message: 'A valid mobile phone number is required.' });
+      }
+      const nrc = normalizeNrc(idNumber);
+      if (!isCompleteNrc(nrc)) {
+        return res.status(400).json({ ok: false, message: 'A complete NRC is required (e.g. 123456/78/9).' });
       }
       if (!scheduledAt) {
         return res.status(400).json({ ok: false, message: 'Appointment time is required.' });
@@ -456,29 +489,54 @@ export function createExecutiveRouter() {
       }
 
       let visitorId = null;
-      if (phone) {
-        const [[existing]] = await pool.query(
-          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-          [ctx.scope.organisation_id, phone.trim()],
-        );
-        visitorId = existing?.id;
-      }
+      const [[existing]] = await pool.query(
+        `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
+        [ctx.scope.organisation_id, phoneNorm],
+      );
+      visitorId = existing?.id || null;
 
+      const maskedNrc = maskNrc(nrc);
       if (!visitorId) {
         visitorId = generateId('vis');
         await pool.query(
-          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company, id_type, id_number_masked)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             visitorId,
             ctx.scope.organisation_id,
             visitorName.trim(),
-            phone?.trim() || null,
+            phoneNorm,
             email?.trim() || null,
             company?.trim() || null,
+            idType || 'nrc',
+            maskedNrc,
+          ],
+        );
+      } else {
+        await pool.query(
+          `UPDATE visitors
+           SET full_name = ?,
+               email = COALESCE(?, email),
+               company = COALESCE(?, company),
+               id_type = COALESCE(?, id_type),
+               id_number_masked = COALESCE(?, id_number_masked),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [
+            visitorName.trim(),
+            email?.trim() || null,
+            company?.trim() || null,
+            idType || 'nrc',
+            maskedNrc,
+            visitorId,
           ],
         );
       }
+
+      await upsertVisitorContactDetails(pool, visitorId, {
+        idType: idType || 'nrc',
+        idNumber: nrc,
+      });
 
       // Executive self-scheduling is host-approved; reception/secretary bookings use other routes.
       const status = 'expected';
@@ -545,7 +603,7 @@ export function createExecutiveRouter() {
         visitorId,
         fullName: visitorName,
         email,
-        phone,
+        phone: phoneNorm,
         company,
       });
 

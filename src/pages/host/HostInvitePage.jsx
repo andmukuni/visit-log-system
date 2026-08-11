@@ -1,23 +1,36 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageHeader, Card, FormField, SaveAction } from '../../components/ui';
+import { PageHeader, Card, FormField, SaveAction, PhoneInput } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  NRC_INPUT_MAX_LENGTH,
+  NRC_PLACEHOLDER,
+  buildFullPhone,
+  formatNrcInput,
+  isCompleteNrc,
+  normalizePhoneNational,
+} from '../../utils/helpers';
+
+const emptyForm = (siteId = '') => ({
+  fullName: '',
+  phone: '',
+  phoneCountry: DEFAULT_PHONE_COUNTRY,
+  idNumber: '',
+  email: '',
+  company: '',
+  categoryId: '',
+  purpose: '',
+  expectedAt: '',
+  siteId,
+});
 
 export default function HostInvitePage() {
   const toast = useToast();
   const [refData, setRefData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    fullName: '',
-    phone: '',
-    email: '',
-    company: '',
-    categoryId: '',
-    purpose: '',
-    expectedAt: '',
-    siteId: '',
-  });
+  const [form, setForm] = useState(emptyForm());
 
   const loadRef = useCallback(async () => {
     try {
@@ -39,28 +52,39 @@ export default function HostInvitePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.fullName?.trim()) {
+      toast.error('Visitor name is required.');
+      return;
+    }
+    const nationalPhone = normalizePhoneNational(form.phone);
+    if (!nationalPhone || nationalPhone.length < 9) {
+      toast.error('A valid mobile phone number is required.');
+      return;
+    }
+    const nrc = formatNrcInput(form.idNumber);
+    if (!isCompleteNrc(nrc)) {
+      toast.error('Enter a complete NRC (e.g. 123456/78/9).');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const visit = await hostApi.inviteVisitor({
         ...form,
+        phone: buildFullPhone(form.phoneCountry || DEFAULT_PHONE_COUNTRY, form.phone),
+        idType: 'nrc',
+        idNumber: nrc,
         expectedAt: form.expectedAt || null,
       });
       const inviteMsg = visit.inviteUrl
         ? ` Pass code: ${visit.pass_code}. Self-service link: ${window.location.origin}${visit.inviteUrl}`
         : ` Pass code: ${visit.pass_code}`;
       toast.success(
-        (visit.status === 'approved' ? 'Invitation sent.' : 'Invitation submitted for approval.') + inviteMsg,
+        (visit.status === 'approved' || visit.status === 'expected'
+          ? 'Invitation sent.'
+          : 'Invitation submitted for approval.') + inviteMsg,
       );
-      setForm({
-        fullName: '',
-        phone: '',
-        email: '',
-        company: '',
-        categoryId: '',
-        purpose: '',
-        expectedAt: '',
-        siteId: refData?.defaultSiteId || refData?.sites?.[0]?.id || '',
-      });
+      setForm(emptyForm(refData?.defaultSiteId || refData?.sites?.[0]?.id || ''));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -86,9 +110,29 @@ export default function HostInvitePage() {
         {loading ? (
           <p className="text-sm text-navy-500">Loading…</p>
         ) : (
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+          <form onSubmit={handleSubmit} className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
             <FormField label="Full name" name="fullName" value={form.fullName} onChange={update('fullName')} required />
-            <FormField label="Phone" name="phone" type="tel" value={form.phone} onChange={update('phone')} />
+            <FormField
+              label="NRC"
+              name="idNumber"
+              value={form.idNumber}
+              onChange={(e) => setForm((f) => ({ ...f, idNumber: formatNrcInput(e.target.value) }))}
+              placeholder={NRC_PLACEHOLDER}
+              maxLength={NRC_INPUT_MAX_LENGTH}
+              inputMode="numeric"
+              required
+            />
+            <div className="md:col-span-2">
+              <p className="mb-1.5 block text-sm font-medium text-navy-700">
+                Mobile phone <span className="text-red-400">*</span>
+              </p>
+              <PhoneInput
+                country={form.phoneCountry || DEFAULT_PHONE_COUNTRY}
+                value={form.phone}
+                onCountryChange={(phoneCountry) => setForm((f) => ({ ...f, phoneCountry }))}
+                onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+              />
+            </div>
             <FormField label="Email" name="email" type="email" value={form.email} onChange={update('email')} />
             <FormField label="Company" name="company" value={form.company} onChange={update('company')} />
             <FormField label="Site" name="siteId" type="select" value={form.siteId} onChange={update('siteId')} options={siteOptions} required />

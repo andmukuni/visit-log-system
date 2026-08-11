@@ -816,11 +816,13 @@ export function createVisitsRouter() {
         params.push(scope.site_id);
       }
 
+      // Prefer visit expected_at, then linked appointment schedule, then created_at.
+      const arrivalAt = 'COALESCE(vis.expected_at, a.scheduled_at, vis.created_at)';
       if (range === 'today') {
-        where += ' AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()';
+        where += ` AND DATE(${arrivalAt}) = CURDATE()`;
       } else {
-        where += ` AND COALESCE(vis.expected_at, vis.created_at) >= CURDATE()
-          AND COALESCE(vis.expected_at, vis.created_at) < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
+        where += ` AND ${arrivalAt} >= CURDATE()
+          AND ${arrivalAt} < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
       }
 
       const [rows] = await pool.query(
@@ -833,7 +835,7 @@ export function createVisitsRouter() {
          FROM visits vis ${VISIT_JOINS}
          LEFT JOIN appointments a ON a.visit_id = vis.id
          WHERE ${where}
-         ORDER BY COALESCE(vis.expected_at, a.scheduled_at, vis.created_at) ASC
+         ORDER BY ${arrivalAt} ASC
          LIMIT 200`,
         params,
       );

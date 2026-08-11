@@ -43,6 +43,7 @@ const CALENDAR_SELECT = `
          v.company,
          v.phone,
          v.email,
+         v.id_number_masked,
          h.id AS host_id,
          h.name AS host_name,
          d.name AS department_name,

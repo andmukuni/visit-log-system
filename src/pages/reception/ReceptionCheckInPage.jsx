@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, LogIn, UserPlus, Users } from 'lucide-react';
+import { CalendarDays, Eye, LogIn, UserPlus, Users } from 'lucide-react';
 import {
   PageHeader,
   Spinner,
@@ -14,12 +14,28 @@ import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { formatDate, formatTime } from '../../utils/helpers';
 
 const TABS = {
   ready: 'ready',
   register: 'register',
   atReception: 'at-reception',
+  expected: 'expected',
 };
+
+function toDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysKey(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
+}
 
 function FormSection({ title, subtitle, children }) {
   return (
@@ -47,6 +63,8 @@ export default function ReceptionCheckInPage() {
   const [queueVisit, setQueueVisit] = useState(null);
   const [queuing, setQueuing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [expectedVisitors, setExpectedVisitors] = useState([]);
+  const [expectedLoading, setExpectedLoading] = useState(false);
   const [tab, setTab] = useState(TABS.register);
 
   const loadRef = useCallback(async () => {
@@ -76,10 +94,31 @@ export default function ReceptionCheckInPage() {
     }
   }, []);
 
+  const loadExpectedVisitors = useCallback(async () => {
+    setExpectedLoading(true);
+    try {
+      const start = toDateKey(new Date());
+      const end = addDaysKey(start, 7);
+      const rows = await receptionApi.getCalendar({ start, end });
+      setExpectedVisitors(Array.isArray(rows) ? rows : []);
+    } catch {
+      setExpectedVisitors([]);
+    } finally {
+      setExpectedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadRef();
     loadReadyToQueue();
-  }, [loadRef, loadReadyToQueue]);
+    loadExpectedVisitors();
+  }, [loadRef, loadReadyToQueue, loadExpectedVisitors]);
+
+  useEffect(() => {
+    if (tab === TABS.expected) {
+      void loadExpectedVisitors();
+    }
+  }, [tab, loadExpectedVisitors]);
 
   const openQueueModal = (visitOrId) => {
     if (visitOrId && typeof visitOrId === 'object') {
@@ -125,7 +164,13 @@ export default function ReceptionCheckInPage() {
       icon: Users,
       count: readyToQueue.length,
     },
-  ], [pendingCount, readyToQueue.length]);
+    {
+      value: TABS.expected,
+      label: 'Expected visitors',
+      icon: CalendarDays,
+      count: expectedVisitors.length,
+    },
+  ], [pendingCount, readyToQueue.length, expectedVisitors.length]);
 
   const receptionEntryApi = useMemo(() => ({
     getReferenceData: () => receptionApi.getReferenceData(),
@@ -222,6 +267,109 @@ export default function ReceptionCheckInPage() {
               api={receptionEntryApi}
               onSuccess={handleDeskEntrySuccess}
             />
+          ) : tab === TABS.expected ? (
+            <FormSection
+              title="Expected visitors"
+              subtitle="Host appointments and pre-registered guests arriving today through the next 7 days"
+            >
+              {expectedLoading ? (
+                <div className="flex justify-center py-10">
+                  <Spinner size={24} />
+                </div>
+              ) : expectedVisitors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-navy-100 bg-navy-50 text-navy-400">
+                    <CalendarDays size={22} aria-hidden="true" />
+                  </span>
+                  <p className="text-sm font-medium text-navy-700">No expected visitors</p>
+                  <p className="max-w-sm text-xs text-navy-400">
+                    When hosts create appointments, they appear here so reception knows who is coming.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-navy-100">
+                  <div className="min-w-[720px]">
+                    <div className="hidden grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] gap-3 border-b border-navy-100 bg-navy-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500 sm:grid">
+                      <span>Visitor</span>
+                      <span>Host</span>
+                      <span>When</span>
+                      <span>Phone / NRC</span>
+                      <span>Status</span>
+                      <span className="text-right">Action</span>
+                    </div>
+                    <ul className="divide-y divide-navy-100">
+                      {expectedVisitors.map((row) => {
+                        const visitId = row.visit_id || row.id;
+                        const whenLabel = row.scheduled_at
+                          ? `${formatDate(row.scheduled_at)} · ${formatTime(row.scheduled_at)}`
+                          : '—';
+                        return (
+                          <li
+                            key={`${visitId}-${row.scheduled_at || row.id}`}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`View ${row.visitor_name || 'visitor'}`}
+                            onClick={() => navigate(`/reception/visitors/${visitId}`)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                navigate(`/reception/visitors/${visitId}`);
+                              }
+                            }}
+                            className="grid cursor-pointer grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-navy-50/70 focus-visible:bg-navy-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500 sm:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_8rem_minmax(0,9rem)_7rem_auto] sm:items-center sm:gap-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-navy-900">
+                                {row.visitor_name || 'Visitor'}
+                              </p>
+                              <p className="mt-0.5 truncate text-sm text-navy-500">
+                                {row.purpose || row.title || row.site_name || '—'}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm text-navy-700">{row.host_name || '—'}</p>
+                              <p className="mt-0.5 truncate text-xs text-navy-400">
+                                {row.department_name || row.site_name || ''}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm text-navy-700">{whenLabel}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm text-navy-700">{row.phone || '—'}</p>
+                              <p className="mt-0.5 truncate text-xs text-navy-400">
+                                NRC {row.id_number_masked || '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <StatusBadge status={row.visit_status || row.status || 'expected'} />
+                            </div>
+                            <div
+                              className="flex items-center justify-end"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <Link
+                                to={`/reception/visitors/${visitId}`}
+                                aria-label={`View ${row.visitor_name || 'visitor'}`}
+                              >
+                                <IconButton
+                                  icon={Eye}
+                                  label="View"
+                                  tooltip="View"
+                                  size="sm"
+                                  variant="ghost"
+                                />
+                              </Link>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </FormSection>
           ) : (
             <FormSection
               title="Ready to queue"

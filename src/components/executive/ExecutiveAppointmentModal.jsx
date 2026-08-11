@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { LoadingButton, SegmentedControl } from '../ui';
+import { LoadingButton, PhoneInput, SegmentedControl } from '../ui';
 import { useToast } from '../../context/ToastContext';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
@@ -40,6 +40,15 @@ import {
   toIsoLocalDateTime,
   toTimeInputValue,
 } from './calendarUtils';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  NRC_INPUT_MAX_LENGTH,
+  NRC_PLACEHOLDER,
+  buildFullPhone,
+  formatNrcInput,
+  isCompleteNrc,
+  normalizePhoneNational,
+} from '../../utils/helpers';
 
 const INPUT =
   'w-full rounded-xl border border-navy-200 bg-navy-50 text-navy-900 placeholder:text-navy-400 transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500 px-3 py-2.5 text-sm';
@@ -233,6 +242,7 @@ export default function ExecutiveAppointmentModal({
       company: contact.company || prev.company,
       phone: contact.phone || prev.phone,
       email: contact.email || prev.email,
+      idNumber: contact.idNumber || contact.id_number || prev.idNumber,
     }));
   };
 
@@ -242,11 +252,27 @@ export default function ExecutiveAppointmentModal({
       toast.error(FUTURE_SCHEDULE_ERROR);
       return;
     }
+    if (!form.visitorName?.trim()) {
+      toast.error('Visitor name is required.');
+      return;
+    }
+    const nationalPhone = normalizePhoneNational(form.phone);
+    if (!nationalPhone || nationalPhone.length < 9) {
+      toast.error('A valid mobile phone number is required.');
+      return;
+    }
+    const nrc = formatNrcInput(form.idNumber);
+    if (!isCompleteNrc(nrc)) {
+      toast.error('Enter a complete NRC (e.g. 123456/78/9).');
+      return;
+    }
     onSave({
       title: form.title.trim(),
       visitorName: form.visitorName.trim(),
       company: form.company.trim(),
-      phone: form.phone.trim(),
+      phone: buildFullPhone(form.phoneCountry || DEFAULT_PHONE_COUNTRY, form.phone),
+      idType: 'nrc',
+      idNumber: nrc,
       email: form.email?.trim() || '',
       purpose: form.purpose.trim(),
       siteId: resolvedSiteId,
@@ -561,16 +587,38 @@ export default function ExecutiveAppointmentModal({
                 />
 
                 <div className="mt-3 space-y-2.5">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-navy-500">
+                      Mobile phone <span className="text-red-500">*</span>
+                    </label>
+                    <PhoneInput
+                      country={form.phoneCountry || DEFAULT_PHONE_COUNTRY}
+                      value={form.phone || ''}
+                      onCountryChange={(phoneCountry) => setForm((prev) => ({ ...prev, phoneCountry }))}
+                      onChange={(phone) => setForm((prev) => ({ ...prev, phone }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-navy-500">
+                      NRC <span className="text-red-500">*</span>
+                    </label>
+                    <NavyInput
+                      value={form.idNumber || ''}
+                      onChange={(event) => setForm((prev) => ({
+                        ...prev,
+                        idNumber: formatNrcInput(event.target.value),
+                      }))}
+                      placeholder={NRC_PLACEHOLDER}
+                      maxLength={NRC_INPUT_MAX_LENGTH}
+                      inputMode="numeric"
+                      required
+                    />
+                  </div>
                   <NavyInput
                     type="email"
                     value={form.email || ''}
                     onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
                     placeholder="Email"
-                  />
-                  <NavyInput
-                    value={form.phone}
-                    onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-                    placeholder="Phone"
                   />
                   <NavyInput
                     value={form.company}
