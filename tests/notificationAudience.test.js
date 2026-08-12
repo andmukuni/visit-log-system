@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRestrictedReceptionVars } from '../server/notificationService.js';
+import {
+  buildRestrictedReceptionVars,
+  buildRestrictedReceptionMetadata,
+} from '../server/notificationService.js';
 
 describe('buildRestrictedReceptionVars — different-zone notification payload (scenario 2)', () => {
   it('is a fresh two-key object, never "full vars minus fields"', () => {
@@ -30,6 +33,47 @@ describe('buildRestrictedReceptionVars — different-zone notification payload (
     const restricted = buildRestrictedReceptionVars(vipVars);
     assert.equal(restricted.classification, undefined);
     assert.equal(restricted.pass_code, undefined);
+  });
+});
+
+describe('restricted notification METADATA must not leak lifecycle or visitor data', () => {
+  // notifications.metadata is returned verbatim by GET /api/admin/notifications
+  // (SELECT *), so it is a client-visible field, not internal bookkeeping.
+  const FORBIDDEN_METADATA_KEYS = [
+    'eventType', 'event_type', 'status', 'classification', 'company',
+    'host_name', 'hostName', 'pass_code', 'passCode', 'purpose',
+    'phone', 'email', 'id_number', 'site_name', 'zone_id',
+  ];
+
+  it('contains only the opaque visit id and the audience tag', () => {
+    const metadata = buildRestrictedReceptionMetadata('visit-1');
+    assert.deepEqual(Object.keys(metadata).sort(), ['audience', 'visitId']);
+    assert.equal(metadata.visitId, 'visit-1');
+  });
+
+  it('never carries eventType or any other visitor/lifecycle field', () => {
+    const metadata = buildRestrictedReceptionMetadata('visit-1');
+    for (const key of FORBIDDEN_METADATA_KEYS) {
+      assert.equal(metadata[key], undefined, `restricted metadata must not include "${key}"`);
+    }
+  });
+
+  it('is a fresh object — spreading a shared metadata bag cannot contaminate it', () => {
+    // Regression: the previous implementation used { ...metadata, audience }
+    // where metadata carried { visitId, eventType }, leaking lifecycle status.
+    const shared = { visitId: 'visit-1', eventType: 'arrived_at_gate', purpose: 'Merger talks' };
+    const metadata = buildRestrictedReceptionMetadata(shared.visitId);
+    assert.equal(metadata.eventType, undefined);
+    assert.equal(metadata.purpose, undefined);
+    assert.equal(JSON.stringify(metadata).includes('arrived_at_gate'), false);
+    assert.equal(JSON.stringify(metadata).includes('Merger talks'), false);
+  });
+
+  it('serialises to JSON containing no forbidden substring', () => {
+    const json = JSON.stringify(buildRestrictedReceptionMetadata('visit-1'));
+    for (const needle of ['arrived_at_gate', 'entered_premises', 'vip', 'Acme']) {
+      assert.doesNotMatch(json, new RegExp(needle, 'i'));
+    }
   });
 });
 

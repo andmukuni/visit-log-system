@@ -165,6 +165,7 @@ export async function loadHostZones(pool, hostId) {
      LEFT JOIN buildings b ON b.id = z.building_id
      LEFT JOIN sites s ON s.id = b.site_id
      WHERE hz.host_id = ?
+       AND COALESCE(hz.status, 'active') = 'active'
      ORDER BY z.name`,
     [hostId],
   );
@@ -182,6 +183,7 @@ export async function attachHostZones(pool, rows = []) {
      INNER JOIN zones z ON z.id = hz.zone_id
      LEFT JOIN buildings b ON b.id = z.building_id
      WHERE hz.host_id IN (${placeholders})
+       AND COALESCE(hz.status, 'active') = 'active'
      ORDER BY z.name`,
     ids,
   );

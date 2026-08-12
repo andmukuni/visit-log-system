@@ -33,20 +33,30 @@ describe('AUDIT DEFECT 1 — security scope clause must only reference aliases t
     assert.deepEqual(params, ['site1', 'bld-1']);
   });
 
-  it('never widens scope when the building predicate is dropped — site+gate still bind', () => {
+  it('FAILS CLOSED rather than dropping a building restriction it cannot evaluate', () => {
     const guard = { siteId: 'site1', stationIds: ['gate-a'], buildingIds: ['bld-1'] };
     const { sql, params } = visitSecurityScopeFilterClause(guard, { buildingJoinAvailable: false });
-    assert.match(sql, /vis\.site_id = \?/);
-    assert.match(sql, /vis\.station_id IN/);
-    assert.deepEqual(params, ['site1', 'gate-a']);
+    assert.match(sql, /1=0/);
+    assert.deepEqual(params, []);
   });
 
-  it('a guard scoped ONLY by building falls back to site scope, never to unscoped', () => {
+  it('ESCALATION GUARD: a building-only officer must never fall back to site-wide', () => {
+    // This is the exact regression that a previous audit pass wrongly described
+    // as "narrowing": with no gate assignment, emptying buildingIds fell into
+    // the no-restrictions branch and returned a SITE-WIDE filter, promoting a
+    // building-scoped officer to every visit on the site.
     const guard = { siteId: 'site1', stationIds: [], buildingIds: ['bld-1'] };
     const { sql, params } = visitSecurityScopeFilterClause(guard, { buildingJoinAvailable: false });
+    assert.match(sql, /1=0/, 'must deny, not widen to site scope');
+    assert.doesNotMatch(sql, /site_id = \?\s*$/);
+    assert.deepEqual(params, []);
+  });
+
+  it('an officer with genuinely no gate/building assignment is still site-scoped, never unscoped', () => {
+    const siteWideOfficer = { siteId: 'site1', stationIds: [], buildingIds: [] };
+    const { sql, params } = visitSecurityScopeFilterClause(siteWideOfficer, { buildingJoinAvailable: false });
     assert.match(sql, /vis\.site_id = \?/);
     assert.deepEqual(params, ['site1']);
-    assert.doesNotMatch(sql, /1=1/);
   });
 });
 
@@ -67,6 +77,11 @@ describe('AUDIT DEFECT 3 — full DTO must not ship private notes / raw ID numbe
     assert.equal(dto.id_number, undefined);
     assert.equal(dto.invite_token, undefined);
     assert.equal(dto.check_in_signature, undefined);
+  });
+
+  it('strips the internal zone_match query artifact from the response', () => {
+    const dto = buildFullExpectedVisitorDTO({ ...row, zone_match: 1 });
+    assert.equal(dto.zone_match, undefined, 'internal plumbing must not reach the API');
   });
 
   it('keeps the masked ID variant the reception desk actually uses', () => {

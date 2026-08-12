@@ -93,6 +93,7 @@ async function ensureReceptionistZonesSchema(db = pool) {
     CREATE TABLE IF NOT EXISTS receptionist_zones (
       receptionist_id VARCHAR(90) NOT NULL,
       zone_id VARCHAR(90) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (receptionist_id, zone_id),
       INDEX idx_receptionist_zones_zone (zone_id)
@@ -131,6 +132,7 @@ async function ensureHostZonesSchema(db = pool) {
     CREATE TABLE IF NOT EXISTS host_zones (
       host_id VARCHAR(90) NOT NULL,
       zone_id VARCHAR(90) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (host_id, zone_id),
       INDEX idx_host_zones_zone (zone_id)
@@ -186,6 +188,7 @@ async function ensureSecurityGuardScopeSchema(db = pool) {
     CREATE TABLE IF NOT EXISTS security_guard_stations (
       security_guard_id VARCHAR(90) NOT NULL,
       station_id VARCHAR(90) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (security_guard_id, station_id),
       INDEX idx_security_guard_stations_station (station_id)
@@ -195,6 +198,7 @@ async function ensureSecurityGuardScopeSchema(db = pool) {
     CREATE TABLE IF NOT EXISTS security_guard_buildings (
       security_guard_id VARCHAR(90) NOT NULL,
       building_id VARCHAR(90) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (security_guard_id, building_id),
       INDEX idx_security_guard_buildings_building (building_id)
@@ -419,6 +423,19 @@ export async function ensureVisitorSchema() {
     )
   `);
   await ensureSecurityGuardScopeSchema(pool);
+  // Additive: assignment-level active/revoked flag for existing deployments.
+  for (const [table, col] of [
+    ['host_zones', 'status'],
+    ['receptionist_zones', 'status'],
+    ['security_guard_stations', 'status'],
+    ['security_guard_buildings', 'status'],
+  ]) {
+    try {
+      await ensureColumn(pool, table, col, `ADD COLUMN ${col} VARCHAR(30) NOT NULL DEFAULT 'active'`);
+    } catch {
+      // Table may not exist yet on a partially-migrated database.
+    }
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_categories (

@@ -41,14 +41,26 @@ describe('visitSecurityScopeFilterClause — hard exclusion, unlike reception (s
     assert.doesNotMatch(sql, /station_id/);
   });
 
-  it('matches on gate OR building — inclusive-or per Logic.md "site, building, or gate" (scenario 8)', () => {
+  it('requires site AND building AND gate to all match when all are configured (scenario 8)', () => {
+    // AND, not OR: a gate has no building_id of its own and serves every
+    // building on its site, so OR would let a gate assignment expose visits
+    // destined for buildings this officer does not cover.
     const { sql, params } = visitSecurityScopeFilterClause({
       siteId: 'site1', stationIds: ['gate-a'], buildingIds: ['bld-1'],
     });
     assert.match(sql, /vis\.station_id IN/);
     assert.match(sql, /building_id\) IN/);
-    assert.match(sql, / OR /);
-    assert.deepEqual(params, ['site1', 'gate-a', 'bld-1']);
+    assert.doesNotMatch(sql, / OR /);
+    assert.deepEqual(params, ['site1', 'bld-1', 'gate-a']);
+  });
+
+  it('a visit whose building cannot be resolved is excluded, not admitted', () => {
+    // COALESCE(zone.building_id, office.building_id) is NULL for such a visit,
+    // and `NULL IN (...)` is never true — fail-closed by construction.
+    const { sql } = visitSecurityScopeFilterClause({
+      siteId: 'site1', stationIds: [], buildingIds: ['bld-1'],
+    });
+    assert.match(sql, /COALESCE\(sec_zone\.building_id, sec_ofc\.building_id\) IN/);
   });
 
   it('gate-only assignment does not reference buildings', () => {

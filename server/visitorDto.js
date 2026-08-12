@@ -43,6 +43,9 @@ export function buildFullExpectedVisitorDTO(row, {
   // id_number_masked variant is kept for the desk's identity checks.
   if (!includePrivateNotes) delete dto.confidential_notes;
   if (!includeRawIdNumber) delete dto.id_number;
+  // Internal query plumbing — the zone-match flag exists only to drive the
+  // policy decision and must not appear in an API response.
+  delete dto.zone_match;
   return dto;
 }
 

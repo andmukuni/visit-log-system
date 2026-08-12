@@ -799,27 +799,46 @@ export function createStationRouter() {
  * officer gets their hard site/building/gate scope; a host-only caller is
  * restricted to hostVisitFilter (their own visits only).
  */
+/**
+ * Extra joins the security branch needs so a building restriction is
+ * evaluable. `h` (hosts) is already provided by VISIT_JOINS.
+ */
+const SECURITY_SCOPE_JOINS = `
+  LEFT JOIN zones sec_zone ON sec_zone.id = vis.zone_id
+  LEFT JOIN offices sec_ofc ON sec_ofc.id = COALESCE(vis.office_id, h.office_id)
+`;
+
 async function resolveVisitsRouterAccess(req) {
   const userId = req.adminClaims?.sub;
   const viewer = await resolveViewerAccessContext(pool, { userId, claims: req.adminClaims || {} });
 
   if (viewer.isElevated) {
-    return { viewer, mode: 'elevated', extraSql: '', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
+    return { viewer, mode: 'elevated', extraJoins: '', extraSql: '', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
   }
   if (viewer.receptionContext) {
     const { sql, params } = visitZoneMatchExpr(viewer.receptionContext.zoneIds);
-    return { viewer, mode: 'reception', extraSql: '', extraParams: [], zoneMatchSql: sql, zoneMatchParams: params };
+    return { viewer, mode: 'reception', extraJoins: '', extraSql: '', extraParams: [], zoneMatchSql: sql, zoneMatchParams: params };
   }
   if (viewer.securityContext) {
-    // VISIT_JOINS provides no sec_zone/sec_ofc aliases, so the building
-    // predicate must be dropped here — site + gate scope still bind.
-    const { sql, params } = visitSecurityScopeFilterClause(viewer.securityContext, { buildingJoinAvailable: false });
-    return { viewer, mode: 'security', extraSql: sql, extraParams: params, zoneMatchSql: null, zoneMatchParams: [] };
+    // SECURITY_SCOPE_JOINS supplies the sec_zone/sec_ofc aliases so the
+    // building restriction can actually be evaluated here rather than
+    // fail-closed. `h` comes from VISIT_JOINS.
+    const { sql, params } = visitSecurityScopeFilterClause(viewer.securityContext);
+    return {
+      viewer,
+      mode: 'security',
+      extraSql: sql,
+      extraParams: params,
+      extraJoins: SECURITY_SCOPE_JOINS,
+      zoneMatchSql: null,
+      zoneMatchParams: [],
+    };
   }
   if (viewer.hostContext) {
     return {
       viewer,
       mode: 'host',
+      extraJoins: '',
       extraSql: ` AND ${hostVisitFilter('vis')}`,
       extraParams: [viewer.hostContext.hostId, viewer.hostContext.userId],
       zoneMatchSql: null,
@@ -827,7 +846,7 @@ async function resolveVisitsRouterAccess(req) {
     };
   }
   // No applicable relationship — deny by default.
-  return { viewer, mode: 'denied', extraSql: ' AND 1=0', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
+  return { viewer, mode: 'denied', extraJoins: '', extraSql: ' AND 1=0', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
 }
 
 function shapeVisitsRouterRows(rows, access) {
@@ -880,7 +899,7 @@ export function createVisitsRouter() {
 
       const [rows] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS}${zoneMatchSelect}
-         FROM visits vis ${VISIT_JOINS}
+         FROM visits vis ${VISIT_JOINS}${access.extraJoins || ''}
          WHERE ${where}
          ORDER BY vis.created_at DESC
          LIMIT 200`,
@@ -932,7 +951,7 @@ export function createVisitsRouter() {
                 (SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
                  FROM expected_vehicles ev
                  WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates${zoneMatchSelect}
-         FROM visits vis ${VISIT_JOINS}
+         FROM visits vis ${VISIT_JOINS}${access.extraJoins || ''}
          LEFT JOIN appointments a ON a.visit_id = vis.id
          WHERE ${where}
          ORDER BY ${arrivalAt} ASC
@@ -978,7 +997,7 @@ export function createVisitsRouter() {
         `SELECT ${VISIT_SELECT_FIELDS},
                 (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
                  FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers${zoneMatchSelect}
-         FROM visits vis ${VISIT_JOINS}
+         FROM visits vis ${VISIT_JOINS}${access.extraJoins || ''}
          WHERE vis.organisation_id = ?
            AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
          ORDER BY vis.created_at DESC
@@ -1024,7 +1043,7 @@ export function createVisitsRouter() {
         `SELECT ${VISIT_SELECT_FIELDS},
                 (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
                  FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers${zoneMatchSelect}
-         FROM visits vis ${VISIT_JOINS}
+         FROM visits vis ${VISIT_JOINS}${access.extraJoins || ''}
          WHERE vis.organisation_id = ?
            AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
          ORDER BY COALESCE(vis.checked_in_at, vis.created_at) DESC
@@ -5178,7 +5197,7 @@ export function createOrgAdminRouter() {
       const visitType = String(req.query.type || 'walking').toLowerCase();
 
       let sql = `
-        SELECT vis.id, vis.pass_code AS reference_number, vis.status, vis.created_at,
+        SELECT vis.id, vis.organisation_id, vis.pass_code AS reference_number, vis.status, vis.created_at,
                vis.checked_in_at AS check_in_at, vis.checked_out_at AS check_out_at,
                v.full_name AS visitor_name,
                h.name AS host_name,
@@ -5227,7 +5246,16 @@ export function createOrgAdminRouter() {
       params.push(limit);
 
       const [rows] = await pool.query(sql, params);
-      res.json({ ok: true, data: rows });
+
+      // Route through the centralized policy rather than trusting the hand-written
+      // projection. Only super_admin / org_admin / platform_admin can reach this
+      // route today, so every row resolves to 'full' — but the allowlist DTO means
+      // adding a sensitive column to the SELECT above cannot silently leak it.
+      const viewer = await resolveViewerAccessContext(pool, {
+        userId,
+        claims: req.adminClaims || {},
+      });
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, {}) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

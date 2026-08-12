@@ -32,9 +32,17 @@ describe('visitZoneMatchExpr — boolean SELECT expression, not a filter (contra
 
   it('checks live host_zones before falling back to the frozen visit/host zone snapshot', () => {
     const { sql, params } = visitZoneMatchExpr(['zone-a', 'zone-b']);
-    assert.match(sql, /EXISTS \(\s*SELECT 1 FROM host_zones hz/);
-    assert.match(sql, /NOT EXISTS \(SELECT 1 FROM host_zones hz2/);
+    // Live assignment table is consulted first...
+    assert.match(sql, /host_id IN \(\s*SELECT hz\.host_id FROM host_zones hz/);
+    // ...and the frozen snapshot only applies when the host has no live rows.
+    assert.match(sql, /host_id NOT IN \(\s*SELECT hz2\.host_id FROM host_zones hz2/);
     assert.deepEqual(params, ['zone-a', 'zone-b', 'zone-a', 'zone-b']);
+  });
+
+  it('only counts ACTIVE assignments — a revoked zone row must not grant a match', () => {
+    const { sql } = visitZoneMatchExpr(['zone-a']);
+    const activeGuards = sql.match(/COALESCE\(hz2?\.status, 'active'\) = 'active'/g) || [];
+    assert.equal(activeGuards.length, 2, 'both the match and the fallback guard must filter on active status');
   });
 });
 

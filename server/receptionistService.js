@@ -153,6 +153,7 @@ export async function loadReceptionistZones(pool, receptionistId) {
      LEFT JOIN buildings b ON b.id = z.building_id
      LEFT JOIN sites s ON s.id = b.site_id
      WHERE rz.receptionist_id = ?
+       AND COALESCE(rz.status, 'active') = 'active'
      ORDER BY z.name`,
     [receptionistId],
   );
@@ -181,8 +182,17 @@ export async function resolveReceptionZoneContext(pool, userId) {
 
   const assigned = await loadReceptionistZones(pool, receptionist.id);
   let zoneIds = assigned.map((zone) => String(zone.id));
-  if (!zoneIds.length && receptionist.zone_id) {
-    zoneIds = [String(receptionist.zone_id)];
+  if (!zoneIds.length) {
+    // Only fall back to the legacy single-zone column when the join table has
+    // never been populated for this receptionist. If rows exist but are all
+    // revoked/inactive, the correct answer is "no zones", not the old one.
+    const [[rows]] = await pool.query(
+      'SELECT COUNT(*) AS count FROM receptionist_zones WHERE receptionist_id = ?',
+      [receptionist.id],
+    );
+    if (!Number(rows?.count || 0) && receptionist.zone_id) {
+      zoneIds = [String(receptionist.zone_id)];
+    }
   }
 
   return {
@@ -298,12 +308,19 @@ export function visitZoneMatchExpr(zoneIds, {
     return { sql: '0', params: [] };
   }
 
+  // Set-based (non-correlated) rather than a correlated EXISTS: identical
+  // semantics, evaluated once instead of per row, and independent of whether
+  // `hosts` is joined. NULL host_id yields NULL from IN, falling through to
+  // ELSE 0 — fail-safe.
   const placeholders = ids.map(() => '?').join(', ');
-  const sql = `(CASE WHEN EXISTS (
-      SELECT 1 FROM host_zones hz WHERE hz.host_id = ${hostAlias}.id AND hz.zone_id IN (${placeholders})
+  const sql = `(CASE
+    WHEN ${visitAlias}.host_id IN (
+      SELECT hz.host_id FROM host_zones hz
+      WHERE COALESCE(hz.status, 'active') = 'active' AND hz.zone_id IN (${placeholders})
     ) THEN 1
-    WHEN NOT EXISTS (SELECT 1 FROM host_zones hz2 WHERE hz2.host_id = ${hostAlias}.id)
-      AND COALESCE(
+    WHEN ${visitAlias}.host_id NOT IN (
+      SELECT hz2.host_id FROM host_zones hz2 WHERE COALESCE(hz2.status, 'active') = 'active'
+    ) AND COALESCE(
         NULLIF(${hostAlias}.zone_id, ''),
         ${hostOfficeAlias}.zone_id,
         ${visitOfficeAlias}.zone_id,
@@ -411,6 +428,7 @@ export async function attachReceptionistZones(pool, rows = []) {
      INNER JOIN zones z ON z.id = rz.zone_id
      LEFT JOIN buildings b ON b.id = z.building_id
      WHERE rz.receptionist_id IN (${placeholders})
+       AND COALESCE(rz.status, 'active') = 'active'
      ORDER BY z.name`,
     ids,
   );

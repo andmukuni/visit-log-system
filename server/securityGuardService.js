@@ -178,12 +178,15 @@ export async function syncSecurityGuardBuildings(pool, guardId, buildingIds = []
   return uniqueIds;
 }
 
+/** Only ACTIVE assignments to ACTIVE gates count — expired/revoked rows must not grant scope. */
 export async function loadSecurityGuardStations(pool, guardId) {
   const [rows] = await pool.query(
     `SELECT st.id, st.name, st.site_id
      FROM security_guard_stations gs
      INNER JOIN stations st ON st.id = gs.station_id
      WHERE gs.security_guard_id = ?
+       AND COALESCE(gs.status, 'active') = 'active'
+       AND COALESCE(st.status, 'active') = 'active'
      ORDER BY st.name`,
     [guardId],
   );
@@ -196,6 +199,7 @@ export async function loadSecurityGuardBuildings(pool, guardId) {
      FROM security_guard_buildings gb
      INNER JOIN buildings b ON b.id = gb.building_id
      WHERE gb.security_guard_id = ?
+       AND COALESCE(gb.status, 'active') = 'active'
      ORDER BY b.name`,
     [guardId],
   );
@@ -295,8 +299,18 @@ export async function resolveSecurityScopeContext(pool, userId) {
 
   const stations = await loadSecurityGuardStations(pool, guard.id);
   let stationIds = stations.map((s) => String(s.id));
-  if (!stationIds.length && guard.station_id) {
-    stationIds = [String(guard.station_id)];
+  if (!stationIds.length) {
+    // Distinguish "never assigned via the join table" (legacy row — fall back
+    // to the single legacy column) from "assigned but every assignment is
+    // revoked/inactive" (must stay empty). Without this, deactivating an
+    // officer's only gate would silently resurrect the legacy assignment.
+    const [[assigned]] = await pool.query(
+      'SELECT COUNT(*) AS count FROM security_guard_stations WHERE security_guard_id = ?',
+      [guard.id],
+    );
+    if (!Number(assigned?.count || 0) && guard.station_id) {
+      stationIds = [String(guard.station_id)];
+    }
   }
   const buildings = await loadSecurityGuardBuildings(pool, guard.id);
   const buildingIds = buildings.map((b) => String(b.id));
@@ -351,30 +365,37 @@ export function visitSecurityScopeFilterClause(scopeCtx, {
   }
 
   const stationIds = scopeCtx.stationIds || [];
-  // Callers whose query does not join zones/offices under the expected aliases
-  // must pass buildingJoinAvailable:false — referencing an unjoined alias would
-  // make the endpoint error out for that officer. Dropping the building
-  // predicate only ever narrows scope (site and gate still bind), never widens.
-  const buildingIds = buildingJoinAvailable ? (scopeCtx.buildingIds || []) : [];
-  if (!stationIds.length && !buildingIds.length) {
-    return { sql: ` AND ${visitAlias}.site_id = ?`, params: [scopeCtx.siteId] };
+  const buildingIds = scopeCtx.buildingIds || [];
+
+  // Fail closed. If the officer carries a building restriction but this query
+  // cannot evaluate it (no zones/offices joined under the expected aliases),
+  // deny outright. Silently dropping the predicate would promote a
+  // building-scoped officer to site-wide visibility — an escalation, not a
+  // narrowing, because the "no restrictions" branch below is site-wide.
+  if (buildingIds.length && !buildingJoinAvailable) {
+    return { sql: ' AND 1=0', params: [] };
   }
 
-  const clauses = [];
+  // Every configured restriction must hold simultaneously (AND, not OR).
+  // A gate is a site-level entity with no building_id of its own, so one gate
+  // serves every building on the site. Under OR, an officer assigned to
+  // gate-a AND building-1 would see every visit through gate-a regardless of
+  // destination building, plus every visit to building-1 regardless of gate.
+  const clauses = [`${visitAlias}.site_id = ?`];
   const params = [scopeCtx.siteId];
+
+  if (buildingIds.length) {
+    // A visit whose building cannot be resolved (no zone, no office) yields
+    // NULL here and is excluded by IN — fail-closed by construction.
+    clauses.push(`COALESCE(${zoneAlias}.building_id, ${officeAlias}.building_id) IN (${buildingIds.map(() => '?').join(', ')})`);
+    params.push(...buildingIds);
+  }
   if (stationIds.length) {
     clauses.push(`${visitAlias}.station_id IN (${stationIds.map(() => '?').join(', ')})`);
     params.push(...stationIds);
   }
-  if (buildingIds.length) {
-    clauses.push(`COALESCE(${zoneAlias}.building_id, ${officeAlias}.building_id) IN (${buildingIds.map(() => '?').join(', ')})`);
-    params.push(...buildingIds);
-  }
 
-  return {
-    sql: ` AND ${visitAlias}.site_id = ? AND (${clauses.join(' OR ')})`,
-    params,
-  };
+  return { sql: ` AND ${clauses.join(' AND ')}`, params };
 }
 
 /** Bulk "who should be notified" lookup for a given visit's site/station/building. */

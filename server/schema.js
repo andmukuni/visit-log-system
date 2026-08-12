@@ -3,6 +3,7 @@ import pool from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureRbacTables, seedRbac } from './rbacService.js';
 import { ensureVisitorSchema, seedVisitorData, seedOfficeHierarchy } from './visitorSchema.js';
+import { runMigrations } from './migrations/index.js';
 import { ensurePasswordResetSchema } from './hostPortalService.js';
 import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
@@ -59,6 +60,10 @@ export async function seedDefaultAdmin() {
 export async function bootstrapDatabase() {
   await ensureSchema();
   await ensureVisitorSchema();
+  // Versioned migrations run after the idempotent ensure* helpers so they can
+  // assume base tables exist, and are recorded in schema_migrations so a
+  // deploy can be verified rather than assumed.
+  await runMigrations(pool);
   await ensurePasswordResetSchema(pool);
   await ensureSecuritySchema();
   await ensureComplianceSchema();

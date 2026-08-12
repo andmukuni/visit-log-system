@@ -13,6 +13,20 @@ function buildRestrictedReceptionVars(vars) {
   return { visitor_name: vars.visitor_name, expected_at: vars.expected_at };
 }
 
+/**
+ * Stored metadata for a different-zone recipient, built as a fresh allowlist.
+ *
+ * `notifications.metadata` is returned verbatim by GET /api/admin/notifications
+ * (SELECT *), so anything placed here is client-visible. Spreading the shared
+ * metadata object leaked `eventType`, which discloses the visit's lifecycle
+ * status (arrived_at_gate, entered_premises, ...) — not part of the permitted
+ * name+time. Only the opaque visit id is retained, because the in-app entry
+ * links to a detail view that re-authorises server-side on every request.
+ */
+function buildRestrictedReceptionMetadata(visitId) {
+  return { visitId, audience: 'reception_different_zone' };
+}
+
 function formatExpectedAt(value) {
   if (!value) return '';
   const date = value instanceof Date ? value : new Date(value);
@@ -527,7 +541,7 @@ export async function notifyVisitEvent(pool, {
         channels: ['in_app', 'email', 'sms'],
         vars: buildRestrictedReceptionVars(vars),
         idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
-        metadata: { ...metadata, audience: 'reception_different_zone' },
+        metadata: buildRestrictedReceptionMetadata(visitId),
         orgSettings,
       });
     }
@@ -594,7 +608,7 @@ export async function notifyVisitEvent(pool, {
         channels: staffChannels,
         vars: buildRestrictedReceptionVars(vars),
         idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
-        metadata: { ...metadata, audience: 'reception_different_zone' },
+        metadata: buildRestrictedReceptionMetadata(visitId),
         orgSettings,
       });
     }
@@ -630,7 +644,7 @@ export async function notifyVisitEvent(pool, {
         channels: ['in_app'],
         vars: buildRestrictedReceptionVars(vars),
         idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
-        metadata: { ...metadata, audience: 'reception_different_zone' },
+        metadata: buildRestrictedReceptionMetadata(visitId),
         orgSettings,
       });
     }
@@ -745,7 +759,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
         channels: ['in_app', 'email', 'sms'],
         vars: buildRestrictedReceptionVars(vars),
         idempotencyKey: `pre_arrival_reminder:${visit.id}:reception_diff:${r.receptionistId}`,
-        metadata: { visitId: visit.id, eventType: 'pre_arrival_reminder', audience: 'reception_different_zone' },
+        metadata: buildRestrictedReceptionMetadata(visit.id),
         orgSettings,
       });
     }
@@ -937,4 +951,4 @@ export async function upsertUserNotificationPreferences(pool, {
 
 // Exported for tests — the restricted-payload builder is deliberately a pure,
 // directly-testable function (see tests/notificationAudience.test.js).
-export { buildRestrictedReceptionVars };
+export { buildRestrictedReceptionVars, buildRestrictedReceptionMetadata };
