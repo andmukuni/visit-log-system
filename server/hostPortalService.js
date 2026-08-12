@@ -298,6 +298,24 @@ export async function syncHostPortalUser(pool, {
     nextUserId = existing?.id || null;
   }
 
+  // Refuse to act on a mis-linked account. A host row pointing at a login that
+  // belongs to someone else is a data error, and syncing it would (a) rewrite
+  // that person's login email to the host's and (b) grant them the host portal
+  // role — which is exactly how a reception account silently regained /host
+  // access after the role was removed. Leave the account untouched and let the
+  // admin re-link it deliberately.
+  if (nextUserId) {
+    const [[linked]] = await pool.query('SELECT id, email FROM users WHERE id = ? LIMIT 1', [nextUserId]);
+    const linkedEmail = String(linked?.email || '').trim().toLowerCase();
+    if (linked && linkedEmail && linkedEmail !== normalizedEmail) {
+      console.warn(
+        `[host] Refusing to sync host "${name}" <${normalizedEmail}> onto login <${linkedEmail}>`
+        + ' — the host record is linked to a different account. Re-link it in Admin → Hosts.',
+      );
+      return null;
+    }
+  }
+
   if (!nextUserId) {
     nextUserId = `usr-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const initialPassword = String(
