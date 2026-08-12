@@ -254,6 +254,19 @@ export function isHostOnlyUser(permissions = []) {
     && !has('platform.dashboard');
 }
 
+/**
+ * True host accounts locked to /host (even if they also have reception permissions).
+ * Distinct from executive_reception, which has executive.* but not host.dashboard.
+ */
+export function isHostPortalLockedUser(permissions = []) {
+  const has = (key) => permissionMatches(permissions, key);
+  return has('host.dashboard')
+    && !has('admin.dashboard')
+    && !has('management.dashboard')
+    && !has('security.dashboard')
+    && !has('platform.dashboard');
+}
+
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
   // Reception desk first (includes executive_reception with executive.* but no host.dashboard).
   if (isReceptionOnlyUser(permissions)) {
@@ -391,7 +404,10 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
 }
 
 export function canAccessPortal(portalId, hasPermission, permissions = []) {
-  if ((isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) && portalId !== 'host') {
+  if (
+    (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isHostPortalLockedUser(permissions))
+    && portalId !== 'host'
+  ) {
     return false;
   }
   if (isReceptionOnlyUser(permissions) && portalId !== 'reception') {

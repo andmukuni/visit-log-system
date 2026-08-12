@@ -11,6 +11,7 @@ import { APP_NAME_SHORT } from '../shared/branding.js';
 import {
   isExecutiveOnlyUser,
   isHostOnlyUser,
+  isHostPortalLockedUser,
   isHostPortalPath,
   isPortalLockExemptPath,
   isReceptionOnlyUser,
@@ -286,7 +287,11 @@ function AppRoot() {
   );
   const lockToHost = Boolean(
     permissions?.length
-    && (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions))
+    && (
+      isExecutiveOnlyUser(permissions)
+      || isHostOnlyUser(permissions)
+      || isHostPortalLockedUser(permissions)
+    )
     && !isHostPortalPath(location.pathname)
     && !exemptPath,
   );

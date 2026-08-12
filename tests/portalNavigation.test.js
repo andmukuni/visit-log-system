@@ -12,6 +12,7 @@ import {
   getAccessiblePortals,
   isExecutiveOnlyUser,
   isHostOnlyUser,
+  isHostPortalLockedUser,
   isHostPortalPath,
   isPortalLockExemptPath,
   isReceptionOnlyUser,
@@ -160,6 +161,9 @@ describe('portal login routing', () => {
     const mixedHostReception = [...hostEmployee, 'reception.dashboard', 'reception.calendar'];
 
     assert.equal(isReceptionOnlyUser(mixedHostReception), false);
+    assert.equal(isHostPortalLockedUser(mixedHostReception), true);
+    assert.equal(isHostPortalLockedUser(executiveReceptionPerms), false);
+    assert.equal(canAccessPortal('reception', hasPermissionFactory(mixedHostReception), mixedHostReception), false);
     assert.equal(resolveDefaultHomeRoute(mixedHostReception), '/host');
     assert.equal(resolveLoginRedirect('/login', mixedHostReception), '/host');
     assert.equal(resolveLoginRedirect('/reception/calendar', mixedHostReception), '/host');
