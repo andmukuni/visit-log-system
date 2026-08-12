@@ -215,10 +215,15 @@ export function isExecutiveOnlyUser(permissions = []) {
     && !has('security.dashboard');
 }
 
-/** Reception desk users — cannot visit host/admin/other portals (even if host perms were granted by mistake). */
+/**
+ * Reception desk users — locked to /reception.
+ * Note: executive_reception may also have executive.* keys; host.dashboard is what
+ * distinguishes a real host account from a reception desk account.
+ */
 export function isReceptionOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
   return has('reception.dashboard')
+    && !has('host.dashboard')
     && !has('admin.dashboard')
     && !has('management.dashboard')
     && !has('security.dashboard')
@@ -250,7 +255,8 @@ export function isHostOnlyUser(permissions = []) {
 }
 
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
-  if (isReceptionOnlyUser(permissions) || permissionMatches(permissions, 'reception.dashboard')) {
+  // Reception desk first (includes executive_reception with executive.* but no host.dashboard).
+  if (isReceptionOnlyUser(permissions)) {
     return 'reception';
   }
 
@@ -258,11 +264,16 @@ export function resolvePrimaryPortal(hasPermission, permissions = []) {
     return 'host';
   }
 
+  // Real host accounts win over incidental reception permissions.
   if (
-    permissionMatches(permissions, 'executive.dashboard')
-    || permissionMatches(permissions, 'host.dashboard')
+    permissionMatches(permissions, 'host.dashboard')
+    || permissionMatches(permissions, 'executive.dashboard')
   ) {
     return 'host';
+  }
+
+  if (permissionMatches(permissions, 'reception.dashboard')) {
+    return 'reception';
   }
 
   if (permissionMatches(permissions, 'security.dashboard')) {
@@ -311,17 +322,23 @@ export function resolvePortalRoute(permissions = []) {
 
 /** Default home route after sign-in — role portal home by permission precedence. */
 export function resolveDefaultHomeRoute(permissions = []) {
+  if (isReceptionOnlyUser(permissions)) {
+    if (permissionMatches(permissions, 'reception.calendar')) {
+      return `${PORTALS.reception.routePrefix}/calendar`;
+    }
+    return PORTALS.reception.routePrefix;
+  }
+  if (
+    permissionMatches(permissions, 'host.dashboard')
+    || permissionMatches(permissions, 'executive.dashboard')
+  ) {
+    return PORTALS.host.routePrefix;
+  }
   if (permissionMatches(permissions, 'reception.calendar')) {
     return `${PORTALS.reception.routePrefix}/calendar`;
   }
   if (permissionMatches(permissions, 'reception.dashboard')) {
     return PORTALS.reception.routePrefix;
-  }
-  if (
-    permissionMatches(permissions, 'executive.dashboard')
-    || permissionMatches(permissions, 'host.dashboard')
-  ) {
-    return PORTALS.host.routePrefix;
   }
   if (permissionMatches(permissions, 'security.dashboard')) {
     return PORTALS.security.routePrefix;
@@ -359,12 +376,12 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
     return isHostPortalPath(from) ? (from.startsWith('/executive') ? homeRoute : from) : homeRoute;
   }
 
-  // Broader host/calendar permission sets still default to the merged host dashboard.
+  // Host accounts (even with extra reception perms) stay on the host portal.
   if (
     permissionMatches(permissions, 'executive.dashboard')
     || permissionMatches(permissions, 'host.dashboard')
   ) {
-    return homeRoute;
+    return isHostPortalPath(from) ? (from.startsWith('/executive') ? homeRoute : from) : homeRoute;
   }
 
   if (!from || from === '/' || from === '/login' || from.startsWith('/admin/login') || from.startsWith('/platform') || from.startsWith('/executive')) {

@@ -137,8 +137,6 @@ describe('portal login routing', () => {
   });
 
   it('locks reception-only users out of every non-reception route', () => {
-    const mixedReceptionHost = [...receptionPerms, 'host.dashboard', 'host.invite'];
-
     assert.equal(isReceptionPortalPath('/reception'), true);
     assert.equal(isReceptionPortalPath('/reception/calendar'), true);
     assert.equal(isReceptionPortalPath('/host'), false);
@@ -153,14 +151,23 @@ describe('portal login routing', () => {
 
     assert.equal(resolveLoginRedirect('/host', executiveReceptionPerms), '/reception/calendar');
     assert.equal(resolveLoginRedirect('/admin/receptionists', executiveReceptionPerms), '/reception/calendar');
-
-    // Host perms must not let a receptionist escape the reception portal.
-    assert.equal(isReceptionOnlyUser(mixedReceptionHost), true);
-    assert.equal(canAccessPortal('host', hasPermissionFactory(mixedReceptionHost), mixedReceptionHost), false);
-    assert.equal(resolveLoginRedirect('/host/appointments', mixedReceptionHost), '/reception/calendar');
     assert.equal(isPortalLockExemptPath('/login'), true);
     assert.equal(isPortalLockExemptPath('/host'), false);
     assert.equal(isPortalLockExemptPath('/reception/calendar'), false);
+  });
+
+  it('keeps host accounts on /host even when they also have reception permissions', () => {
+    const mixedHostReception = [...hostEmployee, 'reception.dashboard', 'reception.calendar'];
+
+    assert.equal(isReceptionOnlyUser(mixedHostReception), false);
+    assert.equal(resolveDefaultHomeRoute(mixedHostReception), '/host');
+    assert.equal(resolveLoginRedirect('/login', mixedHostReception), '/host');
+    assert.equal(resolveLoginRedirect('/reception/calendar', mixedHostReception), '/host');
+    assert.equal(resolveLoginRedirect('/host/appointments', mixedHostReception), '/host/appointments');
+    assert.equal(
+      resolvePrimaryPortal(hasPermissionFactory(mixedHostReception), mixedHostReception),
+      'host',
+    );
   });
 
   it('locks host-only users out of every non-host route', () => {
