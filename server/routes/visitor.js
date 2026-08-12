@@ -4337,7 +4337,7 @@ export function createOrgAdminRouter() {
       const row = await loadReceptionistRow(pool, receptionistId);
       res.json({ ok: true, data: row });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 

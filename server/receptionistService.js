@@ -41,8 +41,18 @@ export async function syncReceptionistPortalUser(pool, {
       [nextUserId, name, normalizedEmail, phone || '', hashPassword(initialPassword)],
     );
   } else {
-    const updates = ['name = ?', 'phone = ?', 'email_verified = 1'];
-    const params = [name, phone || ''];
+    const [[conflict]] = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = ? AND id != ? LIMIT 1',
+      [normalizedEmail, nextUserId],
+    );
+    if (conflict?.id) {
+      const err = new Error('Another login account already uses this email.');
+      err.status = 409;
+      throw err;
+    }
+
+    const updates = ['name = ?', 'phone = ?', 'email = ?', 'email_verified = 1'];
+    const params = [name, phone || '', normalizedEmail];
     if (password) {
       updates.push('password_hash = ?');
       params.push(hashPassword(password));
