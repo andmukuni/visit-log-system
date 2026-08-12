@@ -8,7 +8,8 @@ import {
   Spinner,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
-import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { receptionApi } from '../../utils/visitorApi';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 
 export default function ReceptionRegisterPage() {
   const toast = useToast();
@@ -27,7 +28,7 @@ export default function ReceptionRegisterPage() {
 
   const loadRef = useCallback(async () => {
     try {
-      const data = await receptionApi.getReferenceData();
+      const data = scopeReceptionReferenceData(await receptionApi.getReferenceData());
       setRefData(data);
     } catch {
       toast.error('Failed to load reference data.');
@@ -46,7 +47,7 @@ export default function ReceptionRegisterPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const visit = await visitorApi.registerVisit(form);
+      const visit = await receptionApi.registerVisit(form);
       toast.success(`Walk-in registered. Pass code: ${visit.pass_code}. Host approval requested.`);
       setForm({ fullName: '', phone: '', email: '', company: '', hostId: '', categoryId: '', purpose: '' });
     } catch (err) {

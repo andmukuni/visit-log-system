@@ -1,9 +1,9 @@
 import express from 'express';
 import pool from '../db.js';
-import { getUserScope, requireUserScope, canTransition, loadVisitScoped } from '../scopeService.js';
-import { writeVisitEvent } from '../auditService.js';
+import { getUserScope, requireUserScope, canTransition } from '../scopeService.js';
+import { generatePassCode, writeVisitEvent } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
-import { permissionsFromRequest } from '../classificationService.js';
+import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { applyVisitListMasking, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
   lookupReceptionDeskNrc,
@@ -21,6 +21,8 @@ import {
   fetchWeeklyDriveInVisits,
 } from '../dashboardStats.js';
 import { markHostUnavailableForVisit } from '../hostAvailability.js';
+import { generateId } from '../visitorSchema.js';
+import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import {
   assertTargetInReceptionZones,
   hostZoneFilterClause,
@@ -234,13 +236,18 @@ export function createReceptionRouter() {
         recentParams.push(siteId);
       }
 
+      const { sql: recentZoneSql, params: recentZoneParams } = visitZoneFilterClause(zoneReq.zoneIds);
+      recentParams.push(...recentZoneParams);
       const [recentActivity] = await pool.query(
         `SELECT ve.id, ve.visit_id, ve.event_type, ve.created_at,
                 v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
-         WHERE vis.organisation_id = ?${recentSiteFilter}
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         LEFT JOIN offices ofc ON ofc.id = h.office_id
+         LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+         WHERE vis.organisation_id = ?${recentSiteFilter}${recentZoneSql}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
         recentParams,
@@ -551,6 +558,7 @@ export function createReceptionRouter() {
 
       const [rows] = await pool.query(
         `SELECT vis.id, vis.status, vis.checked_in_at, vis.badge_number, vis.pass_code,
+                vis.zone_id, vis.host_id,
                 v.full_name, v.phone, v.company, h.name AS host_name, vc.name AS category_name,
                 COALESCE(vc.classification, 'standard') AS classification
          FROM visits vis
@@ -592,7 +600,8 @@ export function createReceptionRouter() {
       const { sql: officeZoneSql, params: officeZoneParams } = officeZoneFilterClause(zoneReq.zoneIds, 'ofc');
 
       const [hosts] = await pool.query(
-        `SELECT h.id, h.name, h.email, h.department_id, h.office_id, h.user_id
+        `SELECT h.id, h.name, h.email, h.department_id, h.office_id, h.user_id,
+                COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id) AS zone_id
          FROM hosts h
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          WHERE h.organisation_id = ? AND h.status = 'active'${hostZoneSql}
@@ -644,15 +653,37 @@ export function createReceptionRouter() {
     }
   });
 
+  async function loadReceptionVisit(visitId, scope, zoneIds) {
+    const { site, zone } = receptionVisitFilters(scope, zoneIds);
+    const [[visit]] = await pool.query(
+      `SELECT ${VISIT_SELECT_FIELDS}
+       FROM visits vis
+       ${VISIT_JOINS}
+       LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+       WHERE vis.id = ? AND vis.organisation_id = ?${site.sql}${zone.sql}
+       LIMIT 1`,
+      [visitId, scope.organisation_id, ...site.params, ...zone.params],
+    );
+    if (!visit) {
+      return { ok: false, status: 404, message: 'Visit not found in your zone.' };
+    }
+    return { ok: true, visit };
+  }
+
   async function transitionVisitScoped(req, res, { toStatus, eventType }) {
     const userId = req.adminClaims?.sub;
     const visitId = req.params.id;
+    const zoneReq = await requireReceptionZoneContext(pool, userId);
+    if (!zoneReq.ok) {
+      return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+    }
+
     const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
     if (!scopeResult.ok) {
       return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
     }
 
-    const loaded = await loadVisitScoped(pool, visitId, scopeResult.scope, { elevated: scopeResult.elevated });
+    const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
     if (!loaded.ok) {
       return res.status(loaded.status).json({ ok: false, message: loaded.message });
     }
@@ -680,6 +711,129 @@ export function createReceptionRouter() {
     res.json({ ok: true, message: `Visit updated to ${toStatus}.` });
   }
 
+  router.get('/visits', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const search = String(req.query.search || req.query.q || '').trim();
+      const status = String(req.query.status || '').trim();
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const params = [scope.organisation_id, ...site.params, ...zone.params];
+
+      let filters = '';
+      if (status) {
+        filters += ' AND vis.status = ?';
+        params.push(status);
+      }
+      if (search) {
+        filters += ` AND (
+          v.full_name LIKE ?
+          OR vis.pass_code LIKE ?
+          OR h.name LIKE ?
+          OR v.company LIKE ?
+        )`;
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+      params.push(limit);
+
+      const [rows] = await pool.query(
+        `SELECT ${VISIT_SELECT_FIELDS}
+         FROM visits vis
+         ${VISIT_JOINS}
+         LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+         WHERE vis.organisation_id = ?${site.sql}${zone.sql}${filters}
+         ORDER BY vis.created_at DESC
+         LIMIT ?`,
+        params,
+      );
+
+      const perms = permissionsFromRequest(req);
+      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.get('/visits/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const loaded = await loadReceptionVisit(req.params.id, scopeResult.scope, zoneReq.zoneIds);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const perms = permissionsFromRequest(req);
+      const visit = applyVisitListMasking([loaded.visit], perms)[0];
+      const visitId = visit.id;
+
+      const [events] = await pool.query(
+        `SELECT ve.*, u.name AS actor_name
+         FROM visit_events ve
+         LEFT JOIN users u ON u.id = ve.actor_user_id
+         WHERE ve.visit_id = ?
+         ORDER BY ve.created_at ASC`,
+        [visitId],
+      );
+
+      const [approvals] = await pool.query(
+        `SELECT va.*, u.name AS approver_name
+         FROM visit_approvals va
+         LEFT JOIN users u ON u.id = va.approver_user_id
+         WHERE va.visit_id = ?
+         ORDER BY va.created_at ASC`,
+        [visitId],
+      );
+
+      const { site, zone } = receptionVisitFilters(scopeResult.scope, zoneReq.zoneIds);
+      const [visitorHistory] = await pool.query(
+        `SELECT vis.id, vis.pass_code AS reference_number, vis.status, vis.purpose, vis.created_at,
+                h.name AS host_name
+         FROM visits vis
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         LEFT JOIN offices ofc ON ofc.id = h.office_id
+         LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+         WHERE v.id = ? AND vis.id <> ? AND vis.organisation_id = ?${site.sql}${zone.sql}
+         ORDER BY vis.created_at DESC
+         LIMIT 10`,
+        [visit.visitor_id, visitId, scopeResult.scope.organisation_id, ...site.params, ...zone.params],
+      );
+
+      res.json({
+        ok: true,
+        data: {
+          visit,
+          events,
+          approvals,
+          visitorHistory,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.post('/visits/:id/queue-host', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -705,7 +859,7 @@ export function createReceptionRouter() {
         return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
       }
 
-      const loaded = await loadVisitScoped(pool, visitId, scopeResult.scope, { elevated: scopeResult.elevated });
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
       if (!loaded.ok) {
         return res.status(loaded.status).json({ ok: false, message: loaded.message });
       }
@@ -718,14 +872,7 @@ export function createReceptionRouter() {
         });
       }
 
-      // Visit must already belong to this receptionist's zone (host or stamped zone).
       const visitZoneId = visit.zone_id || await resolveHostZoneId(pool, visit.host_id);
-      if (!visitZoneId || !zoneReq.zoneIds.includes(String(visitZoneId))) {
-        return res.status(403).json({
-          ok: false,
-          message: 'This visit belongs to another zone and cannot be queued from your desk.',
-        });
-      }
 
       const orgId = visit.organisation_id;
       let nextHostId = hostId;
@@ -823,7 +970,7 @@ export function createReceptionRouter() {
              host_id = ?,
              department_id = COALESCE(?, department_id),
              office_id = COALESCE(?, office_id),
-             zone_id = COALESCE(?, zone_id),
+             zone_id = ?,
              updated_at = NOW()
          WHERE id = ?`,
         [nextHostId, nextDepartmentId, nextOfficeId, nextZoneId, visitId],
@@ -867,12 +1014,17 @@ export function createReceptionRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const visitId = req.params.id;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
       const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
       if (!scopeResult.ok) {
         return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
       }
 
-      const loaded = await loadVisitScoped(pool, visitId, scopeResult.scope, { elevated: scopeResult.elevated });
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
       if (!loaded.ok) {
         return res.status(loaded.status).json({ ok: false, message: loaded.message });
       }
@@ -884,6 +1036,178 @@ export function createReceptionRouter() {
 
       await notifyVisitEvent(pool, { visitId, eventType: 'pending_approval', actorUserId: userId });
       res.json({ ok: true, message: 'Approval request sent to host.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/register', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+      const scope = scopeResult.scope;
+      if (!scope?.organisation_id || !scope?.site_id) {
+        return res.status(400).json({ ok: false, message: 'User scope not configured.' });
+      }
+
+      const {
+        fullName,
+        phone,
+        email,
+        company,
+        hostId,
+        categoryId,
+        purpose,
+        expectedAt,
+        idType,
+        idNumber,
+        confidentialNotes,
+      } = req.body || {};
+
+      if (!fullName?.trim()) {
+        return res.status(400).json({ ok: false, message: 'Visitor name is required.' });
+      }
+      if (!hostId) {
+        return res.status(400).json({ ok: false, message: 'Host is required.' });
+      }
+
+      const zoneCheck = await assertTargetInReceptionZones(pool, {
+        hostId,
+        organisationId: scope.organisation_id,
+        zoneIds: zoneReq.zoneIds,
+      });
+      if (!zoneCheck.ok) {
+        return res.status(zoneCheck.status).json({ ok: false, message: zoneCheck.message });
+      }
+
+      const visitZoneId = await resolveHostZoneId(pool, hostId);
+      if (!visitZoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Selected host has no zone assigned. Contact your administrator.',
+        });
+      }
+
+      const perms = permissionsFromRequest(req);
+      if (categoryId) {
+        const classCheck = await assertCanAssignCategory(pool, {
+          categoryId,
+          organisationId: scope.organisation_id,
+          permissions: perms,
+        });
+        if (!classCheck.ok) {
+          return res.status(classCheck.status).json({ ok: false, message: classCheck.message });
+        }
+      }
+
+      let visitorId = null;
+      if (phone) {
+        const [[existing]] = await pool.query(
+          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
+          [scope.organisation_id, phone.trim()],
+        );
+        visitorId = existing?.id || null;
+      }
+
+      if (!visitorId) {
+        visitorId = generateId('vis');
+        await pool.query(
+          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            visitorId,
+            scope.organisation_id,
+            fullName.trim(),
+            phone?.trim() || null,
+            email?.trim() || null,
+            company?.trim() || null,
+          ],
+        );
+      } else {
+        await pool.query(
+          `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
+           WHERE id = ?`,
+          [fullName.trim(), email?.trim() || null, company?.trim() || null, visitorId],
+        );
+      }
+
+      await upsertVisitorContactDetails(pool, visitorId, {
+        idType,
+        idNumber,
+        confidentialNotes,
+      });
+
+      let initialStatus = 'pending_approval';
+      if (categoryId) {
+        const [[cat]] = await pool.query(
+          `SELECT requires_approval FROM visitor_categories WHERE id = ?`,
+          [categoryId],
+        );
+        if (cat && !cat.requires_approval) initialStatus = expectedAt ? 'expected' : 'approved';
+      }
+
+      const visitId = generateId('visit');
+      const passCode = generatePassCode();
+      const [[hostRow]] = await pool.query(
+        'SELECT office_id, department_id FROM hosts WHERE id = ? LIMIT 1',
+        [hostId],
+      );
+
+      await pool.query(
+        `INSERT INTO visits (
+           id, organisation_id, site_id, station_id, visitor_id, host_id, category_id,
+           purpose, status, expected_at, pass_code, created_by, confidential_notes,
+           office_id, department_id, zone_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          visitId,
+          scope.organisation_id,
+          scope.site_id,
+          scope.station_id,
+          visitorId,
+          hostId,
+          categoryId || null,
+          purpose?.trim() || null,
+          initialStatus,
+          expectedAt || null,
+          passCode,
+          userId,
+          confidentialNotes?.trim() || null,
+          hostRow?.office_id || null,
+          hostRow?.department_id || null,
+          visitZoneId,
+        ],
+      );
+
+      await createAppointmentForVisit(pool, {
+        organisationId: scope.organisation_id,
+        visitId,
+        hostId,
+        scheduledAt: expectedAt || null,
+        title: `Visit: ${fullName.trim()}`,
+        createdBy: userId,
+      });
+
+      await writeVisitEvent(pool, {
+        visitId,
+        eventType: initialStatus,
+        actorUserId: userId,
+        stationId: scope.station_id,
+      });
+      await notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId });
+
+      res.status(201).json({
+        ok: true,
+        data: { id: visitId, pass_code: passCode, status: initialStatus, zone_id: visitZoneId },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

@@ -227,8 +227,8 @@ export async function resolveHostZoneId(pool, hostId) {
 
 /**
  * Visit visibility for a receptionist zone set — strict isolation.
- * Matches visit.zone_id, host office zone, or visit office zone.
- * Params order: [...zoneIds, ...zoneIds, ...zoneIds]
+ * Uses one resolved zone: visit.zone_id → host.zone_id → host office → visit office.
+ * Params: [...zoneIds] once.
  */
 export function visitZoneFilterClause(zoneIds, {
   hostOfficeAlias = 'ofc',
@@ -242,28 +242,25 @@ export function visitZoneFilterClause(zoneIds, {
 
   const placeholders = zoneIds.map(() => '?').join(', ');
   return {
-    sql: ` AND (
-      ${visitAlias}.zone_id IN (${placeholders})
-      OR ${hostOfficeAlias}.zone_id IN (${placeholders})
-      OR ${visitOfficeAlias}.zone_id IN (${placeholders})
-      OR ${hostAlias}.zone_id IN (${placeholders})
-    )`,
-    params: [...zoneIds, ...zoneIds, ...zoneIds, ...zoneIds],
+    sql: ` AND COALESCE(
+      NULLIF(${visitAlias}.zone_id, ''),
+      NULLIF(${hostAlias}.zone_id, ''),
+      ${hostOfficeAlias}.zone_id,
+      ${visitOfficeAlias}.zone_id
+    ) IN (${placeholders})`,
+    params: [...zoneIds],
   };
 }
 
-/** Host list filter — host office zone or explicit host.zone_id in receptionist zones. */
+/** Host list filter — resolved host zone (host.zone_id, else office zone). */
 export function hostZoneFilterClause(zoneIds, officeAlias = 'ofc', hostAlias = 'h') {
   if (!Array.isArray(zoneIds) || !zoneIds.length) {
     return { sql: ' AND 1=0', params: [] };
   }
   const placeholders = zoneIds.map(() => '?').join(', ');
   return {
-    sql: ` AND (
-      ${officeAlias}.zone_id IN (${placeholders})
-      OR ${hostAlias}.zone_id IN (${placeholders})
-    )`,
-    params: [...zoneIds, ...zoneIds],
+    sql: ` AND COALESCE(NULLIF(${hostAlias}.zone_id, ''), ${officeAlias}.zone_id) IN (${placeholders})`,
+    params: [...zoneIds],
   };
 }
 

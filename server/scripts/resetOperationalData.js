@@ -2,6 +2,11 @@
 /**
  * Clears visitor/vehicle operational records so the system can start fresh.
  * Preserves users, roles, organisations, sites, hosts, and location structure.
+ *
+ * Usage:
+ *   node server/scripts/resetOperationalData.js
+ *   node server/scripts/resetOperationalData.js --target=remote
+ *   node server/scripts/resetOperationalData.js --target=remote --url=postgres://...
  */
 import mysql from 'mysql2/promise';
 import pg from 'pg';
@@ -13,6 +18,11 @@ import { isPostgresDriver, resolveDbDriver, adaptSqlForPostgres } from '../sqlDi
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 dotenv.config();
+
+const args = process.argv.slice(2);
+const targetArg = args.find((arg) => arg.startsWith('--target='));
+const urlArg = args.find((arg) => arg.startsWith('--url='));
+const target = targetArg?.split('=')[1] || 'local';
 
 const OPERATIONAL_TABLES = [
   'notification_deliveries',
@@ -62,6 +72,23 @@ function createMysqlPool() {
 }
 
 async function resolvePool() {
+  if (target === 'remote') {
+    const connectionString = (urlArg ? urlArg.replace(/^--url=/, '') : null)
+      || process.env.REMOTE_DATABASE_URL
+      || process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('Remote target requires REMOTE_DATABASE_URL, DATABASE_URL, or --url=postgres://...');
+    }
+    if (!connectionString.startsWith('postgres')) {
+      throw new Error('Remote reset currently supports PostgreSQL connection strings only.');
+    }
+    const host = (() => {
+      try { return new URL(connectionString).hostname; } catch { return 'remote'; }
+    })();
+    console.log(`[reset] Connecting to remote PostgreSQL (${host})…`);
+    return createPgPool(connectionString);
+  }
+
   if (isPostgresDriver(resolveDbDriver())) {
     const connectionString = String(process.env.DATABASE_URL || '').trim();
     if (!connectionString) throw new Error('DATABASE_URL is required for PostgreSQL.');

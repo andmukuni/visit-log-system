@@ -154,11 +154,13 @@ describe('reception zone filters', () => {
     const zones = ['zone-a', 'zone-b'];
     const visit = visitZoneFilterClause(zones);
     const host = hostZoneFilterClause(zones, 'ofc');
-    assert.match(visit.sql, /vis\.zone_id IN/);
-    assert.match(visit.sql, /ofc\.zone_id IN/);
-    assert.match(visit.sql, /vis_ofc\.zone_id IN/);
-    assert.deepEqual(visit.params, [...zones, ...zones, ...zones]);
-    assert.match(host.sql, /ofc\.zone_id IN \(\?, \?\)/);
+    assert.match(visit.sql, /COALESCE/);
+    assert.match(visit.sql, /vis\.zone_id/);
+    assert.match(visit.sql, /h\.zone_id/);
+    assert.match(visit.sql, /ofc\.zone_id/);
+    assert.match(visit.sql, /vis_ofc\.zone_id/);
+    assert.deepEqual(visit.params, zones);
+    assert.match(host.sql, /COALESCE\(NULLIF\(h\.zone_id/);
     assert.deepEqual(host.params, zones);
   });
 });

@@ -398,6 +398,12 @@ export function createHostRouter() {
       // Host-created visits that skip approval are already confirmed expected arrivals.
       const alreadyConfirmed = status === 'expected' || status === 'approved';
       const visitZoneId = await resolveHostZoneId(pool, ctx.host.id);
+      if (!visitZoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Your host profile has no zone assigned. Contact your administrator before inviting visitors.',
+        });
+      }
 
       await pool.query(
         `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, confidential_notes, approved_at, privacy_ack_at, zone_id)
@@ -524,11 +530,17 @@ export function createHostRouter() {
       );
 
       const approveZoneId = await resolveHostZoneId(pool, ctx.host.id);
+      if (!approveZoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Your host profile has no zone assigned. Contact your administrator.',
+        });
+      }
       await pool.query(
         `UPDATE visits
          SET status = ?,
              host_id = COALESCE(?, host_id),
-             zone_id = COALESCE(zone_id, ?),
+             zone_id = ?,
              approved_at = NOW(),
              updated_at = NOW()
          WHERE id = ?`,

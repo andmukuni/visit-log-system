@@ -15,6 +15,7 @@ import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import { formatDate, formatTime } from '../../utils/helpers';
 
 const TABS = {
@@ -73,7 +74,7 @@ export default function ReceptionCheckInPage() {
   const loadRef = useCallback(async () => {
     setLoading(true);
     try {
-      const ref = await receptionApi.getReferenceData();
+      const ref = scopeReceptionReferenceData(await receptionApi.getReferenceData());
       setHosts(ref.hosts || []);
       setDepartments(ref.departments || []);
       setOffices(ref.offices || []);

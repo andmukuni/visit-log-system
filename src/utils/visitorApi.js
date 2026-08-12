@@ -550,6 +550,14 @@ export const executiveApi = {
 
 export const receptionApi = {
   getDashboard: () => apiFetch('/admin/reception/dashboard'),
+  getVisits: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    ).toString();
+    return apiFetch(`/admin/reception/visits${qs ? `?${qs}` : ''}`);
+  },
+  getVisit: (id) => apiFetch(`/admin/reception/visits/${id}`),
+  registerVisit: (body) => apiFetch('/admin/reception/register', { method: 'POST', body: JSON.stringify(body) }),
   getCheckInAppointments: (type = 'walk-in') => apiFetch(`/admin/reception/check-in-appointments?type=${encodeURIComponent(type)}`),
   checkInWalkIn: async (body) => {
     const res = await fetch(`${API_BASE}/admin/reception/check-in/walk-in`, {

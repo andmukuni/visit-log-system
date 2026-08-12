@@ -38,14 +38,19 @@ export default function QueueToHostModal({
   }, [isOpen, visit]);
 
   const filteredOffices = useMemo(() => {
-    if (!departmentId) return offices;
-    return offices.filter((row) => row.department_id === departmentId);
+    let rows = offices;
+    if (departmentId) {
+      rows = rows.filter((row) => row.department_id === departmentId);
+    }
+    return rows;
   }, [offices, departmentId]);
 
   const filteredHosts = useMemo(() => {
     return hosts.filter((row) => {
       if (officeId && row.office_id !== officeId) return false;
       if (departmentId && row.department_id !== departmentId) return false;
+      // Drop hosts with no resolvable zone when zone metadata is present on the list.
+      if (hosts.some((host) => host?.zone_id) && !row?.zone_id) return false;
       return true;
     });
   }, [hosts, officeId, departmentId]);
@@ -211,7 +216,11 @@ export default function QueueToHostModal({
             onChange={handleHostChange}
             options={hostOptions}
             required
-            helpText="Sent to this host’s Approvals queue as pending."
+            helpText={
+              filteredHosts.length
+                ? 'Sent to this host’s Approvals queue as pending. Only hosts in your zone are listed.'
+                : 'No hosts in your zone match this filter.'
+            }
           />
         )}
 

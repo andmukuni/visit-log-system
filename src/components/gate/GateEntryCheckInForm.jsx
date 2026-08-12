@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -210,23 +210,34 @@ function PageLogoWatermark() {
   );
 }
 
-function HostSelect({ value, onChange, hosts }) {
+function HostSelect({ value, onChange, hosts, emptyHint = 'No hosts available' }) {
   return (
-    <div className="relative">
-      <User size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" aria-hidden="true" />
-      <select
-        value={value}
-        onChange={(e) => {
-          e.stopPropagation();
-          onChange(e);
-        }}
-        className={`${INPUT_MD} appearance-none`}
-      >
-        <option value="">Person visiting…</option>
-        {hosts.map((host) => (
-          <option key={host.id} value={host.id}>{host.name}</option>
-        ))}
-      </select>
+    <div>
+      <div className="relative">
+        <User size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" aria-hidden="true" />
+        <select
+          value={value}
+          onChange={(e) => {
+            e.stopPropagation();
+            onChange(e);
+          }}
+          className={`${INPUT_MD} appearance-none`}
+          required
+          disabled={hosts.length === 0}
+        >
+          <option value="">
+            {hosts.length === 0 ? emptyHint : 'Person visiting…'}
+          </option>
+          {hosts.map((host) => (
+            <option key={host.id} value={host.id}>{host.name}</option>
+          ))}
+        </select>
+      </div>
+      {hosts.length === 0 ? (
+        <p className="mt-1.5 text-xs text-navy-500">
+          Only hosts in your assigned zone can be selected. Ask an admin to assign hosts to your zone.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -509,8 +520,23 @@ export default function GateEntryCheckInForm({
     setStep(0);
   }, [section]);
 
-  const hosts = refData?.hosts || [];
+  const zoneIds = Array.isArray(refData?.scope?.zone_ids)
+    ? refData.scope.zone_ids.map(String)
+    : [];
+  const hosts = useMemo(() => (refData?.hosts || []).filter((host) => {
+    if (entryContext !== 'reception' || zoneIds.length === 0) return true;
+    const hostZone = host?.zone_id != null ? String(host.zone_id) : '';
+    return hostZone && zoneIds.includes(hostZone);
+  }), [entryContext, refData?.hosts, zoneIds.join('|')]);
   const hostName = (id) => hosts.find((h) => h.id === id)?.name || '';
+  const allowedHostIds = useMemo(() => hosts.map((host) => String(host.id)).join('|'), [hosts]);
+
+  useEffect(() => {
+    if (entryContext !== 'reception' || !allowedHostIds) return;
+    const allowed = new Set(allowedHostIds.split('|').filter(Boolean));
+    setWalkIn((prev) => (prev.hostId && !allowed.has(String(prev.hostId)) ? { ...prev, hostId: '' } : prev));
+    setVehicle((prev) => (prev.hostId && !allowed.has(String(prev.hostId)) ? { ...prev, hostId: '' } : prev));
+  }, [entryContext, allowedHostIds]);
   const vehicleTypeLabel = (value) => VEHICLE_TYPES.find((t) => t.value === value)?.label || value;
   const stationLabel = refData?.scope?.stationName || refData?.scope?.siteName || 'Gate';
   const siteLabel = refData?.scope?.siteName;
@@ -795,6 +821,7 @@ export default function GateEntryCheckInForm({
                   value={vehicle.hostId}
                   onChange={(e) => setVehicle((v) => ({ ...v, hostId: e.target.value }))}
                   hosts={hosts}
+                  emptyHint={entryContext === 'reception' ? 'No hosts in your zone…' : 'Person visiting…'}
                 />
               </div>
               <div className="md:col-span-2">
@@ -1026,6 +1053,7 @@ export default function GateEntryCheckInForm({
                   value={walkIn.hostId}
                   onChange={(e) => setWalkIn((v) => ({ ...v, hostId: e.target.value }))}
                   hosts={hosts}
+                  emptyHint={entryContext === 'reception' ? 'No hosts in your zone…' : 'Person visiting…'}
                 />
               </div>
               <div className="md:col-span-2">

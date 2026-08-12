@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import {
@@ -15,7 +15,11 @@ import {
   AddAction,
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
-import { visitorApi } from '../../utils/visitorApi';
+import { receptionApi } from '../../utils/visitorApi';
+import {
+  filterVisitsByReceptionZones,
+  scopeReceptionReferenceData,
+} from '../../utils/receptionZoneScope';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All', dot: 'bg-navy-400' },
@@ -32,6 +36,8 @@ const STATUS_OPTIONS = [
 export default function ReceptionVisitorLogsPage() {
   const navigate = useNavigate();
   const [visits, setVisits] = useState([]);
+  const [zoneIds, setZoneIds] = useState([]);
+  const [zoneHostIds, setZoneHostIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -42,10 +48,18 @@ export default function ReceptionVisitorLogsPage() {
       const params = {};
       if (search) params.search = search;
       if (status) params.status = status;
-      const rows = await visitorApi.getVisits(params);
-      setVisits(rows);
+      const [rows, rawRef] = await Promise.all([
+        receptionApi.getVisits(params),
+        receptionApi.getReferenceData().catch(() => ({})),
+      ]);
+      const ref = scopeReceptionReferenceData(rawRef);
+      setZoneIds(ref?.scope?.zone_ids || []);
+      setZoneHostIds((ref.hosts || []).map((host) => host.id).filter(Boolean));
+      setVisits(Array.isArray(rows) ? rows : []);
     } catch {
       setVisits([]);
+      setZoneIds([]);
+      setZoneHostIds([]);
     } finally {
       setLoading(false);
     }
@@ -54,6 +68,11 @@ export default function ReceptionVisitorLogsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const scopedVisits = useMemo(
+    () => filterVisitsByReceptionZones(visits, zoneIds, zoneHostIds),
+    [visits, zoneIds, zoneHostIds],
+  );
 
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
@@ -85,7 +104,7 @@ export default function ReceptionVisitorLogsPage() {
     <div>
       <PageHeader
         title="Visitor Logs"
-        subtitle="Site-scoped visitor records"
+        subtitle="Only visitors and hosts in your assigned zone"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Visitors' }]}
         actions={(
           <ActionToolbar>
@@ -118,8 +137,9 @@ export default function ReceptionVisitorLogsPage() {
         <Card>
           <DataTable
             columns={columns}
-            data={visits}
-            emptyTitle="No visits found"
+            data={scopedVisits}
+            emptyTitle="No visits in your zone"
+            emptyDescription="Visitors for hosts in your assigned zone will appear here."
             onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
           />
         </Card>

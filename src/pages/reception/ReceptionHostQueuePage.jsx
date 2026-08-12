@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye } from 'lucide-react';
+import { Eye, UserPlus } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -11,8 +11,11 @@ import {
   RefreshAction,
   IconButton,
 } from '../../components/ui';
+import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { formatDateTime } from '../../utils/helpers';
+import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 
 function waitDuration(row) {
   const start = row.queued_at || row.checked_in_at || row.check_in_at || row.updated_at;
@@ -45,18 +48,38 @@ function HostAvailabilityBadge({ availability }) {
   );
 }
 
+function canQueueVisit(row) {
+  return ['reception_check_in', 'checked_in'].includes(row?.status);
+}
+
 export default function ReceptionHostQueuePage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [visits, setVisits] = useState([]);
+  const [hosts, setHosts] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [offices, setOffices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [queueVisit, setQueueVisit] = useState(null);
+  const [queuing, setQueuing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await receptionApi.getHostQueue({ includeReady: '1' });
+      const [rows, rawRef] = await Promise.all([
+        receptionApi.getHostQueue({ includeReady: '1' }),
+        receptionApi.getReferenceData().catch(() => ({})),
+      ]);
+      const ref = scopeReceptionReferenceData(rawRef);
       setVisits(rows || []);
+      setHosts(ref.hosts || []);
+      setDepartments(ref.departments || []);
+      setOffices(ref.offices || []);
     } catch {
       setVisits([]);
+      setHosts([]);
+      setDepartments([]);
+      setOffices([]);
     } finally {
       setLoading(false);
     }
@@ -67,6 +90,21 @@ export default function ReceptionHostQueuePage() {
     const id = window.setInterval(load, 30000);
     return () => window.clearInterval(id);
   }, [load]);
+
+  const handleQueueConfirm = async (payload) => {
+    if (!queueVisit?.id) return;
+    setQueuing(true);
+    try {
+      await receptionApi.queueToHost(queueVisit.id, payload);
+      toast.success('Visitor sent to host for approval.');
+      setQueueVisit(null);
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setQueuing(false);
+    }
+  };
 
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
@@ -100,9 +138,21 @@ export default function ReceptionHostQueuePage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>
-          <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
-        </Link>
+        <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+          {canQueueVisit(row) ? (
+            <IconButton
+              icon={UserPlus}
+              label="Queue to host"
+              tooltip="Queue to host in your zone"
+              size="sm"
+              variant="ghost"
+              onClick={() => setQueueVisit(row)}
+            />
+          ) : null}
+          <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>
+            <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
+          </Link>
+        </div>
       ),
     },
   ];
@@ -111,7 +161,7 @@ export default function ReceptionHostQueuePage() {
     <div>
       <PageHeader
         title="Host Queue"
-        subtitle="Read-only queue — host Available / Not available is managed by Admin"
+        subtitle="Zone-scoped queue — you can only send visitors to hosts in your assigned zone"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Host queue' }]}
         actions={(
           <ActionToolbar>
@@ -128,11 +178,22 @@ export default function ReceptionHostQueuePage() {
             columns={columns}
             data={visits}
             emptyTitle="Queue is empty"
-            emptyDescription="Visitors sent to a host for approval, or accepted and waiting, appear here."
+            emptyDescription="Visitors checked in at your desk, or waiting for a host in your zone, appear here."
             onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
           />
         </Card>
       )}
+
+      <QueueToHostModal
+        isOpen={Boolean(queueVisit)}
+        onClose={() => !queuing && setQueueVisit(null)}
+        visit={queueVisit}
+        hosts={hosts}
+        departments={departments}
+        offices={offices}
+        submitting={queuing}
+        onConfirm={handleQueueConfirm}
+      />
     </div>
   );
 }

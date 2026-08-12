@@ -553,6 +553,12 @@ export function createExecutiveRouter() {
       const inviteToken = generateInviteToken();
       const meetingTitle = title?.trim() || purpose?.trim() || `Meeting with ${visitorName.trim()}`;
       const visitZoneId = await resolveHostZoneId(pool, ctx.host.id);
+      if (!visitZoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Your host profile has no zone assigned. Contact your administrator before booking appointments.',
+        });
+      }
 
       await pool.query(
         `INSERT INTO visits (id, organisation_id, site_id, visitor_id, host_id, category_id, purpose, status, expected_at, pass_code, invite_token, created_by, approved_at, privacy_ack_at, zone_id)

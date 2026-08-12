@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BellRing, Eye } from 'lucide-react';
 import {
@@ -13,22 +13,36 @@ import {
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
-import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { receptionApi } from '../../utils/visitorApi';
+import {
+  filterVisitsByReceptionZones,
+  scopeReceptionReferenceData,
+} from '../../utils/receptionZoneScope';
 
 export default function ReceptionApprovalsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
+  const [zoneIds, setZoneIds] = useState([]);
+  const [zoneHostIds, setZoneHostIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await visitorApi.getVisits({ status: 'pending_approval' });
-      setVisits(rows);
+      const [rows, rawRef] = await Promise.all([
+        receptionApi.getVisits({ status: 'pending_approval' }),
+        receptionApi.getReferenceData().catch(() => ({})),
+      ]);
+      const ref = scopeReceptionReferenceData(rawRef);
+      setZoneIds(ref?.scope?.zone_ids || []);
+      setZoneHostIds((ref.hosts || []).map((host) => host.id).filter(Boolean));
+      setVisits(Array.isArray(rows) ? rows : []);
     } catch {
       setVisits([]);
+      setZoneIds([]);
+      setZoneHostIds([]);
     } finally {
       setLoading(false);
     }
@@ -37,6 +51,11 @@ export default function ReceptionApprovalsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const scopedVisits = useMemo(
+    () => filterVisitsByReceptionZones(visits, zoneIds, zoneHostIds),
+    [visits, zoneIds, zoneHostIds],
+  );
 
   const requestApproval = async (id) => {
     setActing(id);
@@ -80,8 +99,7 @@ export default function ReceptionApprovalsPage() {
             size="sm"
             variant="ghost"
             iconSize={16}
-            loading={acting === row.id}
-            className="text-cyan-700 hover:bg-cyan-50"
+            disabled={acting === row.id}
             onClick={(e) => {
               e.stopPropagation();
               void requestApproval(row.id);
@@ -96,7 +114,7 @@ export default function ReceptionApprovalsPage() {
     <div>
       <PageHeader
         title="Pending Approvals"
-        subtitle="Track walk-ins and visits awaiting host or security approval"
+        subtitle="Only pending visits for hosts in your assigned zone"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Approvals' }]}
         actions={(
           <ActionToolbar>
@@ -111,9 +129,9 @@ export default function ReceptionApprovalsPage() {
         <Card>
           <DataTable
             columns={columns}
-            data={visits}
-            emptyTitle="No pending approvals"
-            emptyDescription="Walk-ins awaiting host approval will appear here."
+            data={scopedVisits}
+            emptyTitle="No pending approvals in your zone"
+            emptyDescription="Walk-ins awaiting host approval in your zone will appear here."
             onRowClick={(row) => navigate(`/reception/visitors/${row.id}`)}
           />
         </Card>

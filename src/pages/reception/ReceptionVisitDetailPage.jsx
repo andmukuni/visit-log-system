@@ -5,7 +5,8 @@ import { LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
-import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { receptionApi } from '../../utils/visitorApi';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import {
   getReceptionVisitAction,
   receptionActionButtonClass,
@@ -78,10 +79,11 @@ export default function ReceptionVisitDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const fetchVisit = useCallback(async (visitId) => {
-    const [visitData, ref] = await Promise.all([
-      visitorApi.getVisit(visitId),
+    const [visitData, rawRef] = await Promise.all([
+      receptionApi.getVisit(visitId),
       receptionApi.getReferenceData().catch(() => ({})),
     ]);
+    const ref = scopeReceptionReferenceData(rawRef);
     setHosts(ref.hosts || []);
     setDepartments(ref.departments || []);
     setOffices(ref.offices || []);

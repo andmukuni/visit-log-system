@@ -72,7 +72,11 @@ export default function OccupancyPage({
             columns={columns}
             data={rows}
             emptyTitle="No one on site"
-            emptyDescription="All visitors have checked out."
+            emptyDescription={
+              portalPrefix === '/reception'
+                ? 'No on-site visitors for hosts in your zone right now.'
+                : 'All visitors have checked out.'
+            }
             onRowClick={(row) => navigate(`${portalPrefix}/visitors/${row.id}`)}
           />
         </Card>
