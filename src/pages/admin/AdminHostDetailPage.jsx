@@ -7,10 +7,12 @@ import {
   DoorClosed,
   Edit3,
   KeyRound,
+  Layers3,
   Mail,
   MapPin,
   Network,
   Phone,
+  Trash2,
   UserCheck,
 } from 'lucide-react';
 import {
@@ -23,6 +25,7 @@ import {
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
+import { zonesForOrg } from '../../utils/adminStructureDefaults';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'No title' },
@@ -72,6 +75,7 @@ export default function AdminHostDetailPage() {
   const [host, setHost] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
+  const [zones, setZones] = useState([]);
   const [offices, setOffices] = useState([]);
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,21 +84,25 @@ export default function AdminHostDetailPage() {
   const [saving, setSaving] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [row, deptRows, siteRows, officeRows, positionRows] = await Promise.all([
+      const [row, deptRows, siteRows, zoneRows, officeRows, positionRows] = await Promise.all([
         visitorApi.getHost(id),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
+        visitorApi.getZones(),
         visitorApi.getOffices(),
         visitorApi.getPositions(),
       ]);
       setHost(row || null);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
       setOffices(Array.isArray(officeRows) ? officeRows : []);
       setPositions(Array.isArray(positionRows) ? positionRows : []);
     } catch (err) {
@@ -130,6 +138,7 @@ export default function AdminHostDetailPage() {
       if (form.organisationId && ofc.organisation_id && ofc.organisation_id !== form.organisationId) return false;
       if (form.departmentId && ofc.department_id !== form.departmentId) return false;
       if (form.siteId && ofc.site_id && ofc.site_id !== form.siteId) return false;
+      if (form.zoneId && ofc.zone_id && ofc.zone_id !== form.zoneId) return false;
       return ofc.status !== 'inactive';
     });
     return [
@@ -140,6 +149,14 @@ export default function AdminHostDetailPage() {
       })),
     ];
   }, [offices, form]);
+
+  const zoneOptions = useMemo(() => {
+    if (!form) return [];
+    return zonesForOrg(zones, form.organisationId, form.siteId).map((z) => ({
+      value: z.id,
+      label: z.building_name ? `${z.name} · ${z.building_name}` : z.name,
+    }));
+  }, [zones, form]);
 
   const positionOptions = useMemo(() => {
     if (!form) return [{ value: '', label: 'No position (optional)' }];
@@ -159,6 +176,7 @@ export default function AdminHostDetailPage() {
 
   const openEdit = () => {
     if (!host) return;
+    const office = offices.find((ofc) => ofc.id === host.office_id);
     setForm({
       organisationId: host.organisation_id || '',
       title: host.title || '',
@@ -167,6 +185,7 @@ export default function AdminHostDetailPage() {
       phone: host.phone || '',
       departmentId: host.department_id || '',
       siteId: host.site_id || '',
+      zoneId: host.zone_id || office?.zone_id || '',
       officeId: host.office_id || '',
       positionId: host.position_id || '',
       status: host.status || 'active',
@@ -187,6 +206,10 @@ export default function AdminHostDetailPage() {
       toast.error('Department and site are required.');
       return;
     }
+    if (!form.zoneId) {
+      toast.error('Zone is required so reception can match this host.');
+      return;
+    }
     if (form.password && !form.email.trim()) {
       toast.error('Email is required to set a host password.');
       return;
@@ -204,6 +227,7 @@ export default function AdminHostDetailPage() {
         phone: form.phone,
         departmentId: form.departmentId,
         siteId: form.siteId,
+        zoneId: form.zoneId,
         officeId: form.officeId || null,
         positionId: form.positionId || null,
         status: form.status,
@@ -218,6 +242,20 @@ export default function AdminHostDetailPage() {
       toast.error(err?.message || 'Could not save host.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!host?.id) return;
+    setDeleting(true);
+    try {
+      await visitorApi.deleteHost(host.id);
+      toast.success('Host deleted.');
+      navigate('/admin/hosts');
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete host.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -312,6 +350,14 @@ export default function AdminHostDetailPage() {
               <Edit3 size={14} />
               Edit host
             </button>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-50 sm:px-3"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
           </div>
         )}
       />
@@ -366,6 +412,7 @@ export default function AdminHostDetailPage() {
               <DetailItem icon={Briefcase} label="Position" value={host.position_name} />
               <DetailItem icon={Network} label="Department" value={host.department_name} />
               <DetailItem icon={MapPin} label="Site / Branch" value={host.site_name} />
+              <DetailItem icon={Layers3} label="Zone" value={host.zone_name} />
               <DetailItem
                 icon={DoorClosed}
                 label="Office"
@@ -393,7 +440,7 @@ export default function AdminHostDetailPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title="Edit Host"
-        subtitle="Organisation → Host → Department + Site (+ optional Office)"
+        subtitle="Organisation → Department + Site + Zone → Host (+ optional Office)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -474,17 +521,44 @@ export default function AdminHostDetailPage() {
               type="select"
               required
               value={form.siteId}
-              onChange={(e) => setForm((prev) => ({ ...prev, siteId: e.target.value, officeId: '' }))}
+              onChange={(e) => {
+                const siteId = e.target.value;
+                const nextZones = zonesForOrg(zones, form.organisationId, siteId);
+                setForm((prev) => ({
+                  ...prev,
+                  siteId,
+                  zoneId: nextZones.some((z) => z.id === prev.zoneId) ? prev.zoneId : (nextZones[0]?.id || ''),
+                  officeId: '',
+                }));
+              }}
               options={siteOptions}
+            />
+            <FormField
+              label="Zone"
+              name="zoneId"
+              type="select"
+              required
+              value={form.zoneId}
+              onChange={(e) => setForm((prev) => ({ ...prev, zoneId: e.target.value, officeId: '' }))}
+              options={zoneOptions}
+              helpText="Links this host to receptionists covering the same zone."
             />
             <FormField
               label="Office"
               name="officeId"
               type="select"
               value={form.officeId}
-              onChange={(e) => setForm((prev) => ({ ...prev, officeId: e.target.value }))}
+              onChange={(e) => {
+                const officeId = e.target.value;
+                const office = offices.find((ofc) => ofc.id === officeId);
+                setForm((prev) => ({
+                  ...prev,
+                  officeId,
+                  zoneId: office?.zone_id || prev.zoneId,
+                }));
+              }}
               options={officeOptions}
-              helpText="Optional. Must match the selected department and site."
+              helpText="Optional. Offices are filtered to the selected zone."
             />
             <FormField
               label="Status"
@@ -551,6 +625,17 @@ export default function AdminHostDetailPage() {
         title="Send password reset?"
         message={`Email a password reset link to ${host.name} (${host.email}). The link expires in 24 hours.`}
         confirmLabel="Send email"
+      />
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Delete host?"
+        message={`Remove ${displayName} and revoke Host portal access.`}
+        confirmLabel="Delete"
+        variant="danger"
       />
     </div>
   );

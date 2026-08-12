@@ -3398,6 +3398,7 @@ export function createOrgAdminRouter() {
                s.name AS site_name,
                o.name AS organisation_name,
                p.name AS position_name,
+               z.name AS zone_name,
                (
                  SELECT ar.slug
                  FROM user_admin_roles uar
@@ -3419,6 +3420,7 @@ export function createOrgAdminRouter() {
         LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
         LEFT JOIN organisations o ON o.id = h.organisation_id
         LEFT JOIN positions p ON p.id = h.position_id
+        LEFT JOIN zones z ON z.id = COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id)
       `;
       const [rawRows] = orgId
         ? await pool.query(`${hostSelect} WHERE h.organisation_id = ? ORDER BY h.name`, [orgId])
@@ -3437,6 +3439,7 @@ export function createOrgAdminRouter() {
         total: rows.length,
         active: rows.filter((row) => row.status === 'active').length,
         with_office: rows.filter((row) => row.office_id).length,
+        with_zone: rows.filter((row) => row.zone_id || row.zone_name).length,
         departments: new Set(rows.map((row) => row.department_id).filter(Boolean)).size,
         sites: new Set(rows.map((row) => row.site_id).filter(Boolean)).size,
       };
@@ -3462,6 +3465,7 @@ export function createOrgAdminRouter() {
                 s.name AS site_name,
                 o.name AS organisation_name,
                 p.name AS position_name,
+                z.name AS zone_name,
                 (
                   SELECT ar.slug
                   FROM user_admin_roles uar
@@ -3483,6 +3487,7 @@ export function createOrgAdminRouter() {
          LEFT JOIN sites s ON s.id = COALESCE(h.site_id, ofc.site_id)
          LEFT JOIN organisations o ON o.id = h.organisation_id
          LEFT JOIN positions p ON p.id = h.position_id
+         LEFT JOIN zones z ON z.id = COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id)
          WHERE h.id = ?
          LIMIT 1`,
         [hostId],
@@ -3519,6 +3524,7 @@ export function createOrgAdminRouter() {
       const departmentId = String(req.body?.departmentId || req.body?.department_id || '').trim();
       const siteId = String(req.body?.siteId || req.body?.site_id || '').trim();
       const officeId = String(req.body?.officeId || req.body?.office_id || '').trim() || null;
+      let zoneId = String(req.body?.zoneId || req.body?.zone_id || '').trim() || null;
       const positionRaw = String(req.body?.positionId || req.body?.position_id || '').trim() || null;
       const title = String(req.body?.title || req.body?.salutation || '').trim() || null;
       const name = String(req.body?.name || '').trim();
@@ -3574,6 +3580,45 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      if (placement.officeId) {
+        const [[office]] = await pool.query(
+          'SELECT zone_id FROM offices WHERE id = ? LIMIT 1',
+          [placement.officeId],
+        );
+        if (office?.zone_id) {
+          if (zoneId && zoneId !== office.zone_id) {
+            return res.status(400).json({
+              ok: false,
+              message: 'Selected office is not in the chosen zone.',
+            });
+          }
+          zoneId = office.zone_id;
+        }
+      }
+      if (!zoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Zone is required so reception can match this host.',
+        });
+      }
+      const [[zoneRow]] = await pool.query(
+        `SELECT z.id
+         FROM zones z
+         INNER JOIN buildings b ON b.id = z.building_id
+         INNER JOIN sites s ON s.id = b.site_id
+         WHERE z.id = ?
+           AND s.organisation_id = ?
+           AND s.id = ?
+         LIMIT 1`,
+        [zoneId, orgId, siteId],
+      );
+      if (!zoneRow) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Selected zone was not found for this organisation and site.',
+        });
+      }
+
       const position = await resolveHostPositionId(pool, orgId, positionRaw);
       if (!position.ok) {
         return res.status(position.status).json({ ok: false, message: position.message });
@@ -3597,9 +3642,9 @@ export function createOrgAdminRouter() {
 
       const id = generateId('host');
       await pool.query(
-        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, position_id, user_id, title, name, email, phone, status, availability)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, orgId, departmentId, siteId, placement.officeId, position.positionId, linkedUserId, title, name, email, phone, status, availability],
+        `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, zone_id, position_id, user_id, title, name, email, phone, status, availability)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, orgId, departmentId, siteId, placement.officeId, zoneId, position.positionId, linkedUserId, title, name, email, phone, status, availability],
       );
 
       const [[row]] = await pool.query(
@@ -3609,13 +3654,15 @@ export function createOrgAdminRouter() {
                 ofc.name AS office_name,
                 s.name AS site_name,
                 o.name AS organisation_name,
-                p.name AS position_name
+                p.name AS position_name,
+                z.name AS zone_name
          FROM hosts h
          LEFT JOIN departments d ON d.id = h.department_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN sites s ON s.id = h.site_id
          LEFT JOIN organisations o ON o.id = h.organisation_id
          LEFT JOIN positions p ON p.id = h.position_id
+         LEFT JOIN zones z ON z.id = COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id)
          WHERE h.id = ?`,
         [id],
       );
@@ -3658,6 +3705,9 @@ export function createOrgAdminRouter() {
         ? String(req.body.officeId || req.body.office_id || '').trim()
         : existing.office_id;
       const officeId = officeRaw || null;
+      let zoneId = req.body?.zoneId != null || req.body?.zone_id != null
+        ? String(req.body.zoneId || req.body.zone_id || '').trim() || null
+        : existing.zone_id || null;
       const positionRaw = req.body?.positionId != null || req.body?.position_id != null
         ? String(req.body.positionId || req.body.position_id || '').trim() || null
         : existing.position_id || null;
@@ -3710,6 +3760,45 @@ export function createOrgAdminRouter() {
         return res.status(placement.status).json({ ok: false, message: placement.message });
       }
 
+      if (placement.officeId) {
+        const [[office]] = await pool.query(
+          'SELECT zone_id FROM offices WHERE id = ? LIMIT 1',
+          [placement.officeId],
+        );
+        if (office?.zone_id) {
+          if (zoneId && zoneId !== office.zone_id) {
+            return res.status(400).json({
+              ok: false,
+              message: 'Selected office is not in the chosen zone.',
+            });
+          }
+          zoneId = office.zone_id;
+        }
+      }
+      if (!zoneId) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Zone is required so reception can match this host.',
+        });
+      }
+      const [[zoneRow]] = await pool.query(
+        `SELECT z.id
+         FROM zones z
+         INNER JOIN buildings b ON b.id = z.building_id
+         INNER JOIN sites s ON s.id = b.site_id
+         WHERE z.id = ?
+           AND s.organisation_id = ?
+           AND s.id = ?
+         LIMIT 1`,
+        [zoneId, existing.organisation_id, siteId],
+      );
+      if (!zoneRow) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Selected zone was not found for this organisation and site.',
+        });
+      }
+
       const position = await resolveHostPositionId(pool, existing.organisation_id, positionRaw);
       if (!position.ok) {
         return res.status(position.status).json({ ok: false, message: position.message });
@@ -3734,9 +3823,9 @@ export function createOrgAdminRouter() {
 
       await pool.query(
         `UPDATE hosts
-         SET department_id = ?, site_id = ?, office_id = ?, position_id = ?, user_id = ?, title = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
+         SET department_id = ?, site_id = ?, office_id = ?, zone_id = ?, position_id = ?, user_id = ?, title = ?, name = ?, email = ?, phone = ?, status = ?, availability = ?
          WHERE id = ?`,
-        [departmentId, siteId, placement.officeId, position.positionId, linkedUserId, title, name, email, phone, status, availability, hostId],
+        [departmentId, siteId, placement.officeId, zoneId, position.positionId, linkedUserId, title, name, email, phone, status, availability, hostId],
       );
 
       const [[row]] = await pool.query(
@@ -3746,13 +3835,15 @@ export function createOrgAdminRouter() {
                 ofc.name AS office_name,
                 s.name AS site_name,
                 o.name AS organisation_name,
-                p.name AS position_name
+                p.name AS position_name,
+                z.name AS zone_name
          FROM hosts h
          LEFT JOIN departments d ON d.id = h.department_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN sites s ON s.id = h.site_id
          LEFT JOIN organisations o ON o.id = h.organisation_id
          LEFT JOIN positions p ON p.id = h.position_id
+         LEFT JOIN zones z ON z.id = COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id)
          WHERE h.id = ?`,
         [hostId],
       );
@@ -3767,6 +3858,41 @@ export function createOrgAdminRouter() {
           portal_role_label: hostPortalRoleLabel(resolvedRole),
         },
       });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/hosts/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const hostId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM hosts WHERE id = ? LIMIT 1', [hostId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Host not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this host.' });
+      }
+
+      if (existing.user_id && existing.email) {
+        await syncHostPortalUser(pool, {
+          userId: existing.user_id,
+          name: existing.name,
+          email: existing.email,
+          phone: existing.phone,
+          organisationId: existing.organisation_id,
+          siteId: existing.site_id,
+          departmentId: existing.department_id,
+          officeId: existing.office_id,
+          active: false,
+          portalRole: 'host',
+        });
+      }
+
+      await pool.query('DELETE FROM hosts WHERE id = ?', [hostId]);
+      res.json({ ok: true, message: 'Host deleted.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

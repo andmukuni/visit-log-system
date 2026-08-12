@@ -205,7 +205,7 @@ export async function resolveHostZoneId(pool, hostId) {
   const id = String(hostId || '').trim();
   if (!id) return null;
   const [[row]] = await pool.query(
-    `SELECT ofc.zone_id
+    `SELECT COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id) AS zone_id
      FROM hosts h
      LEFT JOIN offices ofc ON ofc.id = h.office_id
      WHERE h.id = ?
@@ -224,6 +224,7 @@ export function visitZoneFilterClause(zoneIds, {
   hostOfficeAlias = 'ofc',
   visitOfficeAlias = 'vis_ofc',
   visitAlias = 'vis',
+  hostAlias = 'h',
 } = {}) {
   if (!Array.isArray(zoneIds) || !zoneIds.length) {
     return { sql: ' AND 1=0', params: [] };
@@ -235,26 +236,37 @@ export function visitZoneFilterClause(zoneIds, {
       ${visitAlias}.zone_id IN (${placeholders})
       OR ${hostOfficeAlias}.zone_id IN (${placeholders})
       OR ${visitOfficeAlias}.zone_id IN (${placeholders})
+      OR ${hostAlias}.zone_id IN (${placeholders})
     )`,
-    params: [...zoneIds, ...zoneIds, ...zoneIds],
+    params: [...zoneIds, ...zoneIds, ...zoneIds, ...zoneIds],
   };
 }
 
-/** Host list filter — host must have an office in one of the receptionist zones. */
-export function hostZoneFilterClause(zoneIds, officeAlias = 'ofc') {
+/** Host list filter — host office zone or explicit host.zone_id in receptionist zones. */
+export function hostZoneFilterClause(zoneIds, officeAlias = 'ofc', hostAlias = 'h') {
   if (!Array.isArray(zoneIds) || !zoneIds.length) {
     return { sql: ' AND 1=0', params: [] };
   }
   const placeholders = zoneIds.map(() => '?').join(', ');
   return {
-    sql: ` AND ${officeAlias}.zone_id IN (${placeholders})`,
-    params: [...zoneIds],
+    sql: ` AND (
+      ${officeAlias}.zone_id IN (${placeholders})
+      OR ${hostAlias}.zone_id IN (${placeholders})
+    )`,
+    params: [...zoneIds, ...zoneIds],
   };
 }
 
 /** Office list filter by zone. */
 export function officeZoneFilterClause(zoneIds, alias = 'ofc') {
-  return hostZoneFilterClause(zoneIds, alias);
+  if (!Array.isArray(zoneIds) || !zoneIds.length) {
+    return { sql: ' AND 1=0', params: [] };
+  }
+  const placeholders = zoneIds.map(() => '?').join(', ');
+  return {
+    sql: ` AND ${alias}.zone_id IN (${placeholders})`,
+    params: [...zoneIds],
+  };
 }
 
 export async function assertTargetInReceptionZones(pool, {
@@ -290,7 +302,7 @@ export async function assertTargetInReceptionZones(pool, {
 
   if (hostId) {
     const [[host]] = await pool.query(
-      `SELECT h.id, ofc.zone_id
+      `SELECT h.id, COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id) AS zone_id
        FROM hosts h
        LEFT JOIN offices ofc ON ofc.id = h.office_id
        WHERE h.id = ? AND h.organisation_id = ? AND h.status = 'active'

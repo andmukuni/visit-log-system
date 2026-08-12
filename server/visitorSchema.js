@@ -233,6 +233,26 @@ export async function ensureVisitorSchema() {
   `);
   await ensureColumn(pool, 'hosts', 'office_id', 'ADD COLUMN office_id VARCHAR(90) NULL');
   await ensureColumn(pool, 'hosts', 'site_id', 'ADD COLUMN site_id VARCHAR(90) NULL');
+  // Additive — links host to a reception zone (same zone as receptionist coverage).
+  await ensureColumn(pool, 'hosts', 'zone_id', 'ADD COLUMN zone_id VARCHAR(90) NULL');
+  try {
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_hosts_zone ON hosts (zone_id)');
+  } catch {
+    // Index may already exist under another name.
+  }
+  // Backfill zone from office when host has no explicit zone yet.
+  try {
+    await pool.query(`
+      UPDATE hosts h
+      INNER JOIN offices ofc ON ofc.id = h.office_id
+      SET h.zone_id = ofc.zone_id
+      WHERE (h.zone_id IS NULL OR h.zone_id = '')
+        AND ofc.zone_id IS NOT NULL
+        AND ofc.zone_id != ''
+    `);
+  } catch {
+    // Ignore if offices/zones not ready yet.
+  }
   // Additive only — existing host rows stay intact (NULL title until set).
   await ensureColumn(pool, 'hosts', 'title', 'ADD COLUMN title VARCHAR(40) NULL');
   // Additive only — optional job position from positions catalogue.

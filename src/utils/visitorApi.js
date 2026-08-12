@@ -283,6 +283,7 @@ export const visitorApi = {
   },
   createHost: (body) => apiFetch('/admin/org/hosts', { method: 'POST', body: JSON.stringify(body) }),
   updateHost: (id, body) => apiFetch(`/admin/org/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteHost: (id) => apiFetch(`/admin/org/hosts/${id}`, { method: 'DELETE' }),
   sendHostPasswordReset: async (id) => {
     const res = await fetch(`${API_BASE}/admin/org/hosts/${id}/send-password-reset`, {
       method: 'POST',

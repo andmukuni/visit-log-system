@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { DoorClosed, Eye, Network, Plus, Search, UserCheck } from 'lucide-react';
+import { DoorClosed, Edit3, Eye, Map, Plus, Search, Trash2, UserCheck } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
@@ -9,6 +9,7 @@ import {
   Modal,
   FormField,
   LoadingButton,
+  ConfirmDialog,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
@@ -20,6 +21,7 @@ import {
   activeSitesForOrg,
   hasStructurePrerequisites,
   resolveDefaultOrganisationId,
+  zonesForOrg,
 } from '../../utils/adminStructureDefaults';
 
 const TITLE_OPTIONS = [
@@ -49,6 +51,7 @@ const emptyForm = () => ({
   phone: '',
   departmentId: '',
   siteId: '',
+  zoneId: '',
   officeId: '',
   positionId: '',
   status: 'active',
@@ -62,6 +65,10 @@ function formatHostDisplayName(row) {
   const name = String(row?.name || '').trim();
   if (title && name) return `${title} ${name}`;
   return name || '—';
+}
+
+function resolveHostZoneId(row) {
+  return row?.zone_id || row?.office_zone_id || '';
 }
 
 export default function AdminHostsPage() {
@@ -85,13 +92,17 @@ export default function AdminHostsPage() {
   const [allRows, setAllRows] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [sites, setSites] = useState([]);
+  const [zones, setZones] = useState([]);
   const [offices, setOffices] = useState([]);
   const [positions, setPositions] = useState([]);
   const [kpis, setKpis] = useState({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -107,16 +118,18 @@ export default function AdminHostsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rows, deptRows, siteRows, officeRows, positionRows] = await Promise.all([
+      const [rows, deptRows, siteRows, zoneRows, officeRows, positionRows] = await Promise.all([
         visitorApi.getHosts(),
         visitorApi.getDepartments(),
         visitorApi.getSites(),
+        visitorApi.getZones(),
         visitorApi.getOffices(),
         visitorApi.getPositions(),
       ]);
       setAllRows(Array.isArray(rows) ? rows : []);
       setDepartments(Array.isArray(deptRows) ? deptRows : []);
       setSites(Array.isArray(siteRows) ? siteRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
       setOffices(Array.isArray(officeRows) ? officeRows : []);
       setPositions(Array.isArray(positionRows) ? positionRows : []);
       setKpis(rows?.stats || { total: rows?.length || 0 });
@@ -148,6 +161,7 @@ export default function AdminHostsPage() {
         row.organisation_name,
         row.department_name,
         row.site_name,
+        row.zone_name,
         row.office_number,
         row.portal_role_label,
         row.portal_role,
@@ -184,11 +198,20 @@ export default function AdminHostsPage() {
     [sites, form.organisationId],
   );
 
+  const zoneOptions = useMemo(() => {
+    const list = zonesForOrg(zones, form.organisationId, form.siteId);
+    return list.map((z) => ({
+      value: z.id,
+      label: z.building_name ? `${z.name} · ${z.building_name}` : z.name,
+    }));
+  }, [zones, form.organisationId, form.siteId]);
+
   const officeOptions = useMemo(() => {
     const list = offices.filter((ofc) => {
       if (form.organisationId && ofc.organisation_id && ofc.organisation_id !== form.organisationId) return false;
       if (form.departmentId && ofc.department_id !== form.departmentId) return false;
       if (form.siteId && ofc.site_id && ofc.site_id !== form.siteId) return false;
+      if (form.zoneId && ofc.zone_id && ofc.zone_id !== form.zoneId) return false;
       return ofc.status !== 'inactive';
     });
     return [
@@ -198,7 +221,7 @@ export default function AdminHostsPage() {
         label: `#${ofc.office_number}${ofc.name ? ` · ${ofc.name}` : ''}`,
       })),
     ];
-  }, [offices, form.organisationId, form.departmentId, form.siteId]);
+  }, [offices, form.organisationId, form.departmentId, form.siteId, form.zoneId]);
 
   const positionOptions = useMemo(() => {
     const list = positions.filter((p) => {
@@ -218,8 +241,10 @@ export default function AdminHostsPage() {
     orgOptions,
     sites,
     departments,
+    zones,
     preferredOrgId: selectedOrganisationId,
     requireDepartments: true,
+    requireZones: true,
   });
 
   const openCreate = () => {
@@ -235,8 +260,10 @@ export default function AdminHostsPage() {
       orgOptions,
       sites,
       departments,
+      zones,
       preferredOrgId: selectedOrganisationId,
       requireDepartments: true,
+      requireZones: true,
     });
     const deptForOrg = departments.filter((d) => d.organisation_id === defaultOrgId);
     const siteForOrg = activeSitesForOrg(sites, defaultOrgId);
@@ -248,11 +275,40 @@ export default function AdminHostsPage() {
       toast.error('Create a site/branch under an organisation first.');
       return;
     }
+    const zonesForSite = zonesForOrg(zones, defaultOrgId, siteForOrg[0].id);
+    if (!zonesForSite.length) {
+      toast.error('Create a zone first so this host can link to reception.');
+      return;
+    }
+    setEditing(null);
     setForm({
       ...emptyForm(),
       organisationId: defaultOrgId,
       departmentId: deptForOrg[0].id,
       siteId: siteForOrg[0].id,
+      zoneId: zonesForSite[0].id,
+    });
+    setModalOpen(true);
+  };
+
+  const openEdit = (row) => {
+    const office = offices.find((ofc) => ofc.id === row.office_id);
+    setEditing(row);
+    setForm({
+      organisationId: row.organisation_id || '',
+      title: row.title || '',
+      name: row.name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+      departmentId: row.department_id || '',
+      siteId: row.site_id || '',
+      zoneId: resolveHostZoneId(row) || office?.zone_id || '',
+      officeId: row.office_id || '',
+      positionId: row.position_id || '',
+      status: row.status || 'active',
+      availability: row.availability === 'unavailable' ? 'unavailable' : 'available',
+      portalRole: row.portal_role || 'host',
+      password: '',
     });
     setModalOpen(true);
   };
@@ -262,12 +318,16 @@ export default function AdminHostsPage() {
       toast.error('Host name is required.');
       return;
     }
-    if (!form.organisationId) {
+    if (!editing && !form.organisationId) {
       toast.error('Organisation is required.');
       return;
     }
     if (!form.departmentId || !form.siteId) {
       toast.error('Department and site are required.');
+      return;
+    }
+    if (!form.zoneId) {
+      toast.error('Zone is required so reception can match this host.');
       return;
     }
     if (form.password && !form.email.trim()) {
@@ -280,32 +340,53 @@ export default function AdminHostsPage() {
     }
     setSaving(true);
     try {
-      const created = await visitorApi.createHost({
+      const payload = {
         title: form.title || null,
         name: form.name,
         email: form.email,
         phone: form.phone,
         departmentId: form.departmentId,
         siteId: form.siteId,
+        zoneId: form.zoneId,
         officeId: form.officeId || null,
         positionId: form.positionId || null,
         status: form.status,
         availability: form.availability,
         portalRole: form.portalRole || 'host',
         password: form.password || undefined,
-        organisationId: form.organisationId,
-      });
-      toast.success('Host created.');
-      setModalOpen(false);
-      if (created?.id) {
-        navigate(`/admin/hosts/${created.id}`);
-        return;
+      };
+      if (editing?.id) {
+        await visitorApi.updateHost(editing.id, payload);
+        toast.success('Host updated.');
+      } else {
+        await visitorApi.createHost({
+          ...payload,
+          organisationId: form.organisationId,
+        });
+        toast.success('Host created.');
       }
+      setModalOpen(false);
+      setEditing(null);
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not save host.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    try {
+      await visitorApi.deleteHost(deleteTarget.id);
+      toast.success('Host deleted.');
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete host.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -333,6 +414,11 @@ export default function AdminHostsPage() {
     },
     { key: 'department_name', label: 'Department' },
     { key: 'site_name', label: 'Site / Branch' },
+    {
+      key: 'zone_name',
+      label: 'Zone',
+      render: (value) => value || '—',
+    },
     {
       key: 'office_number',
       label: 'Office',
@@ -373,15 +459,37 @@ export default function AdminHostsPage() {
       key: 'actions',
       label: '',
       render: (_, row) => (
-        <IconButton
-          icon={Eye}
-          label="View employee"
-          iconSize={16}
-          onClick={(e) => {
-            e.stopPropagation();
-            openHost(row);
-          }}
-        />
+        <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Eye}
+            label="View employee"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openHost(row);
+            }}
+          />
+          <IconButton
+            icon={Edit3}
+            label="Edit employee"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+          />
+          <IconButton
+            icon={Trash2}
+            label="Delete employee"
+            iconSize={16}
+            variant="ghost"
+            className="text-rose-600 hover:bg-rose-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row);
+            }}
+          />
+        </div>
       ),
     },
   ], [openHost]);
@@ -390,7 +498,7 @@ export default function AdminHostsPage() {
     <div className="flex flex-col gap-2.5 sm:gap-3">
       <PageHeader
         title="Hosts"
-        subtitle="Organisation → Department + Site → Employee. Manage Available / Not available for reception."
+        subtitle="Organisation → Department + Site + Zone → Employee. Same zone links receptionists and hosts."
         breadcrumbs={[{ label: 'Admin', to: '/admin' }, { label: 'Hosts' }]}
         actions={(
           <button
@@ -414,8 +522,8 @@ export default function AdminHostsPage() {
         {[
           { key: 'total', label: 'Employees', icon: UserCheck },
           { key: 'active', label: 'Active', icon: UserCheck },
+          { key: 'with_zone', label: 'With zone', icon: Map },
           { key: 'with_office', label: 'With office', icon: DoorClosed },
-          { key: 'departments', label: 'Departments', icon: Network },
         ].map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-500">
@@ -437,7 +545,7 @@ export default function AdminHostsPage() {
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search name, email, department, site..."
+              placeholder="Search name, email, zone, department, site..."
               className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
             />
           </label>
@@ -455,7 +563,9 @@ export default function AdminHostsPage() {
                 ? 'Create a Department first, then assign employees to department + site.'
                 : !sites.some((s) => s.status !== 'inactive')
                   ? 'Create a Site / Branch first, then assign employees.'
-                  : 'Add an employee under an organisation, department and site.'
+                  : !zones.length
+                    ? 'Create a Zone first so hosts can link to reception coverage.'
+                    : 'Add an employee under an organisation, department, site and zone.'
           }
           onRowClick={openHost}
           serverPagination
@@ -472,8 +582,8 @@ export default function AdminHostsPage() {
       <Modal
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
-        title="New Host"
-        subtitle="Organisation → Host → Department + Site (+ optional Office)"
+        title={editing ? 'Edit Host' : 'New Host'}
+        subtitle="Organisation → Department + Site + Zone → Host (+ optional Office)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -481,7 +591,7 @@ export default function AdminHostsPage() {
               Cancel
             </button>
             <LoadingButton loading={saving} onClick={handleSave}>
-              Create host
+              {editing ? 'Save changes' : 'Create host'}
             </LoadingButton>
           </div>
         )}
@@ -493,21 +603,25 @@ export default function AdminHostsPage() {
             type="select"
             required
             value={form.organisationId}
+            disabled={Boolean(editing)}
             onChange={(e) => {
               const organisationId = e.target.value;
               const deptForOrg = departments.filter((d) => d.organisation_id === organisationId);
               const siteForOrg = sites.filter((s) => s.status !== 'inactive' && s.organisation_id === organisationId);
+              const nextSiteId = siteForOrg[0]?.id || '';
+              const nextZones = zonesForOrg(zones, organisationId, nextSiteId);
               setForm((prev) => ({
                 ...prev,
                 organisationId,
                 departmentId: deptForOrg[0]?.id || '',
-                siteId: siteForOrg[0]?.id || '',
+                siteId: nextSiteId,
+                zoneId: nextZones[0]?.id || '',
                 officeId: '',
                 positionId: '',
               }));
             }}
             options={orgOptions}
-            helpText="Required. Host belongs to this organisation."
+            helpText={editing ? 'Organisation cannot be changed after create.' : 'Required. Host belongs to this organisation.'}
           />
           <FormField
             label="Title"
@@ -566,17 +680,44 @@ export default function AdminHostsPage() {
             type="select"
             required
             value={form.siteId}
-            onChange={(e) => setForm((prev) => ({ ...prev, siteId: e.target.value, officeId: '' }))}
+            onChange={(e) => {
+              const siteId = e.target.value;
+              const nextZones = zonesForOrg(zones, form.organisationId, siteId);
+              setForm((prev) => ({
+                ...prev,
+                siteId,
+                zoneId: nextZones.some((z) => z.id === prev.zoneId) ? prev.zoneId : (nextZones[0]?.id || ''),
+                officeId: '',
+              }));
+            }}
             options={siteOptions}
+          />
+          <FormField
+            label="Zone"
+            name="zoneId"
+            type="select"
+            required
+            value={form.zoneId}
+            onChange={(e) => setForm((prev) => ({ ...prev, zoneId: e.target.value, officeId: '' }))}
+            options={zoneOptions}
+            helpText="Links this host to receptionists covering the same zone."
           />
           <FormField
             label="Office"
             name="officeId"
             type="select"
             value={form.officeId}
-            onChange={(e) => setForm((prev) => ({ ...prev, officeId: e.target.value }))}
+            onChange={(e) => {
+              const officeId = e.target.value;
+              const office = offices.find((ofc) => ofc.id === officeId);
+              setForm((prev) => ({
+                ...prev,
+                officeId,
+                zoneId: office?.zone_id || prev.zoneId,
+              }));
+            }}
             options={officeOptions}
-            helpText="Optional. Must match the selected department and site."
+            helpText="Optional. Offices are filtered to the selected zone."
           />
           <FormField
             label="Status"
@@ -611,16 +752,35 @@ export default function AdminHostsPage() {
             helpText="CEO and Deputy CEO see Executive Calendar; General Employee sees Calendar."
           />
           <FormField
-            label="Temporary password"
+            label={editing ? 'Reset password' : 'Temporary password'}
             name="password"
             type="password"
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder="Optional"
-            helpText="Optional. Creates Host portal login when email is set. Prefer sending a password reset from the host details page."
+            placeholder={editing ? 'Leave blank to keep current' : 'Optional'}
+            helpText={
+              editing
+                ? 'Leave blank to keep the current password.'
+                : 'Optional. Creates Host portal login when email is set.'
+            }
           />
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Delete host?"
+        message={
+          deleteTarget
+            ? `Remove ${formatHostDisplayName(deleteTarget)} and revoke Host portal access.`
+            : 'Are you sure you want to proceed?'
+        }
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
