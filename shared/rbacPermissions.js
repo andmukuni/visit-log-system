@@ -147,13 +147,29 @@ export const EXECUTIVE_PORTAL_KEYS = [
   'host.notifications',
 ];
 
-/** Calendar + scheduling access for employees on the merged host portal. */
+/**
+ * Calendar + scheduling access for employees on the merged host portal.
+ * Includes `executive.contacts` so an employee can keep their own contact
+ * list; it never exposes another host's visitors. Deliberately excludes
+ * `executive.full_contact` and `executive.assign_vip` — VIP contact detail and
+ * VIP classification stay with the executive roles.
+ */
 export const EMPLOYEE_CALENDAR_KEYS = [
   'executive.dashboard',
   'executive.calendar',
   'executive.appointments',
   'executive.visits',
+  'executive.contacts',
 ];
+
+/**
+ * Executive assistants act on the principal's behalf: full calendar,
+ * appointments and VIP contact detail so they can coordinate visits — but NOT
+ * `executive.assign_vip`. Classifying a visitor as VIP/VVIP is a policy
+ * decision reserved for the executive themselves.
+ */
+export const EXECUTIVE_SECRETARY_KEYS = EXECUTIVE_PORTAL_KEYS
+  .filter((key) => key !== 'executive.assign_vip');
 
 const EXECUTIVE_KEYS = EXECUTIVE_PERMISSIONS.map((p) => p.key);
 
@@ -223,10 +239,14 @@ export const DEFAULT_ADMIN_ROLES = [
   },
   {
     slug: 'receptionist',
-    name: 'Receptionist / Guard',
-    description: 'Daily visitor and vehicle processing at assigned station.',
+    name: 'Receptionist',
+    description: 'Reception desk check-in, visitor passes and host queue for the assigned zone.',
     is_system: true,
-    permissions: STATION_KEYS,
+    // Previously carried STATION_KEYS — byte-identical to gate_security — while
+    // still being a reception-lock role, so holders were locked to /reception
+    // with zero reception permissions and an empty portal. Reception desks are
+    // differentiated by assigned ZONE, not by permission set.
+    permissions: RECEPTION_KEYS,
   },
   {
     slug: 'host',
@@ -288,16 +308,16 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: 'ceo_secretary',
     name: 'CEO Secretary',
-    description: 'Manage CEO calendar and VIP/VVIP appointments.',
+    description: 'Manage the CEO calendar and VIP/VVIP appointments (cannot assign VIP status).',
     is_system: true,
-    permissions: [...HOST_KEYS, ...EXECUTIVE_KEYS],
+    permissions: [...new Set([...HOST_KEYS, ...EXECUTIVE_SECRETARY_KEYS])],
   },
   {
     slug: 'dceo_secretary',
     name: 'DCEO Secretary',
-    description: 'Manage DCEO calendar and VIP/VVIP appointments.',
+    description: 'Manage the DCEO calendar and VIP/VVIP appointments (cannot assign VIP status).',
     is_system: true,
-    permissions: [...HOST_KEYS, ...EXECUTIVE_KEYS],
+    permissions: [...new Set([...HOST_KEYS, ...EXECUTIVE_SECRETARY_KEYS])],
   },
   {
     slug: 'ceo',
