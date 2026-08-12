@@ -13,6 +13,7 @@ import {
   isExecutiveOnlyUser,
   isHostOnlyUser,
   isHostPortalPath,
+  isPortalLockExemptPath,
   isReceptionOnlyUser,
   isReceptionPortalPath,
   resolveDefaultHomeRoute,
@@ -136,6 +137,8 @@ describe('portal login routing', () => {
   });
 
   it('locks reception-only users out of every non-reception route', () => {
+    const mixedReceptionHost = [...receptionPerms, 'host.dashboard', 'host.invite'];
+
     assert.equal(isReceptionPortalPath('/reception'), true);
     assert.equal(isReceptionPortalPath('/reception/calendar'), true);
     assert.equal(isReceptionPortalPath('/host'), false);
@@ -150,6 +153,14 @@ describe('portal login routing', () => {
 
     assert.equal(resolveLoginRedirect('/host', executiveReceptionPerms), '/reception/calendar');
     assert.equal(resolveLoginRedirect('/admin/receptionists', executiveReceptionPerms), '/reception/calendar');
+
+    // Host perms must not let a receptionist escape the reception portal.
+    assert.equal(isReceptionOnlyUser(mixedReceptionHost), true);
+    assert.equal(canAccessPortal('host', hasPermissionFactory(mixedReceptionHost), mixedReceptionHost), false);
+    assert.equal(resolveLoginRedirect('/host/appointments', mixedReceptionHost), '/reception/calendar');
+    assert.equal(isPortalLockExemptPath('/login'), true);
+    assert.equal(isPortalLockExemptPath('/host'), false);
+    assert.equal(isPortalLockExemptPath('/reception/calendar'), false);
   });
 
   it('locks host-only users out of every non-host route', () => {

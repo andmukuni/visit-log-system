@@ -1,4 +1,4 @@
-import { Suspense, lazy, Component, useEffect } from 'react';
+import { Suspense, lazy, Component } from 'react';
 import { Outlet, createBrowserRouter, Navigate, useLocation, useNavigate, useNavigation, useParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -12,6 +12,7 @@ import {
   isExecutiveOnlyUser,
   isHostOnlyUser,
   isHostPortalPath,
+  isPortalLockExemptPath,
   isReceptionOnlyUser,
   isReceptionPortalPath,
   resolveDefaultHomeRoute,
@@ -275,25 +276,30 @@ function AppRoot() {
     permissions,
   } = useAuth();
 
-  useEffect(() => {
-    if (!permissions?.length) return;
-    if (
-      (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions))
-      && !isHostPortalPath(location.pathname)
-    ) {
-      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
-      return;
-    }
-    if (isReceptionOnlyUser(permissions) && !isReceptionPortalPath(location.pathname)) {
-      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
-    }
-  }, [permissions, location.pathname, navigate]);
+  const homeRoute = permissions?.length ? resolveDefaultHomeRoute(permissions) : null;
+  const exemptPath = isPortalLockExemptPath(location.pathname);
+  const lockToReception = Boolean(
+    permissions?.length
+    && isReceptionOnlyUser(permissions)
+    && !isReceptionPortalPath(location.pathname)
+    && !exemptPath,
+  );
+  const lockToHost = Boolean(
+    permissions?.length
+    && (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions))
+    && !isHostPortalPath(location.pathname)
+    && !exemptPath,
+  );
 
   const openAdminLogin = () => {
     dismissIdleLogoutPrompt();
     purgeInvalidAuthState();
     navigate('/login', { state: { from: { pathname: location.pathname } } });
   };
+
+  if (lockToReception || lockToHost) {
+    return <Navigate to={homeRoute} replace />;
+  }
 
   return (
     <>

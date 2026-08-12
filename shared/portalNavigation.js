@@ -215,15 +215,26 @@ export function isExecutiveOnlyUser(permissions = []) {
     && !has('security.dashboard');
 }
 
-/** Reception desk users — cannot switch into host or other portals. */
+/** Reception desk users — cannot visit host/admin/other portals (even if host perms were granted by mistake). */
 export function isReceptionOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
   return has('reception.dashboard')
-    && !has('host.dashboard')
     && !has('admin.dashboard')
     && !has('management.dashboard')
     && !has('security.dashboard')
     && !has('platform.dashboard');
+}
+
+/** Public auth / self-service paths that portal locks must not trap. */
+export function isPortalLockExemptPath(pathname = '') {
+  const path = String(pathname || '');
+  return path === '/'
+    || path === '/login'
+    || path.startsWith('/admin/login')
+    || path.startsWith('/reset-password')
+    || path.startsWith('/visit/invite')
+    || path === '/kiosk'
+    || path.startsWith('/kiosk/');
 }
 
 /** Host / employee calendar users — cannot switch into reception. */
