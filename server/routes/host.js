@@ -393,15 +393,26 @@ export function createHostRouter() {
         idType: idType || 'nrc',
         idNumber: nrc,
         confidentialNotes,
+        actorUserId: userId,
+        organisationId: ctx.scope.organisation_id,
       });
 
       // Host-created visits that skip approval are already confirmed expected arrivals.
       const alreadyConfirmed = status === 'expected' || status === 'approved';
+      // Fail-safe: a host with no resolvable zone must never block appointment
+      // creation — the visit proceeds with zone_id NULL, which the access
+      // policy treats as "restricted for every receptionist," never as
+      // "unscoped = visible to all." Record a config warning for admins.
       const visitZoneId = await resolveHostZoneId(pool, ctx.host.id);
       if (!visitZoneId) {
-        return res.status(400).json({
-          ok: false,
-          message: 'Your host profile has no zone assigned. Contact your administrator before inviting visitors.',
+        await writeAuditLog(pool, {
+          organisationId: ctx.scope.organisation_id,
+          actorUserId: userId,
+          action: 'host.zone_missing',
+          targetType: 'host',
+          targetId: ctx.host.id,
+          result: 'warning',
+          details: { visitId, hostId: ctx.host.id },
         });
       }
 
@@ -529,11 +540,18 @@ export function createHostRouter() {
         [visit.visitor_id],
       );
 
+      // Fail-safe: missing zone never blocks approval — proceed with zone_id
+      // NULL (restricted-for-everyone downstream) and log a config warning.
       const approveZoneId = await resolveHostZoneId(pool, ctx.host.id);
       if (!approveZoneId) {
-        return res.status(400).json({
-          ok: false,
-          message: 'Your host profile has no zone assigned. Contact your administrator.',
+        await writeAuditLog(pool, {
+          organisationId: ctx.scope.organisation_id,
+          actorUserId: userId,
+          action: 'host.zone_missing',
+          targetType: 'host',
+          targetId: ctx.host.id,
+          result: 'warning',
+          details: { visitId, hostId: ctx.host.id },
         });
       }
       await pool.query(

@@ -27,6 +27,7 @@ function mapCalendarRow(row) {
     pass_code: row.pass_code,
     expected_plates: row.expected_plates,
     duration_minutes: row.duration_minutes || 60,
+    _accessLevel: row._accessLevel,
   };
 }
 

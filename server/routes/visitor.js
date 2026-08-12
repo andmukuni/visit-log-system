@@ -8,7 +8,11 @@ import {
   loadVisitScoped,
   canTransition,
   isSuperAdmin,
+  hostVisitFilter,
 } from '../scopeService.js';
+import { resolveViewerAccessContext, applyVisitAccessPolicyToRows } from '../visitorAccessPolicy.js';
+import { visitZoneMatchExpr } from '../receptionistService.js';
+import { visitSecurityScopeFilterClause } from '../securityGuardService.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
 import { GATE_CHECKOUT_ELIGIBLE_STATUSES, isGateCheckoutEligible } from '../../shared/visitCheckout.js';
 import { findWatchlistMatches } from '../watchlistService.js';
@@ -40,11 +44,15 @@ import {
 import { loadReceptionistRow, syncReceptionistPortalUser, parseReceptionistZoneIds, validateReceptionistZones, syncReceptionistZones, attachReceptionistZones, loadReceptionistZones } from '../receptionistService.js';
 import { loadSecurityGuardRow, syncSecurityGuardPortalUser } from '../securityGuardService.js';
 import {
+  attachHostZones,
   hostPortalRoleLabel,
   normalizeHostPortalRole,
+  parseHostZoneIds,
   resolveHostPortalRole,
   sendHostPasswordResetEmail,
   syncHostPortalUser,
+  syncHostZones,
+  validateHostZones,
 } from '../hostPortalService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
 
@@ -482,7 +490,7 @@ export function createStationRouter() {
         );
       }
 
-      await upsertVisitorContactDetails(pool, visitorId, { idType, idNumber });
+      await upsertVisitorContactDetails(pool, visitorId, { idType, idNumber, actorUserId: userId, organisationId });
 
       const visitId = generateId('visit');
       const passCode = generatePassCode();
@@ -781,6 +789,55 @@ export function createStationRouter() {
   return router;
 }
 
+/**
+ * Multi-role dispatch for the shared /admin/visits endpoints (reachable via
+ * host.visitors, reception.visitors.view, security.visitors, admin.visitors,
+ * executive.visits — see resolveVisitRoutePermissions). Closes the ownership
+ * gap where a plain host-role user could see every host's visitors here:
+ * elevated/admin get org+site scope unchanged; a receptionist gets the same
+ * visible-but-restricted zone-match treatment as reception.js; a security
+ * officer gets their hard site/building/gate scope; a host-only caller is
+ * restricted to hostVisitFilter (their own visits only).
+ */
+async function resolveVisitsRouterAccess(req) {
+  const userId = req.adminClaims?.sub;
+  const viewer = await resolveViewerAccessContext(pool, { userId, claims: req.adminClaims || {} });
+
+  if (viewer.isElevated) {
+    return { viewer, mode: 'elevated', extraSql: '', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
+  }
+  if (viewer.receptionContext) {
+    const { sql, params } = visitZoneMatchExpr(viewer.receptionContext.zoneIds);
+    return { viewer, mode: 'reception', extraSql: '', extraParams: [], zoneMatchSql: sql, zoneMatchParams: params };
+  }
+  if (viewer.securityContext) {
+    const { sql, params } = visitSecurityScopeFilterClause(viewer.securityContext);
+    return { viewer, mode: 'security', extraSql: sql, extraParams: params, zoneMatchSql: null, zoneMatchParams: [] };
+  }
+  if (viewer.hostContext) {
+    return {
+      viewer,
+      mode: 'host',
+      extraSql: ` AND ${hostVisitFilter('vis')}`,
+      extraParams: [viewer.hostContext.hostId, viewer.hostContext.userId],
+      zoneMatchSql: null,
+      zoneMatchParams: [],
+    };
+  }
+  // No applicable relationship — deny by default.
+  return { viewer, mode: 'denied', extraSql: ' AND 1=0', extraParams: [], zoneMatchSql: null, zoneMatchParams: [] };
+}
+
+function shapeVisitsRouterRows(rows, access) {
+  if (access.mode === 'reception') {
+    return applyVisitAccessPolicyToRows(rows, access.viewer, { zoneMatchColumn: 'zone_match' });
+  }
+  if (access.mode === 'security') {
+    return applyVisitAccessPolicyToRows(rows, access.viewer, { securityMatches: true });
+  }
+  return applyVisitListMasking(rows, access.viewer.permissions || []);
+}
+
 export function createVisitsRouter() {
   const router = express.Router();
 
@@ -792,6 +849,7 @@ export function createVisitsRouter() {
         return res.json({ ok: true, data: [] });
       }
 
+      const access = await resolveVisitsRouterAccess(req);
       const { status, search, date } = req.query;
       const params = [scope.organisation_id];
       let where = 'vis.organisation_id = ?';
@@ -813,18 +871,21 @@ export function createVisitsRouter() {
         const q = `%${search}%`;
         params.push(q, q, q, q, q);
       }
+      where += access.extraSql;
+      params.push(...access.extraParams);
+
+      const zoneMatchSelect = access.zoneMatchSql ? `, ${access.zoneMatchSql} AS zone_match` : '';
 
       const [rows] = await pool.query(
-        `SELECT ${VISIT_SELECT_FIELDS}
+        `SELECT ${VISIT_SELECT_FIELDS}${zoneMatchSelect}
          FROM visits vis ${VISIT_JOINS}
          WHERE ${where}
          ORDER BY vis.created_at DESC
          LIMIT 200`,
-        params,
+        [...params, ...access.zoneMatchParams],
       );
 
-      const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      res.json({ ok: true, data: shapeVisitsRouterRows(rows, access) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -838,6 +899,7 @@ export function createVisitsRouter() {
         return res.json({ ok: true, data: [] });
       }
 
+      const access = await resolveVisitsRouterAccess(req);
       const range = String(req.query.range || 'week').toLowerCase();
       const params = [scope.organisation_id];
       let where = `vis.organisation_id = ?
@@ -856,6 +918,10 @@ export function createVisitsRouter() {
         where += ` AND ${arrivalAt} >= CURDATE()
           AND ${arrivalAt} < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
       }
+      where += access.extraSql;
+      params.push(...access.extraParams);
+
+      const zoneMatchSelect = access.zoneMatchSql ? `, ${access.zoneMatchSql} AS zone_match` : '';
 
       const [rows] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS},
@@ -863,17 +929,16 @@ export function createVisitsRouter() {
                 a.scheduled_at AS appointment_scheduled_at,
                 (SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
                  FROM expected_vehicles ev
-                 WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates
+                 WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates${zoneMatchSelect}
          FROM visits vis ${VISIT_JOINS}
          LEFT JOIN appointments a ON a.visit_id = vis.id
          WHERE ${where}
          ORDER BY ${arrivalAt} ASC
          LIMIT 200`,
-        params,
+        [...params, ...access.zoneMatchParams],
       );
 
-      const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      res.json({ ok: true, data: shapeVisitsRouterRows(rows, access) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -887,6 +952,7 @@ export function createVisitsRouter() {
         return res.json({ ok: true, data: [] });
       }
 
+      const access = await resolveVisitsRouterAccess(req);
       const visitType = String(req.query.type || 'walk-in').toLowerCase();
       const statusPlaceholders = CHECK_IN_ELIGIBLE_STATUSES.map(() => '?').join(', ');
       const params = [scope.organisation_id, ...CHECK_IN_ELIGIBLE_STATUSES];
@@ -902,21 +968,23 @@ export function createVisitsRouter() {
       } else if (visitType === 'vehicle') {
         typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
       }
+      typeFilter += access.extraSql;
+
+      const zoneMatchSelect = access.zoneMatchSql ? `, ${access.zoneMatchSql} AS zone_match` : '';
 
       const [rows] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS},
                 (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
-                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers${zoneMatchSelect}
          FROM visits vis ${VISIT_JOINS}
          WHERE vis.organisation_id = ?
            AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
          ORDER BY vis.created_at DESC
          LIMIT 50`,
-        params,
+        [...params, ...access.extraParams, ...access.zoneMatchParams],
       );
 
-      const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      res.json({ ok: true, data: shapeVisitsRouterRows(rows, access) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -930,6 +998,7 @@ export function createVisitsRouter() {
         return res.json({ ok: true, data: [] });
       }
 
+      const access = await resolveVisitsRouterAccess(req);
       const visitType = String(req.query.type || 'walk-in').toLowerCase();
       const statusPlaceholders = GATE_CHECKOUT_ELIGIBLE_STATUSES.map(() => '?').join(', ');
       const params = [scope.organisation_id, ...GATE_CHECKOUT_ELIGIBLE_STATUSES];
@@ -945,21 +1014,23 @@ export function createVisitsRouter() {
       } else if (visitType === 'vehicle') {
         typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
       }
+      typeFilter += access.extraSql;
+
+      const zoneMatchSelect = access.zoneMatchSql ? `, ${access.zoneMatchSql} AS zone_match` : '';
 
       const [rows] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS},
                 (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
-                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers${zoneMatchSelect}
          FROM visits vis ${VISIT_JOINS}
          WHERE vis.organisation_id = ?
            AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
          ORDER BY COALESCE(vis.checked_in_at, vis.created_at) DESC
          LIMIT 100`,
-        params,
+        [...params, ...access.extraParams, ...access.zoneMatchParams],
       );
 
-      const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      res.json({ ok: true, data: shapeVisitsRouterRows(rows, access) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1033,6 +1104,8 @@ export function createVisitsRouter() {
         idType,
         idNumber,
         confidentialNotes,
+        actorUserId: userId,
+        organisationId: scope.organisation_id,
       });
 
       let initialStatus = 'pending_approval';
@@ -3014,6 +3087,87 @@ export function createOrgAdminRouter() {
     }
   });
 
+  // Configurable role→zone fallback mapping (Logic.md: "CEO → CEO - Reception" etc.),
+  // used only when a host has no explicit zone/office zone assigned.
+  const HOST_ROLE_ZONE_DEFAULT_SLUGS = ['ceo', 'dceo', 'host'];
+
+  router.get('/host-role-zone-defaults', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      if (!orgId) {
+        return res.status(400).json({ ok: false, message: 'Organisation is required.' });
+      }
+      const [rows] = await pool.query(
+        `SELECT d.organisation_id, d.role_slug, d.zone_id, z.name AS zone_name,
+                b.name AS building_name
+         FROM host_role_zone_defaults d
+         LEFT JOIN zones z ON z.id = d.zone_id
+         LEFT JOIN buildings b ON b.id = z.building_id
+         WHERE d.organisation_id = ?
+         ORDER BY d.role_slug`,
+        [orgId],
+      );
+      res.json({ ok: true, data: rows, roleSlugs: HOST_ROLE_ZONE_DEFAULT_SLUGS });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.put('/host-role-zone-defaults/:roleSlug', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      if (!orgId) {
+        return res.status(400).json({ ok: false, message: 'Organisation is required.' });
+      }
+      const roleSlug = normalizeHostPortalRole(req.params.roleSlug);
+      if (!HOST_ROLE_ZONE_DEFAULT_SLUGS.includes(roleSlug)) {
+        return res.status(400).json({ ok: false, message: 'Unknown host portal role.' });
+      }
+      const zoneId = String(req.body?.zoneId || req.body?.zone_id || '').trim();
+      if (!zoneId) {
+        return res.status(400).json({ ok: false, message: 'zoneId is required.' });
+      }
+      const zone = await loadZoneInOrg(pool, zoneId, orgId);
+      if (!zone) {
+        return res.status(400).json({ ok: false, message: 'Zone was not found in this organisation.' });
+      }
+
+      await pool.query(
+        `INSERT INTO host_role_zone_defaults (organisation_id, role_slug, zone_id)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE zone_id = VALUES(zone_id)`,
+        [orgId, roleSlug, zoneId],
+      );
+
+      res.json({ ok: true, data: { organisationId: orgId, roleSlug, zoneId } });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/host-role-zone-defaults/:roleSlug', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      if (!orgId) {
+        return res.status(400).json({ ok: false, message: 'Organisation is required.' });
+      }
+      const roleSlug = normalizeHostPortalRole(req.params.roleSlug);
+      await pool.query(
+        'DELETE FROM host_role_zone_defaults WHERE organisation_id = ? AND role_slug = ?',
+        [orgId, roleSlug],
+      );
+      res.json({ ok: true, message: 'Default mapping removed.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/departments', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -3617,7 +3771,7 @@ export function createOrgAdminRouter() {
         ? await pool.query(`${hostSelect} WHERE h.organisation_id = ? ORDER BY h.name`, [orgId])
         : await pool.query(`${hostSelect} ORDER BY o.name, h.name`);
 
-      const rows = rawRows.map((row) => {
+      const withRoles = rawRows.map((row) => {
         const portalRole = normalizeHostPortalRole(row.portal_role || 'host');
         return {
           ...row,
@@ -3625,6 +3779,7 @@ export function createOrgAdminRouter() {
           portal_role_label: hostPortalRoleLabel(portalRole),
         };
       });
+      const rows = await attachHostZones(pool, withRoles);
 
       const stats = {
         total: rows.length,
@@ -3692,13 +3847,14 @@ export function createOrgAdminRouter() {
       }
 
       const portalRole = normalizeHostPortalRole(raw.portal_role || 'host');
+      const [withZones] = await attachHostZones(pool, [{
+        ...raw,
+        portal_role: portalRole,
+        portal_role_label: hostPortalRoleLabel(portalRole),
+      }]);
       res.json({
         ok: true,
-        data: {
-          ...raw,
-          portal_role: portalRole,
-          portal_role_label: hostPortalRoleLabel(portalRole),
-        },
+        data: withZones,
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -3837,6 +3993,16 @@ export function createOrgAdminRouter() {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, orgId, departmentId, siteId, placement.officeId, zoneId, position.positionId, linkedUserId, title, name, email, phone, status, availability],
       );
+
+      // Optional multi-zone assignment (host_zones) — additive, on top of the
+      // required single zoneId above. Falls back to [zoneId] so host_zones
+      // always stays in sync even when the caller only ever sends zoneId.
+      const requestedZoneIds = parseHostZoneIds(req.body, [zoneId]);
+      const zonesValidation = await validateHostZones(pool, requestedZoneIds, orgId, siteId);
+      if (!zonesValidation.ok) {
+        return res.status(zonesValidation.status).json({ ok: false, message: zonesValidation.message });
+      }
+      await syncHostZones(pool, id, zonesValidation.zoneIds.length ? zonesValidation.zoneIds : [zoneId]);
 
       const [[row]] = await pool.query(
         `SELECT h.*,
@@ -4018,6 +4184,13 @@ export function createOrgAdminRouter() {
          WHERE id = ?`,
         [departmentId, siteId, placement.officeId, zoneId, position.positionId, linkedUserId, title, name, email, phone, status, availability, hostId],
       );
+
+      const requestedZoneIds = parseHostZoneIds(req.body, [zoneId]);
+      const zonesValidation = await validateHostZones(pool, requestedZoneIds, existing.organisation_id, siteId);
+      if (!zonesValidation.ok) {
+        return res.status(zonesValidation.status).json({ ok: false, message: zonesValidation.message });
+      }
+      await syncHostZones(pool, hostId, zonesValidation.zoneIds.length ? zonesValidation.zoneIds : [zoneId]);
 
       const [[row]] = await pool.query(
         `SELECT h.*,

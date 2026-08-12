@@ -138,6 +138,11 @@ const REFRESH_TEMPLATE_KEYS = new Set([
   'visit.visitor_reminder',
   'visit.host_approved',
   'visit.host_rejected',
+  'visit.reception_new_expected',
+  'visit.reception_new_expected_restricted',
+  'visit.arrived_at_gate_restricted',
+  'visit.entered_premises_restricted',
+  'visit.pre_arrival_alert_restricted',
 ]);
 
 const DEFAULT_TEMPLATES = [
@@ -294,6 +299,43 @@ const DEFAULT_TEMPLATES = [
     inApp: 'Your visit was rescheduled.',
     email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} was rescheduled to {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
     sms: `${SMS_SENDER_PREFIX}: Visit rescheduled to {{expected_at}}. Code {{pass_code}}.`,
+  },
+  // Zone-based access control (Logic.md) — same-zone reception gets the full
+  // picture; different-zone reception gets name + time only, nothing else.
+  {
+    key: 'visit.reception_new_expected',
+    subject: 'New expected visitor',
+    inApp: '{{visitor_name}} is expected for {{host_name}} at {{expected_at}}.',
+    email: `Hello,\n\n{{visitor_name}} ({{company}}) is expected for {{host_name}} at {{expected_at}}.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected for {{host_name}} at {{expected_at}}. Code {{pass_code}}.`,
+  },
+  {
+    key: 'visit.reception_new_expected_restricted',
+    subject: 'New expected visitor',
+    inApp: '{{visitor_name}} — expected {{expected_at}}.',
+    email: `A visitor is expected in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+  },
+  {
+    key: 'visit.arrived_at_gate_restricted',
+    subject: 'Visitor at gate',
+    inApp: '{{visitor_name}} — expected {{expected_at}}.',
+    email: `A visitor has arrived at the gate in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+  },
+  {
+    key: 'visit.entered_premises_restricted',
+    subject: 'Visitor on premises',
+    inApp: '{{visitor_name}} — expected {{expected_at}}.',
+    email: `A visitor has entered the premises in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+  },
+  {
+    key: 'visit.pre_arrival_alert_restricted',
+    subject: 'Expected arrival in 1 hour',
+    inApp: '{{visitor_name}} — expected {{expected_at}}.',
+    email: `A visitor is expected soon in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
+    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
   },
 ];
 

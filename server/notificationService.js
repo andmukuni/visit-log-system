@@ -5,20 +5,13 @@ import { sendSms } from './adapters/smsAdapter.js';
 import { getAppBaseUrl, getDeliveryConfig } from './adapters/deliveryConfig.js';
 import { getNotificationSettings } from './services/adminSettingsService.js';
 import { categoryKeyForEvent } from '../shared/notificationCategories.js';
+import { resolveReceptionAudienceByZone } from './receptionistService.js';
+import { resolveSecurityAudienceForVisit } from './securityGuardService.js';
 
-const GATE_RECEPTION_ROLE_SLUGS = [
-  'gate_security',
-  'main_reception',
-  'executive_reception',
-  'receptionist',
-];
-
-const GATE_ROLE_SLUGS = ['gate_security'];
-const RECEPTION_ROLE_SLUGS = [
-  'main_reception',
-  'executive_reception',
-  'receptionist',
-];
+/** Different-zone reception audiences only ever get {visitor_name, expected_at}. */
+function buildRestrictedReceptionVars(vars) {
+  return { visitor_name: vars.visitor_name, expected_at: vars.expected_at };
+}
 
 function formatExpectedAt(value) {
   if (!value) return '';
@@ -326,39 +319,21 @@ async function resolveHostUserId(pool, hostId) {
   return host?.user_id || null;
 }
 
-async function resolveStaffUsers(pool, { organisationId, siteId = null, roleSlugs = GATE_RECEPTION_ROLE_SLUGS }) {
-  const rolePlaceholders = roleSlugs.map(() => '?').join(', ');
-  const params = [...roleSlugs, organisationId];
-  let siteClause = '';
-  if (siteId) {
-    siteClause = ' AND (us.site_id IS NULL OR us.site_id = ?)';
-    params.push(siteId);
-  }
-
-  const [rows] = await pool.query(
-    `SELECT DISTINCT u.id, u.email, u.phone, u.name
-     FROM users u
-     INNER JOIN user_admin_roles uar ON uar.user_id = u.id
-     INNER JOIN admin_roles ar ON ar.id = uar.role_id
-     INNER JOIN user_scopes us ON us.user_id = u.id
-     WHERE ar.slug IN (${rolePlaceholders})
-       AND us.organisation_id = ?
-       ${siteClause}`,
-    params,
-  );
-  return rows;
-}
-
-async function resolveGateAndReceptionUsers(pool, { organisationId, siteId = null }) {
-  return resolveStaffUsers(pool, {
-    organisationId,
-    siteId,
-    roleSlugs: GATE_RECEPTION_ROLE_SLUGS,
-  });
-}
-
 function isVipClassification(classification) {
   return classification === 'vip' || classification === 'vvip';
+}
+
+/** Resolve a visit's building — via its zone, else via its office — for security audience matching. */
+async function resolveVisitBuildingId(pool, visit) {
+  if (visit.zone_id) {
+    const [[zone]] = await pool.query('SELECT building_id FROM zones WHERE id = ? LIMIT 1', [visit.zone_id]);
+    if (zone?.building_id) return zone.building_id;
+  }
+  if (visit.office_id) {
+    const [[office]] = await pool.query('SELECT building_id FROM offices WHERE id = ? LIMIT 1', [visit.office_id]);
+    if (office?.building_id) return office.building_id;
+  }
+  return null;
 }
 
 /**
@@ -372,6 +347,7 @@ export async function notifyVisitEvent(pool, {
 }) {
   const [[visit]] = await pool.query(
     `SELECT vis.*, v.full_name AS visitor_name, v.phone AS visitor_phone, v.email AS visitor_email,
+            v.company AS visitor_company,
             h.name AS host_name, h.user_id AS host_user_id,
             s.name AS site_name,
             COALESCE(vc.classification, 'standard') AS classification
@@ -401,8 +377,16 @@ export async function notifyVisitEvent(pool, {
     status: visit.status,
     expected_at: formatExpectedAt(extra.expected_at || visit.expected_at),
     site_name: visit.site_name || '',
+    company: visit.visitor_company || '',
     ...extra,
   };
+  // Live host zone at creation time was already resolved and stamped onto
+  // visits.zone_id (host.js / reception.js, including the role-default
+  // fallback) — using the frozen snapshot here is correct: it reflects the
+  // zone this visit was booked into, not whatever the host's zone happens
+  // to be right now. An empty array (no zone) is the fail-safe case: every
+  // receptionist lands in the different-zone/restricted bucket below.
+  const hostZoneIds = visit.zone_id ? [String(visit.zone_id)] : [];
 
   const hostUserId = visit.host_user_id || await resolveHostUserId(pool, visit.host_id);
   const vip = isVipClassification(visit.classification);
@@ -506,49 +490,147 @@ export async function notifyVisitEvent(pool, {
     });
   }
 
-  // Gate / reception staff
-  if (eventType === 'arrived_at_gate' || (vip && (eventType === 'reception_check_in' || eventType === 'checked_in'))) {
-    const staff = await resolveGateAndReceptionUsers(pool, {
+  // Appointment Creation Flow (Logic.md steps 3-6) — notify reception when a
+  // host books/expects a visitor, split by zone match. This previously did
+  // not exist at all: reception only ever heard about a visit once it
+  // reached the gate.
+  const RECEPTION_NEW_EXPECTED_EVENTS = ['pending_approval', 'expected', 'approved', 'pre_registered'];
+  if (RECEPTION_NEW_EXPECTED_EVENTS.includes(eventType)) {
+    const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
       organisationId: visit.organisation_id,
       siteId: visit.site_id,
+      hostZoneIds,
+    });
+    for (const r of sameZone) {
+      if (r.userId === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: 'visit.reception_new_expected',
+        categoryKey,
+        channels: ['in_app', 'email', 'sms'],
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:reception_same:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_same_zone' },
+        orgSettings,
+      });
+    }
+    for (const r of differentZone) {
+      if (r.userId === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: 'visit.reception_new_expected_restricted',
+        categoryKey,
+        channels: ['in_app', 'email', 'sms'],
+        vars: buildRestrictedReceptionVars(vars),
+        idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_different_zone' },
+        orgSettings,
+      });
+    }
+  }
+
+  // Gate / reception staff — split into security (site/building/gate scope)
+  // and reception (zone scope, same/different split). VIP-ness itself is
+  // withheld from different-zone reception: they never learn a visit is VIP.
+  if (eventType === 'arrived_at_gate' || (vip && (eventType === 'reception_check_in' || eventType === 'checked_in'))) {
+    const buildingId = await resolveVisitBuildingId(pool, visit);
+    const securityStaff = await resolveSecurityAudienceForVisit(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+      stationId: visit.station_id,
+      buildingId,
     });
     const staffTemplate = vip ? 'visit.vip_arrival' : 'visit.arrived_at_gate';
     const staffChannels = vip ? ['in_app', 'email', 'sms'] : ['in_app'];
 
-    for (const user of staff) {
-      if (user.id === actorUserId) continue;
+    for (const guard of securityStaff) {
+      if (guard.user_id === actorUserId) continue;
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
-        userId: user.id,
-        recipient: { email: user.email || null, phone: user.phone || null },
+        userId: guard.user_id,
+        recipient: { email: guard.email || null, phone: guard.phone || null },
         templateKey: staffTemplate,
         categoryKey,
         channels: staffChannels,
         vars,
-        idempotencyKey: `${eventType}:${visitId}:staff:${user.id}`,
-        metadata: { ...metadata, audience: 'gate_reception' },
+        idempotencyKey: `${eventType}:${visitId}:security:${guard.id}`,
+        metadata: { ...metadata, audience: 'security' },
+        orgSettings,
+      });
+    }
+
+    const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+      hostZoneIds,
+    });
+    for (const r of sameZone) {
+      if (r.userId === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: staffTemplate,
+        categoryKey,
+        channels: staffChannels,
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:reception_same:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_same_zone' },
+        orgSettings,
+      });
+    }
+    for (const r of differentZone) {
+      if (r.userId === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: 'visit.arrived_at_gate_restricted',
+        categoryKey,
+        channels: staffChannels,
+        vars: buildRestrictedReceptionVars(vars),
+        idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_different_zone' },
         orgSettings,
       });
     }
   }
 
   if (eventType === 'entered_premises') {
-    const reception = await resolveStaffUsers(pool, {
+    const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
       organisationId: visit.organisation_id,
       siteId: visit.site_id,
-      roleSlugs: RECEPTION_ROLE_SLUGS,
+      hostZoneIds,
     });
-    for (const user of reception) {
-      if (user.id === actorUserId) continue;
+    for (const r of sameZone) {
+      if (r.userId === actorUserId) continue;
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
-        userId: user.id,
+        userId: r.userId,
         templateKey: 'visit.entered_premises',
         categoryKey,
         channels: ['in_app'],
         vars,
-        idempotencyKey: `${eventType}:${visitId}:reception:${user.id}`,
-        metadata: { ...metadata, audience: 'reception' },
+        idempotencyKey: `${eventType}:${visitId}:reception_same:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_same_zone' },
+        orgSettings,
+      });
+    }
+    for (const r of differentZone) {
+      if (r.userId === actorUserId) continue;
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        templateKey: 'visit.entered_premises_restricted',
+        categoryKey,
+        channels: ['in_app'],
+        vars: buildRestrictedReceptionVars(vars),
+        idempotencyKey: `${eventType}:${visitId}:reception_diff:${r.receptionistId}`,
+        metadata: { ...metadata, audience: 'reception_different_zone' },
         orgSettings,
       });
     }
@@ -567,7 +649,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
 
   const [visits] = await pool.query(
     `SELECT vis.id, vis.organisation_id, vis.site_id, vis.pass_code, vis.invite_token,
-            vis.host_id, h.user_id AS host_user_id,
+            vis.host_id, vis.zone_id, vis.office_id, vis.station_id, h.user_id AS host_user_id,
             v.full_name AS visitor_name, v.email AS visitor_email, v.phone AS visitor_phone,
             h.name AS host_name,
             s.name AS site_name,
@@ -595,11 +677,6 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
   let notified = 0;
 
   for (const visit of visits) {
-    const staff = await resolveGateAndReceptionUsers(pool, {
-      organisationId: visit.organisation_id,
-      siteId: visit.site_id,
-    });
-
     const inviteUrl = visit.invite_token
       ? `${getAppBaseUrl()}/visit/invite/${visit.invite_token}`
       : '';
@@ -612,25 +689,63 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
       site_name: visit.site_name || '',
       invite_url: inviteUrl,
     };
+    const hostZoneIds = visit.zone_id ? [String(visit.zone_id)] : [];
 
-    for (const user of staff) {
+    // Security keeps the existing template unchanged — its body already
+    // contains only visitor_name/host_name/site_name/expected_at/pass_code,
+    // no contact fields, so it's already gate-appropriate.
+    const buildingId = await resolveVisitBuildingId(pool, visit);
+    const securityStaff = await resolveSecurityAudienceForVisit(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+      stationId: visit.station_id,
+      buildingId,
+    });
+    for (const guard of securityStaff) {
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
-        userId: user.id,
-        recipient: {
-          email: user.email || null,
-          phone: user.phone || null,
-        },
+        userId: guard.user_id,
+        recipient: { email: guard.email || null, phone: guard.phone || null },
         templateKey: 'visit.pre_arrival_alert',
         categoryKey,
         channels: ['in_app', 'email', 'sms'],
         vars,
-        idempotencyKey: `pre_arrival_reminder:${visit.id}:staff:${user.id}`,
-        metadata: {
-          visitId: visit.id,
-          eventType: 'pre_arrival_reminder',
-          audience: 'gate_reception',
-        },
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:security:${guard.id}`,
+        metadata: { visitId: visit.id, eventType: 'pre_arrival_reminder', audience: 'security' },
+        orgSettings,
+      });
+    }
+
+    const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
+      organisationId: visit.organisation_id,
+      siteId: visit.site_id,
+      hostZoneIds,
+    });
+    for (const r of sameZone) {
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: 'visit.pre_arrival_alert',
+        categoryKey,
+        channels: ['in_app', 'email', 'sms'],
+        vars,
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:reception_same:${r.receptionistId}`,
+        metadata: { visitId: visit.id, eventType: 'pre_arrival_reminder', audience: 'reception_same_zone' },
+        orgSettings,
+      });
+    }
+    for (const r of differentZone) {
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        userId: r.userId,
+        recipient: { email: r.email || null, phone: r.phone || null },
+        templateKey: 'visit.pre_arrival_alert_restricted',
+        categoryKey,
+        channels: ['in_app', 'email', 'sms'],
+        vars: buildRestrictedReceptionVars(vars),
+        idempotencyKey: `pre_arrival_reminder:${visit.id}:reception_diff:${r.receptionistId}`,
+        metadata: { visitId: visit.id, eventType: 'pre_arrival_reminder', audience: 'reception_different_zone' },
         orgSettings,
       });
     }
@@ -820,5 +935,6 @@ export async function upsertUserNotificationPreferences(pool, {
   return getUserNotificationPreferences(pool, userId, organisationId);
 }
 
-// Re-export for tests / callers that need role helpers
-export { GATE_ROLE_SLUGS, RECEPTION_ROLE_SLUGS };
+// Exported for tests — the restricted-payload builder is deliberately a pure,
+// directly-testable function (see tests/notificationAudience.test.js).
+export { buildRestrictedReceptionVars };

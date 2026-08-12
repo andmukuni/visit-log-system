@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { hashPassword } from './auth.js';
 import { loadZoneInOrg } from './orgStructureService.js';
+import { resolveHostPrimaryZoneId } from './hostPortalService.js';
 
 const RECEPTION_ROLE_SLUG = 'main_reception';
 
@@ -211,18 +212,16 @@ export async function requireReceptionZoneContext(pool, userId) {
   return { ok: true, ...ctx };
 }
 
+/**
+ * Resolve a host's primary zone. Delegates to hostPortalService's 4-tier
+ * resolution (host_zones → hosts.zone_id → office.zone_id → role default)
+ * so every existing caller of this function/module path automatically gains
+ * multi-zone + role-default-mapping support with zero import changes.
+ */
 export async function resolveHostZoneId(pool, hostId) {
   const id = String(hostId || '').trim();
   if (!id) return null;
-  const [[row]] = await pool.query(
-    `SELECT COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id) AS zone_id
-     FROM hosts h
-     LEFT JOIN offices ofc ON ofc.id = h.office_id
-     WHERE h.id = ?
-     LIMIT 1`,
-    [id],
-  );
-  return row?.zone_id ? String(row.zone_id) : null;
+  return resolveHostPrimaryZoneId(pool, id);
 }
 
 /**
@@ -274,6 +273,46 @@ export function officeZoneFilterClause(zoneIds, alias = 'ofc') {
     sql: ` AND ${alias}.zone_id IN (${placeholders})`,
     params: [...zoneIds],
   };
+}
+
+/**
+ * Boolean SQL expression (no leading AND) — TRUE if a visit's live host-zone
+ * set intersects zoneIds. This is the literal
+ * intersection(host.zoneIds, receptionist.zoneIds).length > 0 from Logic.md,
+ * evaluated against live host_zones data on every read (not the frozen
+ * visits.zone_id snapshot) — so revoked/reassigned zones take effect
+ * immediately. Multi-zone aware: host_zones wins over legacy hosts.zone_id
+ * only when host_zones has no rows for that host, mirroring
+ * resolveReceptionZoneContext's fallback convention. Callers use this in a
+ * SELECT list (not a WHERE filter) — visitZoneFilterClause is unchanged and
+ * still the right tool for hard-excluding queries.
+ */
+export function visitZoneMatchExpr(zoneIds, {
+  visitAlias = 'vis',
+  hostAlias = 'h',
+  hostOfficeAlias = 'ofc',
+  visitOfficeAlias = 'vis_ofc',
+} = {}) {
+  const ids = Array.isArray(zoneIds) ? zoneIds.filter(Boolean) : [];
+  if (!ids.length) {
+    return { sql: '0', params: [] };
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const sql = `(CASE WHEN EXISTS (
+      SELECT 1 FROM host_zones hz WHERE hz.host_id = ${hostAlias}.id AND hz.zone_id IN (${placeholders})
+    ) THEN 1
+    WHEN NOT EXISTS (SELECT 1 FROM host_zones hz2 WHERE hz2.host_id = ${hostAlias}.id)
+      AND COALESCE(
+        NULLIF(${hostAlias}.zone_id, ''),
+        ${hostOfficeAlias}.zone_id,
+        ${visitOfficeAlias}.zone_id,
+        NULLIF(${visitAlias}.zone_id, '')
+      ) IN (${placeholders})
+    THEN 1
+    ELSE 0 END)`;
+
+  return { sql, params: [...ids, ...ids] };
 }
 
 export async function assertTargetInReceptionZones(pool, {
@@ -368,6 +407,47 @@ export async function attachReceptionistZones(pool, rows = []) {
       zone_name: zoneNames.length ? zoneNames.join(', ') : fallbackName,
     };
   });
+}
+
+/**
+ * Split active receptionists at a site into same-zone / different-zone
+ * buckets against a host's resolved zone set, for notification audience
+ * resolution. The empty-hostZoneIds fail-safe (Logic.md scenario 6) falls
+ * out for free here: every receptionist lands in differentZone when
+ * hostZoneIds is empty, with no special-casing needed.
+ */
+export async function resolveReceptionAudienceByZone(pool, { organisationId, siteId = null, hostZoneIds = [] }) {
+  if (!organisationId) return { sameZone: [], differentZone: [] };
+
+  const params = [organisationId];
+  let siteClause = '';
+  if (siteId) {
+    siteClause = ' AND (r.site_id IS NULL OR r.site_id = ?)';
+    params.push(siteId);
+  }
+
+  const [rows] = await pool.query(
+    `SELECT r.id, r.user_id, r.name, u.email, u.phone
+     FROM receptionists r
+     LEFT JOIN users u ON u.id = r.user_id
+     WHERE r.organisation_id = ? AND r.status = 'active' AND r.user_id IS NOT NULL${siteClause}`,
+    params,
+  );
+  if (!rows.length) return { sameZone: [], differentZone: [] };
+
+  const withZones = await attachReceptionistZones(pool, rows);
+  const hostZoneSet = new Set((hostZoneIds || []).map(String));
+
+  const sameZone = [];
+  const differentZone = [];
+  for (const receptionist of withZones) {
+    const zoneIds = receptionist.zone_ids || [];
+    const matches = hostZoneSet.size > 0 && zoneIds.some((id) => hostZoneSet.has(String(id)));
+    const bucket = { receptionistId: receptionist.id, userId: receptionist.user_id, email: receptionist.email, phone: receptionist.phone, name: receptionist.name };
+    (matches ? sameZone : differentZone).push(bucket);
+  }
+
+  return { sameZone, differentZone };
 }
 
 export async function loadReceptionistRow(pool, id) {

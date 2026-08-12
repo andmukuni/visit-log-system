@@ -359,6 +359,7 @@ export const securityApi = {
   getExceptions: () => apiFetch('/admin/security/exceptions'),
   getOverdue: () => apiFetch('/admin/security/overdue'),
   getVisitors: (q) => apiFetch(`/admin/security/visitors${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  getVisit: (id) => apiFetch(`/admin/security/visitors/${id}`),
   getVehicles: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/security/vehicles${qs ? `?${qs}` : ''}`);

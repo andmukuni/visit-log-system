@@ -23,25 +23,51 @@ import {
   fetchSecurityEventsByType,
   ON_SITE_VISIT_STATUSES,
 } from '../dashboardStats.js';
+import { requireSecurityScopeContext, visitSecurityScopeFilterClause } from '../securityGuardService.js';
+import { buildSecurityExpectedVisitorDTO } from '../visitorDto.js';
+import { auditVisitAccessDenied } from '../visitorAccessPolicy.js';
 
-function scopeSiteFilter(scope, elevated, column = 'vis.site_id') {
-  if (elevated || !scope?.site_id) return { sql: '', params: [] };
-  return { sql: ` AND ${column} = ?`, params: [scope.site_id] };
+/**
+ * Site/building/gate scope for the logged-in security officer — elevated
+ * (super-admin) bypasses entirely; everyone else must resolve a real guard
+ * scope (deny by default, mirrors requireReceptionZoneContext's shape).
+ * Distinct from Logic.md's reception rule: out-of-scope visits are excluded
+ * outright here ("must not see the visit"), never shown restricted.
+ */
+async function getSecurityContext(req) {
+  const userId = req.adminClaims?.sub;
+  const base = await requireUserScope(pool, userId, req.adminClaims);
+  if (!base.ok) return base;
+  if (base.elevated) return { ok: true, scope: base.scope, elevated: true, securityScope: null };
+  const scopeCtx = await requireSecurityScopeContext(pool, userId);
+  if (!scopeCtx.ok) return scopeCtx;
+  return { ok: true, scope: base.scope, elevated: false, securityScope: scopeCtx };
+}
+
+function securityVisitFilter(ctx, visitAlias = 'vis') {
+  if (ctx.elevated) return { sql: '', params: [] };
+  return visitSecurityScopeFilterClause(ctx.securityScope, { visitAlias });
+}
+
+/** Site-only filter for non-visit tables (incidents) — no station/building concept there. */
+function securitySiteFilter(ctx, column = 'site_id') {
+  if (ctx.elevated || !ctx.securityScope?.siteId) return { sql: '', params: [] };
+  return { sql: ` AND ${column} = ?`, params: [ctx.securityScope.siteId] };
 }
 
 function maskVisitRowsForRequest(req, rows) {
   return applyVisitListMasking(rows, permissionsFromRequest(req));
 }
 
-function visitListSql(scope, elevated, extraWhere = '', orderBy = 'vis.created_at DESC') {
+function visitListSql(ctx, extraWhere = '', orderBy = 'vis.created_at DESC') {
   const params = [];
   let orgFilter = '';
-  if (!elevated && scope?.organisation_id) {
+  if (!ctx.elevated && ctx.scope?.organisation_id) {
     orgFilter = ' AND vis.organisation_id = ?';
-    params.push(scope.organisation_id);
+    params.push(ctx.scope.organisation_id);
   }
-  const { sql, params: siteParams } = scopeSiteFilter(scope, elevated);
-  params.push(...siteParams);
+  const { sql, params: scopeParams } = securityVisitFilter(ctx);
+  params.push(...scopeParams);
   return {
     sql: `
       SELECT vis.*, v.full_name, v.phone, v.email, v.company,
@@ -65,8 +91,7 @@ export function createSecurityRouter() {
   const router = express.Router();
 
   async function getContext(req) {
-    const userId = req.adminClaims?.sub;
-    return requireUserScope(pool, userId, req.adminClaims);
+    return getSecurityContext(req);
   }
 
   router.get('/dashboard', async (req, res) => {
@@ -77,7 +102,7 @@ export function createSecurityRouter() {
       const { scope, elevated } = ctx;
       const orgId = scope.organisation_id;
       const params = [orgId];
-      const { sql: siteSql, params: siteParams } = scopeSiteFilter(scope, elevated);
+      const { sql: siteSql, params: siteParams } = securityVisitFilter(ctx);
       params.push(...siteParams);
 
       const countVisits = async (extra = '', extraParams = []) => {
@@ -89,8 +114,8 @@ export function createSecurityRouter() {
       };
 
       const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
-      const chartSiteSql = scope.site_id && !elevated ? ' AND vis.site_id = ?' : '';
-      const chartSiteParams = scope.site_id && !elevated ? [scope.site_id] : [];
+      const chartSiteSql = ctx.securityScope?.siteId && !elevated ? ' AND vis.site_id = ?' : '';
+      const chartSiteParams = ctx.securityScope?.siteId && !elevated ? [ctx.securityScope.siteId] : [];
       const { visitsToday, visitTrend } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
@@ -110,7 +135,7 @@ export function createSecurityRouter() {
       );
 
       const incidentParams = [orgId];
-      const { sql: incidentSiteSql, params: incidentSiteParams } = scopeSiteFilter(scope, elevated, 'site_id');
+      const { sql: incidentSiteSql, params: incidentSiteParams } = securitySiteFilter(ctx, 'site_id');
       incidentParams.push(...incidentSiteParams);
 
       const [[openIncidents]] = await pool.query(
@@ -162,9 +187,9 @@ export function createSecurityRouter() {
       const ctx = await getContext(req);
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
-      const { scope, elevated } = ctx;
+      const { scope } = ctx;
       const params = [scope.organisation_id];
-      const { sql, params: siteParams } = scopeSiteFilter(scope, elevated, 'vis');
+      const { sql, params: siteParams } = securityVisitFilter(ctx);
       params.push(...siteParams);
 
       const [rows] = await pool.query(
@@ -194,8 +219,7 @@ export function createSecurityRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       const { sql, params } = visitListSql(
-        ctx.scope,
-        ctx.elevated,
+        ctx,
         ` AND vis.status IN ('pending_approval', 'pre_registered')`,
       );
       const [rows] = await pool.query(sql, params);
@@ -211,8 +235,7 @@ export function createSecurityRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       const { sql, params } = visitListSql(
-        ctx.scope,
-        ctx.elevated,
+        ctx,
         ` AND vis.status IN ('rejected', 'denied', 'overdue', 'expired')`,
       );
       const [rows] = await pool.query(sql, params);
@@ -227,7 +250,7 @@ export function createSecurityRouter() {
       const ctx = await getContext(req);
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
-      const { sql, params } = visitListSql(ctx.scope, ctx.elevated, ` AND vis.status = 'overdue'`);
+      const { sql, params } = visitListSql(ctx, ` AND vis.status = 'overdue'`);
       const [rows] = await pool.query(sql, params);
       res.json({ ok: true, data: maskVisitRowsForRequest(req, rows) });
     } catch (error) {
@@ -241,17 +264,121 @@ export function createSecurityRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       const q = String(req.query.q || '').trim();
+      const params = [];
+      let orgFilter = '';
+      if (!ctx.elevated && ctx.scope?.organisation_id) {
+        orgFilter = ' AND vis.organisation_id = ?';
+        params.push(ctx.scope.organisation_id);
+      }
+      const { sql: scopeSql, params: scopeParams } = ctx.elevated
+        ? { sql: '', params: [] }
+        : visitSecurityScopeFilterClause(ctx.securityScope, { zoneAlias: 'sec_zone', officeAlias: 'ofc' });
+      params.push(...scopeParams);
       let extra = '';
-      const extraParams = [];
       if (q) {
-        extra = ` AND (v.full_name LIKE ? OR v.phone LIKE ? OR v.company LIKE ? OR vis.pass_code LIKE ?)`;
+        extra = ` AND (v.full_name LIKE ? OR vis.pass_code LIKE ?)`;
         const like = `%${q}%`;
-        extraParams.push(like, like, like, like);
+        params.push(like, like);
       }
 
-      const { sql, params } = visitListSql(ctx.scope, ctx.elevated, extra);
-      const [rows] = await pool.query(sql, [...params, ...extraParams]);
-      res.json({ ok: true, data: maskVisitRowsForRequest(req, rows) });
+      // Gate-operational view (Logic.md) — no phone/email/company here.
+      const [rows] = await pool.query(
+        `SELECT vis.id, vis.status, vis.expected_at, vis.checked_in_at, vis.station_id,
+                v.full_name,
+                h.name AS host_name, ofc.office_number AS destination_office_number,
+                bld.name AS destination_building_name, gate.name AS gate_name,
+                (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+         FROM visits vis
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         LEFT JOIN offices ofc ON ofc.id = COALESCE(vis.office_id, h.office_id)
+         LEFT JOIN zones sec_zone ON sec_zone.id = vis.zone_id
+         LEFT JOIN buildings bld ON bld.id = COALESCE(sec_zone.building_id, ofc.building_id)
+         LEFT JOIN stations gate ON gate.id = vis.station_id
+         WHERE 1=1${orgFilter}${scopeSql}${extra}
+         ORDER BY vis.created_at DESC
+         LIMIT 200`,
+        params,
+      );
+      res.json({ ok: true, data: rows.map((row) => buildSecurityExpectedVisitorDTO(row)) });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  // Closes a confirmed leak: the generic /admin/visits/:id endpoint has no
+  // site/station/building check at all, so any security officer could
+  // previously open any visit's full unmasked record by URL. This route is
+  // the one the Security portal's visit-detail page must use instead.
+  router.get('/visitors/:id', async (req, res) => {
+    try {
+      const ctx = await getContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const params = [req.params.id];
+      let orgFilter = '';
+      if (!ctx.elevated && ctx.scope?.organisation_id) {
+        orgFilter = ' AND vis.organisation_id = ?';
+        params.push(ctx.scope.organisation_id);
+      }
+      const { sql: scopeSql, params: scopeParams } = ctx.elevated
+        ? { sql: '', params: [] }
+        : visitSecurityScopeFilterClause(ctx.securityScope, { zoneAlias: 'sec_zone', officeAlias: 'ofc' });
+
+      const [[row]] = await pool.query(
+        `SELECT vis.id, vis.status, vis.expected_at, vis.checked_in_at, vis.station_id,
+                vis.site_id, vis.organisation_id,
+                v.full_name,
+                h.name AS host_name, ofc.office_number AS destination_office_number,
+                bld.id AS destination_building_id, bld.name AS destination_building_name,
+                gate.name AS gate_name,
+                (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
+                 FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+         FROM visits vis
+         INNER JOIN visitors v ON v.id = vis.visitor_id
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         LEFT JOIN offices ofc ON ofc.id = COALESCE(vis.office_id, h.office_id)
+         LEFT JOIN zones sec_zone ON sec_zone.id = vis.zone_id
+         LEFT JOIN buildings bld ON bld.id = COALESCE(sec_zone.building_id, ofc.building_id)
+         LEFT JOIN stations gate ON gate.id = vis.station_id
+         WHERE vis.id = ?${orgFilter}
+         LIMIT 1`,
+        params,
+      );
+
+      if (!row) {
+        return res.status(404).json({ ok: false, message: 'Visit not found in your assigned area.' });
+      }
+
+      // Confirm in-scope with the same site/station/building rule as the list
+      // query, applied to this single row in JS rather than round-tripping
+      // through SQL again.
+      let inScope = ctx.elevated;
+      if (!inScope) {
+        const scopeCtx = ctx.securityScope;
+        const stationIds = scopeCtx.stationIds || [];
+        const buildingIds = scopeCtx.buildingIds || [];
+        inScope = Boolean(scopeCtx.siteId) && scopeCtx.siteId === row.site_id
+          && (!stationIds.length && !buildingIds.length
+            ? true
+            : (stationIds.includes(String(row.station_id)) || buildingIds.includes(String(row.destination_building_id))));
+      }
+
+      if (!inScope) {
+        await auditVisitAccessDenied(pool, {
+          organisationId: row.organisation_id,
+          actorUserId: req.adminClaims?.sub,
+          visitId: row.id,
+          reason: 'security_scope_mismatch',
+        });
+        return res.status(404).json({ ok: false, message: 'Visit not found in your assigned area.' });
+      }
+
+      res.json({
+        ok: true,
+        data: { visit: buildSecurityExpectedVisitorDTO(row), events: [], approvals: [] },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

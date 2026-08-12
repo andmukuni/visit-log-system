@@ -3,6 +3,7 @@ import { hashPassword } from './auth.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { getAppBaseUrl } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
+import { loadZoneInOrg } from './orgStructureService.js';
 
 const HOST_ROLE_SLUG = 'host';
 const HOST_PORTAL_ROLE_SLUGS = ['host', 'ceo', 'dceo'];
@@ -102,6 +103,172 @@ export async function resolveHostPortalRole(pool, userId) {
     [userId, ...HOST_PORTAL_ROLE_SLUGS],
   );
   return normalizeHostPortalRole(row?.slug || 'host');
+}
+
+export function parseHostZoneIds(body = {}, fallback = []) {
+  if (Array.isArray(body.zoneIds)) {
+    return [...new Set(body.zoneIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+  if (Array.isArray(body.zone_ids)) {
+    return [...new Set(body.zone_ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+  if (body.zoneId != null || body.zone_id != null) {
+    const single = String(body.zoneId || body.zone_id || '').trim();
+    return single ? [single] : [];
+  }
+  return [...new Set((fallback || []).map((id) => String(id || '').trim()).filter(Boolean))];
+}
+
+export async function validateHostZones(pool, zoneIds, organisationId, siteId) {
+  const uniqueIds = [...new Set((zoneIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!uniqueIds.length) {
+    return { ok: true, zones: [], zoneIds: [] };
+  }
+
+  const resolved = [];
+  for (const zoneId of uniqueIds) {
+    const zone = await loadZoneInOrg(pool, zoneId, organisationId);
+    if (!zone) {
+      return { ok: false, status: 400, message: 'One or more zones were not found in this organisation.' };
+    }
+    if (zone.site_id && siteId && zone.site_id !== siteId) {
+      return { ok: false, status: 400, message: 'All selected zones must belong to the chosen site.' };
+    }
+    resolved.push(zone);
+  }
+
+  return { ok: true, zones: resolved, zoneIds: uniqueIds };
+}
+
+export async function syncHostZones(pool, hostId, zoneIds = []) {
+  const uniqueIds = [...new Set((zoneIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  await pool.query('DELETE FROM host_zones WHERE host_id = ?', [hostId]);
+  for (const zoneId of uniqueIds) {
+    await pool.query(
+      'INSERT INTO host_zones (host_id, zone_id) VALUES (?, ?)',
+      [hostId, zoneId],
+    );
+  }
+  // Keep legacy primary zone column aligned for older readers without touching other columns.
+  await pool.query(
+    'UPDATE hosts SET zone_id = ? WHERE id = ?',
+    [uniqueIds[0] || null, hostId],
+  );
+  return uniqueIds;
+}
+
+export async function loadHostZones(pool, hostId) {
+  const [rows] = await pool.query(
+    `SELECT z.id, z.name, b.site_id, s.organisation_id, b.name AS building_name
+     FROM host_zones hz
+     INNER JOIN zones z ON z.id = hz.zone_id
+     LEFT JOIN buildings b ON b.id = z.building_id
+     LEFT JOIN sites s ON s.id = b.site_id
+     WHERE hz.host_id = ?
+     ORDER BY z.name`,
+    [hostId],
+  );
+  return rows;
+}
+
+export async function attachHostZones(pool, rows = []) {
+  if (!rows.length) return rows;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return rows;
+  const placeholders = ids.map(() => '?').join(', ');
+  const [zoneRows] = await pool.query(
+    `SELECT hz.host_id, z.id, z.name, b.name AS building_name
+     FROM host_zones hz
+     INNER JOIN zones z ON z.id = hz.zone_id
+     LEFT JOIN buildings b ON b.id = z.building_id
+     WHERE hz.host_id IN (${placeholders})
+     ORDER BY z.name`,
+    ids,
+  );
+
+  const byHost = new Map();
+  for (const row of zoneRows) {
+    const list = byHost.get(row.host_id) || [];
+    list.push(row);
+    byHost.set(row.host_id, list);
+  }
+
+  return rows.map((row) => {
+    const assigned = byHost.get(row.id) || [];
+    const zoneIds = assigned.map((zone) => zone.id);
+    const zoneNames = assigned.map((zone) => (
+      zone.building_name ? `${zone.name} · ${zone.building_name}` : zone.name
+    ));
+    const fallbackName = row.zone_name || '';
+    return {
+      ...row,
+      zone_ids: zoneIds.length ? zoneIds : (row.zone_id ? [row.zone_id] : []),
+      zone_names: zoneNames.length ? zoneNames.join(', ') : fallbackName,
+      zones: assigned,
+      zone_id: zoneIds[0] || row.zone_id || null,
+      zone_name: zoneNames.length ? zoneNames.join(', ') : fallbackName,
+    };
+  });
+}
+
+/**
+ * Resolve a host's zone assignment for portal-lock/access-policy purposes.
+ * Resolution order (deny-by-default — an empty array is a legitimate terminal
+ * state, never an error): host_zones (multi-zone, explicit) → legacy
+ * hosts.zone_id → offices.zone_id (via the host's office) → configurable
+ * role→zone default mapping (host_role_zone_defaults) → [].
+ * Accepts either a host id string or an already-loaded host row (avoids a
+ * redundant query when the caller already has one).
+ */
+export async function resolveHostZoneIds(pool, hostIdOrHost) {
+  let host = hostIdOrHost;
+  if (typeof hostIdOrHost === 'string' || typeof hostIdOrHost === 'number') {
+    const [[row]] = await pool.query(
+      `SELECT id, organisation_id, zone_id, office_id, user_id
+       FROM hosts WHERE id = ? LIMIT 1`,
+      [String(hostIdOrHost)],
+    );
+    host = row;
+  }
+  if (!host?.id) return [];
+
+  const explicit = await loadHostZones(pool, host.id);
+  if (explicit.length) {
+    return explicit.map((zone) => String(zone.id));
+  }
+
+  if (host.zone_id) {
+    return [String(host.zone_id)];
+  }
+
+  if (host.office_id) {
+    const [[office]] = await pool.query(
+      'SELECT zone_id FROM offices WHERE id = ? LIMIT 1',
+      [host.office_id],
+    );
+    if (office?.zone_id) {
+      return [String(office.zone_id)];
+    }
+  }
+
+  const roleSlug = await resolveHostPortalRole(pool, host.user_id || null);
+  if (roleSlug && host.organisation_id) {
+    const [[mapping]] = await pool.query(
+      `SELECT zone_id FROM host_role_zone_defaults
+       WHERE organisation_id = ? AND role_slug = ? LIMIT 1`,
+      [host.organisation_id, roleSlug],
+    );
+    if (mapping?.zone_id) {
+      return [String(mapping.zone_id)];
+    }
+  }
+
+  return [];
+}
+
+export async function resolveHostPrimaryZoneId(pool, hostIdOrHost) {
+  const zoneIds = await resolveHostZoneIds(pool, hostIdOrHost);
+  return zoneIds[0] || null;
 }
 
 export async function syncHostPortalUser(pool, {

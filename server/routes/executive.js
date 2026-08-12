@@ -543,6 +543,8 @@ export function createExecutiveRouter() {
       await upsertVisitorContactDetails(pool, visitorId, {
         idType: idType || 'nrc',
         idNumber: nrc,
+        actorUserId: userId,
+        organisationId: ctx.scope.organisation_id,
       });
 
       // Host/executive calendar bookings are already confirmed by the host — no visitor ack needed.

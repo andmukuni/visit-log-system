@@ -1,6 +1,7 @@
 const UPSERT_CONFLICT = {
   admin_permissions: 'perm_key',
   admin_roles: 'slug',
+  host_role_zone_defaults: 'organisation_id, role_slug',
   system_settings: 'setting_key',
   user_scopes: 'user_id, organisation_id',
   visitor_contact_details: 'visitor_id',

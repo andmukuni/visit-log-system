@@ -124,6 +124,105 @@ async function ensureReceptionistZonesSchema(db = pool) {
   `);
 }
 
+async function ensureHostZonesSchema(db = pool) {
+  // Additive migration only: keep hosts.zone_id at rest and mirror assignments
+  // into host_zones for multi-zone support (mirrors ensureReceptionistZonesSchema).
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS host_zones (
+      host_id VARCHAR(90) NOT NULL,
+      zone_id VARCHAR(90) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (host_id, zone_id),
+      INDEX idx_host_zones_zone (zone_id)
+    )
+  `);
+  if (getDbDriver() === 'postgres') {
+    await db.query('CREATE INDEX IF NOT EXISTS idx_host_zones_zone ON host_zones (zone_id)');
+    await db.query(`
+      INSERT INTO host_zones (host_id, zone_id)
+      SELECT h.id, h.zone_id
+      FROM hosts h
+      WHERE h.zone_id IS NOT NULL AND h.zone_id != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM host_zones hz WHERE hz.host_id = h.id AND hz.zone_id = h.zone_id
+        )
+    `);
+    return;
+  }
+
+  await db.query(`
+    INSERT IGNORE INTO host_zones (host_id, zone_id)
+    SELECT id, zone_id FROM hosts
+    WHERE zone_id IS NOT NULL AND zone_id != ''
+  `);
+}
+
+/** Configurable role→zone fallback mapping, used only when a host has no explicit zone. */
+async function ensureHostRoleZoneDefaultsSchema(db = pool) {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS host_role_zone_defaults (
+      organisation_id VARCHAR(90) NOT NULL,
+      role_slug VARCHAR(60) NOT NULL,
+      zone_id VARCHAR(90) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (organisation_id, role_slug),
+      INDEX idx_host_role_zone_defaults_zone (zone_id)
+    )
+  `);
+  if (getDbDriver() === 'postgres') {
+    await db.query('CREATE INDEX IF NOT EXISTS idx_host_role_zone_defaults_zone ON host_role_zone_defaults (zone_id)');
+  }
+}
+
+/**
+ * Multi-gate / multi-building assignment for security officers (site stays
+ * singular, mirroring receptionists.site_id — no multi-site officer in scope).
+ * Zero rows in both tables is a valid, deliberate site-wide assignment, not a
+ * misconfiguration.
+ */
+async function ensureSecurityGuardScopeSchema(db = pool) {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS security_guard_stations (
+      security_guard_id VARCHAR(90) NOT NULL,
+      station_id VARCHAR(90) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (security_guard_id, station_id),
+      INDEX idx_security_guard_stations_station (station_id)
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS security_guard_buildings (
+      security_guard_id VARCHAR(90) NOT NULL,
+      building_id VARCHAR(90) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (security_guard_id, building_id),
+      INDEX idx_security_guard_buildings_building (building_id)
+    )
+  `);
+  if (getDbDriver() === 'postgres') {
+    await db.query('CREATE INDEX IF NOT EXISTS idx_security_guard_stations_station ON security_guard_stations (station_id)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_security_guard_buildings_building ON security_guard_buildings (building_id)');
+    await db.query(`
+      INSERT INTO security_guard_stations (security_guard_id, station_id)
+      SELECT g.id, g.station_id
+      FROM security_guards g
+      WHERE g.station_id IS NOT NULL AND g.station_id != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM security_guard_stations gs
+          WHERE gs.security_guard_id = g.id AND gs.station_id = g.station_id
+        )
+    `);
+    return;
+  }
+
+  await db.query(`
+    INSERT IGNORE INTO security_guard_stations (security_guard_id, station_id)
+    SELECT id, station_id FROM security_guards
+    WHERE station_id IS NOT NULL AND station_id != ''
+  `);
+}
+
 export async function ensureVisitorSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -297,6 +396,8 @@ export async function ensureVisitorSchema() {
   }
 
   await ensureReceptionistZonesSchema(pool);
+  await ensureHostZonesSchema(pool);
+  await ensureHostRoleZoneDefaultsSchema(pool);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS security_guards (
@@ -317,6 +418,7 @@ export async function ensureVisitorSchema() {
       INDEX idx_security_guards_user (user_id)
     )
   `);
+  await ensureSecurityGuardScopeSchema(pool);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_categories (

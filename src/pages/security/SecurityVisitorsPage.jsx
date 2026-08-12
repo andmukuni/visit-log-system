@@ -28,34 +28,36 @@ export default function SecurityVisitorsPage() {
     search('');
   }, [search]);
 
-  const showOrganisation = visits.some((row) => row.organisation_name);
-
+  // Gate-operational view only — no phone/email/company here (Logic.md).
   const columns = [
-    { key: 'full_name', label: 'Visitor' },
-    { key: 'phone', label: 'Phone' },
-    { key: 'company', label: 'Company' },
+    { key: 'visitor_name', label: 'Visitor' },
     { key: 'host_name', label: 'Host' },
-    ...(showOrganisation ? [{ key: 'organisation_name', label: 'Organisation' }] : []),
-    { key: 'site_name', label: 'Site' },
+    {
+      key: 'destination',
+      label: 'Destination',
+      render: (_, row) => row.destination_building_name || row.destination_office_number
+        ? [row.destination_building_name, row.destination_office_number].filter(Boolean).join(' · ')
+        : '—',
+    },
+    { key: 'gate_name', label: 'Gate' },
     {
       key: 'status',
       label: 'Status',
       render: (_, row) => <StatusBadge status={row.status} />,
     },
     {
-      key: 'created_at',
-      label: 'Created',
-      render: (_, row) => formatDateTime(row.created_at),
+      key: 'expected_at',
+      label: 'Expected',
+      render: (_, row) => (row.expected_at ? formatDateTime(row.expected_at) : '—'),
     },
+    { key: 'plate_numbers', label: 'Vehicle' },
   ];
 
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
         title="Visitors"
-        subtitle={showOrganisation
-          ? 'Search visits across all organisations'
-          : 'Search visits within your security scope'}
+        subtitle="Search visits within your assigned site, building, or gate"
         iconKey="visitors"
       />
       <Card className="mb-6">
@@ -71,7 +73,7 @@ export default function SecurityVisitorsPage() {
             label="Search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Name, phone, company or pass code"
+            placeholder="Name or pass code"
           />
           <LoadingButton type="submit" variant="secondary" icon={Search} iconOnly loading={loading} aria-label="Search" className="self-end" />
         </form>
@@ -88,7 +90,7 @@ export default function SecurityVisitorsPage() {
             emptyDescription="Try a different search term."
             toolbar={{
               placeholder: 'Filter results…',
-              searchKeys: ['full_name', 'phone', 'company', 'host_name', 'organisation_name', 'site_name'],
+              searchKeys: ['visitor_name', 'host_name', 'gate_name'],
             }}
             onRowClick={(row) => navigate(`/security/visitors/${row.id}`)}
           />

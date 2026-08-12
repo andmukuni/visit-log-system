@@ -5,7 +5,7 @@ import {
   Phone,
   User,
 } from 'lucide-react';
-import { StatusBadge, VisitorTypeBadge } from '../ui';
+import { RestrictedIndicator, StatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
 import { formatVisitHostName, getVisitHostPosition, visitorInitials } from './visitorDetailUtils';
 
@@ -55,6 +55,9 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
                 {visit.classification ? (
                   <VisitorTypeBadge classification={visit.classification} size="xs" />
                 ) : null}
+                {visit._accessLevel === 'restricted' ? (
+                  <RestrictedIndicator size="xs" />
+                ) : null}
               </div>
               <h2 className={`mt-2 font-bold tracking-tight text-navy-900 ${compact ? 'truncate text-lg' : 'text-xl sm:text-2xl'}`}>
                 {visitorName}
@@ -69,12 +72,14 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
           </div>
 
           <div className={`grid shrink-0 gap-2 ${compact ? 'grid-cols-1' : 'w-full grid-cols-2 sm:w-auto sm:min-w-[11.5rem] sm:grid-cols-1'}`}>
-            <div className="rounded-2xl border border-cyan-100 bg-white px-4 py-3 text-center shadow-sm ring-1 ring-cyan-50">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-700/80">Pass code</p>
-              <p className={`mt-1 font-mono font-bold tracking-[0.2em] text-navy-900 ${compact ? 'text-lg' : 'text-2xl'}`}>
-                {passCode}
-              </p>
-            </div>
+            {visit.pass_code || visit.reference_number ? (
+              <div className="rounded-2xl border border-cyan-100 bg-white px-4 py-3 text-center shadow-sm ring-1 ring-cyan-50">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-700/80">Pass code</p>
+                <p className={`mt-1 font-mono font-bold tracking-[0.2em] text-navy-900 ${compact ? 'text-lg' : 'text-2xl'}`}>
+                  {passCode}
+                </p>
+              </div>
+            ) : null}
             {visit.badge_number ? (
               <div className="rounded-2xl border border-navy-100 bg-white px-4 py-3 text-center shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-navy-400">Badge</p>

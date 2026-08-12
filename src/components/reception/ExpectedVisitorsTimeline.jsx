@@ -12,6 +12,7 @@ import {
   Button,
   FilterPills,
   IconButton,
+  RestrictedIndicator,
   Spinner,
   StatusBadge,
   VisitorTypeBadge,
@@ -183,14 +184,17 @@ function KpiTile({ label, value, accent = 'navy' }) {
 function ArrivalCard({ row }) {
   const navigate = useNavigate();
   const visitId = visitIdOf(row);
+  const isRestricted = row._accessLevel === 'restricted';
   const classification = String(row.classification || 'standard').toLowerCase();
-  const showType = classification === 'vip' || classification === 'vvip';
+  const showType = !isRestricted && (classification === 'vip' || classification === 'vvip');
   const detailPath = `/reception/visitors/${visitId}`;
   const visitStatus = row.visit_status || row.status;
-  const action = getReceptionVisitAction(visitStatus);
+  const action = isRestricted ? { show: false } : getReceptionVisitAction(visitStatus);
   const actionHref = receptionActionHref(action, visitId);
   const cardTone = statusCardTone(visitStatus);
   const timeChipTone = statusTimeChipTone(visitStatus);
+  const hasMeta = Boolean(row.host_name || row.department_name || row.company || row.pass_code);
+  const hasPurpose = Boolean(row.purpose || row.title);
 
   return (
     <article
@@ -218,24 +222,31 @@ function ArrivalCard({ row }) {
               {row.visitor_name || 'Visitor'}
             </h3>
             {showType ? <VisitorTypeBadge classification={row.classification} size="xs" /> : null}
+            {isRestricted ? <RestrictedIndicator size="xs" /> : null}
           </div>
-          <p className="mt-0.5 truncate text-xs text-navy-500">
-            Host: {row.host_name || '—'}
-            {row.department_name ? ` · ${row.department_name}` : ''}
-            {row.company ? ` · ${row.company}` : ''}
-            {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
-          </p>
-          <p className="mt-1 truncate text-xs text-navy-600">
-            {row.purpose || row.title || '—'}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <StatusBadge status={row.visit_status || row.status} />
-            {row.expected_plates ? (
-              <span className="inline-flex items-center rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
-                {row.expected_plates}
-              </span>
-            ) : null}
-          </div>
+          {hasMeta ? (
+            <p className="mt-0.5 truncate text-xs text-navy-500">
+              {row.host_name ? `Host: ${row.host_name}` : null}
+              {row.department_name ? ` · ${row.department_name}` : ''}
+              {row.company ? ` · ${row.company}` : ''}
+              {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
+            </p>
+          ) : null}
+          {hasPurpose ? (
+            <p className="mt-1 truncate text-xs text-navy-600">
+              {row.purpose || row.title}
+            </p>
+          ) : null}
+          {!isRestricted ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={row.visit_status || row.status} />
+              {row.expected_plates ? (
+                <span className="inline-flex items-center rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
+                  {row.expected_plates}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

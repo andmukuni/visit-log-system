@@ -4,7 +4,7 @@ import { getUserScope, requireUserScope, canTransition } from '../scopeService.j
 import { generatePassCode, writeVisitEvent } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
-import { applyVisitListMasking, VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
+import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
   lookupReceptionDeskNrc,
   registerWalkInAtReceptionDesk,
@@ -30,7 +30,10 @@ import {
   requireReceptionZoneContext,
   resolveHostZoneId,
   visitZoneFilterClause,
+  visitZoneMatchExpr,
 } from '../receptionistService.js';
+import { applyVisitAccessPolicy, applyVisitAccessPolicyToRows, auditFullRecordViewed } from '../visitorAccessPolicy.js';
+import { resolveHostZoneIds } from '../hostPortalService.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
 
@@ -51,7 +54,21 @@ function receptionVisitFilters(scope, zoneIds) {
   return { site, zone };
 }
 
-const CALENDAR_SELECT = `
+/** Receptionist viewer context for the centralized access policy (no admin/host/security facet on these routes — requireReceptionZoneContext already gates on an active receptionist profile). */
+function buildReceptionViewer(scope, zoneReq, permissions) {
+  return {
+    userId: scope?.user_id || null,
+    permissions,
+    isElevated: false,
+    scope,
+    hostContext: null,
+    receptionContext: { receptionistId: zoneReq.receptionistId, zoneIds: zoneReq.zoneIds },
+    securityContext: null,
+  };
+}
+
+function calendarSelectSql(zoneMatchSql) {
+  return `
   SELECT a.id,
          COALESCE(a.title, vis.purpose) AS title,
          COALESCE(a.scheduled_at, vis.expected_at) AS scheduled_at,
@@ -75,7 +92,8 @@ const CALENDAR_SELECT = `
          COALESCE(vc.default_duration_minutes, 60) AS duration_minutes,
          (SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
           FROM expected_vehicles ev
-          WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates
+          WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates,
+         ${zoneMatchSql} AS zone_match
   FROM visits vis
   INNER JOIN visitors v ON v.id = vis.visitor_id
   LEFT JOIN appointments a ON a.visit_id = vis.id
@@ -85,18 +103,18 @@ const CALENDAR_SELECT = `
   LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
   ${ZONE_OFFICE_JOINS}
 `;
+}
 
 async function fetchCheckInAppointments(scope, visitType = 'walk-in', zoneIds = null) {
   if (!scope?.organisation_id) return [];
 
   const statusPlaceholders = CHECK_IN_ELIGIBLE_STATUSES.map(() => '?').join(', ');
   const { sql: siteSql, params: siteParams } = siteFilterClause(scope);
-  const { sql: zoneSql, params: zoneParams } = visitZoneFilterClause(zoneIds);
+  const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneIds);
   const params = [
     scope.organisation_id,
     ...CHECK_IN_ELIGIBLE_STATUSES,
     ...siteParams,
-    ...zoneParams,
   ];
 
   let typeFilter = '';
@@ -107,7 +125,9 @@ async function fetchCheckInAppointments(scope, visitType = 'walk-in', zoneIds = 
   }
 
   // Gate arrivals stay on the desk until reception check-in, even if the
-  // original appointment/expected date is not today.
+  // original appointment/expected date is not today. Visits outside the
+  // receptionist's zone still appear (zone_match feeds the access policy,
+  // which shapes them as a restricted name+time-only row).
   const [rows] = await pool.query(
     `SELECT ${VISIT_SELECT_FIELDS},
             d.name AS department_name,
@@ -115,13 +135,14 @@ async function fetchCheckInAppointments(scope, visitType = 'walk-in', zoneIds = 
             a.title AS appointment_title,
             COALESCE(a.scheduled_at, vis.expected_at) AS scheduled_at,
             (SELECT GROUP_CONCAT(DISTINCT veh.plate_number)
-             FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers
+             FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers,
+            ${zoneMatchSql} AS zone_match
      FROM visits vis ${VISIT_JOINS}
      LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
      LEFT JOIN departments d ON d.id = h.department_id
      LEFT JOIN appointments a ON a.visit_id = vis.id
      WHERE vis.organisation_id = ?
-       AND vis.status IN (${statusPlaceholders})${siteSql}${zoneSql}${typeFilter}
+       AND vis.status IN (${statusPlaceholders})${siteSql}${typeFilter}
        AND (
          DATE(COALESCE(a.scheduled_at, vis.expected_at, vis.created_at)) = CURDATE()
          OR vis.status IN ('arrived_at_gate', 'entered_premises')
@@ -130,7 +151,7 @@ async function fetchCheckInAppointments(scope, visitType = 'walk-in', zoneIds = 
        CASE WHEN vis.status IN ('arrived_at_gate', 'entered_premises') THEN 0 ELSE 1 END,
        COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) ASC
      LIMIT 200`,
-    params,
+    [...params, ...zoneMatchParams],
   );
 
   return rows;
@@ -256,24 +277,30 @@ export function createReceptionRouter() {
         recentParams.push(siteId);
       }
 
-      const { sql: recentZoneSql, params: recentZoneParams } = visitZoneFilterClause(zoneReq.zoneIds);
-      recentParams.push(...recentZoneParams);
-      const [recentActivity] = await pool.query(
+      const { sql: recentZoneMatchSql, params: recentZoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
+      const [recentActivityRaw] = await pool.query(
         `SELECT ve.id, ve.visit_id, ve.event_type, ve.created_at,
-                v.full_name AS visitor_name, vis.status AS visit_status
+                v.full_name AS visitor_name, vis.status AS visit_status,
+                ${recentZoneMatchSql} AS zone_match
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
-         WHERE vis.organisation_id = ?${recentSiteFilter}${recentZoneSql}
+         WHERE vis.organisation_id = ?${recentSiteFilter}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
-        recentParams,
+        [...recentParams, ...recentZoneMatchParams],
       );
+      // Activity feed rows aren't full visit records — shape them by hand
+      // rather than forcing them through the visit DTO builders.
+      const recentActivity = recentActivityRaw.map((row) => (row.zone_match
+        ? { id: row.id, visit_id: row.visit_id, event_type: row.event_type, created_at: row.created_at, visitor_name: row.visitor_name, visit_status: row.visit_status, _accessLevel: 'full' }
+        : { id: row.id, visit_id: row.visit_id, created_at: row.created_at, visitor_name: row.visitor_name, _accessLevel: 'restricted' }));
 
       const perms = permissionsFromRequest(req);
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
       res.json({
         ok: true,
         data: {
@@ -283,7 +310,7 @@ export function createReceptionRouter() {
           waitingForHost,
           hostsOccupied: Number(hostsOccupiedRow?.count || 0),
           scheduledToday,
-          checkInAppointments: applyVisitListMasking(checkInRows, perms),
+          checkInAppointments: applyVisitAccessPolicyToRows(checkInRows, viewer, { zoneMatchColumn: 'zone_match' }),
           visitTrend,
           visitsToday,
           weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
@@ -384,7 +411,8 @@ export function createReceptionRouter() {
       const visitType = String(req.query.type || 'walk-in').toLowerCase();
       const rows = await fetchCheckInAppointments(scope, visitType, zoneReq.zoneIds);
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, { zoneMatchColumn: 'zone_match' }) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -405,8 +433,9 @@ export function createReceptionRouter() {
 
       const from = String(req.query.start || req.query.from || '').trim();
       const to = String(req.query.end || req.query.to || '').trim();
-      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
-      const params = [scope.organisation_id, ...site.params, ...zone.params];
+      const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
+      const params = [scope.organisation_id, ...site.params];
 
       let dateFilter = `AND COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) >= CURDATE()
         AND COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
@@ -416,18 +445,22 @@ export function createReceptionRouter() {
         params.push(from, to);
       }
 
+      // Cross-zone visits still appear here (Expected Visitors) — the access
+      // policy shapes them as a restricted name+time-only row instead of
+      // hiding them outright.
       const [rows] = await pool.query(
-        `${CALENDAR_SELECT}
-         WHERE vis.organisation_id = ?${site.sql}${zone.sql}
+        `${calendarSelectSql(zoneMatchSql)}
+         WHERE vis.organisation_id = ?${site.sql}
            AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
            ${dateFilter}
          ORDER BY COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) ASC
          LIMIT 500`,
-        params,
+        [...params, ...zoneMatchParams],
       );
 
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, { zoneMatchColumn: 'zone_match' }) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -531,7 +564,8 @@ export function createReceptionRouter() {
         ? ['waiting', 'pending_approval', 'reception_check_in', 'checked_in']
         : ['waiting', 'pending_approval'];
 
-      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
       const placeholders = statuses.map(() => '?').join(', ');
 
       const [rows] = await pool.query(
@@ -543,20 +577,25 @@ export function createReceptionRouter() {
                   WHEN vis.host_id IS NULL THEN NULL
                   WHEN COALESCE(h.availability, 'available') = 'unavailable' THEN 'unavailable'
                   ELSE 'available'
-                END AS host_availability
+                END AS host_availability,
+                ${zoneMatchSql} AS zone_match
          FROM visits vis ${VISIT_JOINS}
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
          LEFT JOIN appointments a ON a.visit_id = vis.id
          LEFT JOIN visit_events ve ON ve.visit_id = vis.id AND ve.event_type = 'waiting'
-         WHERE vis.organisation_id = ?${site.sql}${zone.sql}
+         WHERE vis.organisation_id = ?${site.sql}
            AND vis.status IN (${placeholders})
          ORDER BY COALESCE(ve.created_at, vis.checked_in_at, vis.updated_at) ASC
          LIMIT 200`,
-        [scope.organisation_id, ...site.params, ...zone.params, ...statuses],
+        [scope.organisation_id, ...site.params, ...statuses, ...zoneMatchParams],
       );
 
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      // Restricted rows never get action buttons on the client — the write
+      // path (assertTargetInReceptionZones) still blocks any mutation attempt
+      // on an out-of-zone host/office regardless.
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, { zoneMatchColumn: 'zone_match' }) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -575,27 +614,30 @@ export function createReceptionRouter() {
         return res.json({ ok: true, data: [] });
       }
 
-      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
-      const params = [scope.organisation_id, ...site.params, ...zone.params];
+      const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
+      const params = [scope.organisation_id, ...site.params];
 
       const [rows] = await pool.query(
         `SELECT vis.id, vis.status, vis.checked_in_at, vis.badge_number, vis.pass_code,
-                vis.zone_id, vis.host_id,
+                vis.zone_id, vis.host_id, vis.expected_at,
                 v.full_name, v.phone, v.company, h.name AS host_name, vc.name AS category_name,
-                COALESCE(vc.classification, 'standard') AS classification
+                COALESCE(vc.classification, 'standard') AS classification,
+                ${zoneMatchSql} AS zone_match
          FROM visits vis
          INNER JOIN visitors v ON v.id = vis.visitor_id
          LEFT JOIN hosts h ON h.id = vis.host_id
          ${ZONE_OFFICE_JOINS}
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
-         WHERE vis.organisation_id = ?${site.sql}${zone.sql}
+         WHERE vis.organisation_id = ?${site.sql}
            AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')
          ORDER BY vis.checked_in_at DESC`,
-        params,
+        [...params, ...zoneMatchParams],
       );
 
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, { zoneMatchColumn: 'zone_match' }) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -746,11 +788,12 @@ export function createReceptionRouter() {
         return res.json({ ok: true, data: [] });
       }
 
-      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
+      const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
       const search = String(req.query.search || req.query.q || '').trim();
       const status = String(req.query.status || '').trim();
       const limit = Math.min(200, Number(req.query.limit) || 100);
-      const params = [scope.organisation_id, ...site.params, ...zone.params];
+      const params = [scope.organisation_id, ...site.params];
 
       let filters = '';
       if (status) {
@@ -767,25 +810,45 @@ export function createReceptionRouter() {
         const term = `%${search}%`;
         params.push(term, term, term, term);
       }
-      params.push(limit);
 
       const [rows] = await pool.query(
-        `SELECT ${VISIT_SELECT_FIELDS}
+        `SELECT ${VISIT_SELECT_FIELDS}, ${zoneMatchSql} AS zone_match
          FROM visits vis
          ${VISIT_JOINS}
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
-         WHERE vis.organisation_id = ?${site.sql}${zone.sql}${filters}
+         WHERE vis.organisation_id = ?${site.sql}${filters}
          ORDER BY vis.created_at DESC
          LIMIT ?`,
-        params,
+        [...params, ...zoneMatchParams, limit],
       );
 
       const perms = permissionsFromRequest(req);
-      res.json({ ok: true, data: applyVisitListMasking(rows, perms) });
+      const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      res.json({ ok: true, data: applyVisitAccessPolicyToRows(rows, viewer, { zoneMatchColumn: 'zone_match' }) });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
   });
+
+  /** Site-scoped only (no zone exclusion) — used for the read/detail path, where
+   *  cross-zone visits must still resolve (visible-but-restricted), unlike the
+   *  mutation paths above which keep the hard zone filter via loadReceptionVisit. */
+  async function loadReceptionVisitForRead(visitId, scope) {
+    const { sql: siteSql, params: siteParams } = siteFilterClause(scope);
+    const [[visit]] = await pool.query(
+      `SELECT ${VISIT_SELECT_FIELDS}
+       FROM visits vis
+       ${VISIT_JOINS}
+       LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+       WHERE vis.id = ? AND vis.organisation_id = ?${siteSql}
+       LIMIT 1`,
+      [visitId, scope.organisation_id, ...siteParams],
+    );
+    if (!visit) {
+      return { ok: false, status: 404, message: 'Visit not found.' };
+    }
+    return { ok: true, visit };
+  }
 
   router.get('/visits/:id', async (req, res) => {
     try {
@@ -800,14 +863,27 @@ export function createReceptionRouter() {
         return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
       }
 
-      const loaded = await loadReceptionVisit(req.params.id, scopeResult.scope, zoneReq.zoneIds);
+      const loaded = await loadReceptionVisitForRead(req.params.id, scopeResult.scope);
       if (!loaded.ok) {
         return res.status(loaded.status).json({ ok: false, message: loaded.message });
       }
 
       const perms = permissionsFromRequest(req);
-      const visit = applyVisitListMasking([loaded.visit], perms)[0];
-      const visitId = visit.id;
+      const viewer = buildReceptionViewer(scopeResult.scope, zoneReq, perms);
+      const hostZoneIds = await resolveHostZoneIds(pool, loaded.visit.host_id);
+      const visitZoneMatch = hostZoneIds.some((id) => zoneReq.zoneIds.includes(id));
+      const visit = applyVisitAccessPolicy(loaded.visit, viewer, { visitZoneMatch });
+      const visitId = loaded.visit.id;
+
+      if (visit?._accessLevel === 'restricted') {
+        return res.json({ ok: true, data: { visit, events: [], approvals: [], visitorHistory: [] } });
+      }
+
+      await auditFullRecordViewed(pool, {
+        organisationId: scopeResult.scope.organisation_id,
+        actorUserId: userId,
+        visitId,
+      });
 
       const [events] = await pool.query(
         `SELECT ve.*, u.name AS actor_name
@@ -827,7 +903,7 @@ export function createReceptionRouter() {
         [visitId],
       );
 
-      const { site, zone } = receptionVisitFilters(scopeResult.scope, zoneReq.zoneIds);
+      const { site } = receptionVisitFilters(scopeResult.scope, zoneReq.zoneIds);
       const [visitorHistory] = await pool.query(
         `SELECT vis.id, vis.pass_code AS reference_number, vis.status, vis.purpose, vis.created_at,
                 h.name AS host_name
@@ -836,10 +912,10 @@ export function createReceptionRouter() {
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
-         WHERE v.id = ? AND vis.id <> ? AND vis.organisation_id = ?${site.sql}${zone.sql}
+         WHERE v.id = ? AND vis.id <> ? AND vis.organisation_id = ?${site.sql}
          ORDER BY vis.created_at DESC
          LIMIT 10`,
-        [visit.visitor_id, visitId, scopeResult.scope.organisation_id, ...site.params, ...zone.params],
+        [loaded.visit.visitor_id, visitId, scopeResult.scope.organisation_id, ...site.params],
       );
 
       res.json({
@@ -1165,6 +1241,8 @@ export function createReceptionRouter() {
         idType,
         idNumber,
         confidentialNotes,
+        actorUserId: userId,
+        organisationId: scope.organisation_id,
       });
 
       let initialStatus = 'pending_approval';

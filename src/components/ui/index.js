@@ -11,6 +11,7 @@ export { default as Modal } from './Modal';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as StatusBadge } from './StatusBadge';
 export { default as VisitorTypeBadge } from './VisitorTypeBadge';
+export { default as RestrictedIndicator } from './RestrictedIndicator';
 export { default as Spinner } from './Spinner';
 export { default as LoadingButton } from './LoadingButton';
 export { default as Button } from './Button';
