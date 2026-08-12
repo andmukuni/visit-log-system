@@ -120,6 +120,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'visitor-logs', name: 'Visitor Logs', to: '/reception/visitors', permission: 'reception.visitors.view', section: 'primary' },
     { key: 'badges', name: 'Badge Desk', to: '/reception/badges', permission: 'reception.badges', section: 'system' },
     { key: 'occupancy', name: 'On-site Visitors', to: '/reception/occupancy', permission: 'reception.occupancy', section: 'system' },
+    { key: 'notifications', name: 'Notifications', to: '/reception/notifications', permission: 'reception.dashboard', section: 'system', badgeKey: 'notifications' },
   ],
   station: [
     { key: 'dashboard', name: 'Dashboard', to: '/station', permission: 'station.dashboard', end: true, section: 'primary' },

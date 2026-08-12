@@ -158,6 +158,12 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             {portalId === 'host' && hasPermission('host.notifications') ? (
               <NavbarNotificationsBell compact={compactChrome} />
             ) : null}
+            {portalId === 'reception' && hasPermission('reception.dashboard') ? (
+              <NavbarNotificationsBell
+                compact={compactChrome}
+                to="/reception/notifications"
+              />
+            ) : null}
             <PortalSwitcherMenu compact={compactChrome} />
             <AdminUserMenu compact={compactChrome} />
           </div>

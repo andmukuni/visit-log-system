@@ -154,7 +154,15 @@ app.use('/api', async (req, res, next) => {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }
   } else if (!isLegacyAdmin && routePath.startsWith('/admin/notifications')) {
-    const notificationGate = ['host.notifications', 'admin.notifications', 'admin.dashboard', 'station.dashboard', 'security.dashboard', 'executive.dashboard'];
+    const notificationGate = [
+      'host.notifications',
+      'admin.notifications',
+      'admin.dashboard',
+      'station.dashboard',
+      'security.dashboard',
+      'executive.dashboard',
+      'reception.dashboard',
+    ];
     if (!hasAnyPermission(perms, notificationGate)) {
       return res.status(403).json({ ok: false, message: 'Insufficient permissions for this action.' });
     }

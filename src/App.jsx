@@ -74,6 +74,7 @@ const ReceptionVisitorLogsPage = lazy(() => import('./pages/reception/ReceptionV
 const ReceptionVisitDetailPage = lazy(() => import('./pages/reception/ReceptionVisitDetailPage'));
 const ReceptionOccupancyPage = lazy(() => import('./pages/reception/ReceptionOccupancyPage'));
 const ReceptionBadgesPage = lazy(() => import('./pages/reception/ReceptionBadgesPage'));
+const ReceptionNotificationsPage = lazy(() => import('./pages/reception/ReceptionNotificationsPage'));
 
 const HostDashboardPage = lazy(() => import('./pages/host/HostDashboardPage'));
 const HostInvitePage = lazy(() => import('./pages/host/HostInvitePage'));
@@ -357,6 +358,7 @@ export const router = createBrowserRouter([
           { path: 'visitors/:id', element: <ReceptionVisitDetailPage /> },
           { path: 'badges', element: <ReceptionBadgesPage /> },
           { path: 'occupancy', element: <ReceptionOccupancyPage /> },
+          { path: 'notifications', element: <ReceptionNotificationsPage /> },
           { path: '*', element: <PlaceholderPage title="Reception" portalLabel="Reception" /> },
         ],
       },
