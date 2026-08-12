@@ -11,7 +11,10 @@ import { APP_NAME_SHORT } from '../shared/branding.js';
 import {
   isExecutiveOnlyUser,
   isHostOnlyUser,
+  isHostPortalPath,
   isReceptionOnlyUser,
+  isReceptionPortalPath,
+  resolveDefaultHomeRoute,
 } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
@@ -275,13 +278,13 @@ function AppRoot() {
     if (!permissions?.length) return;
     if (
       (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions))
-      && (location.pathname.startsWith('/management') || location.pathname.startsWith('/reception'))
+      && !isHostPortalPath(location.pathname)
     ) {
-      navigate('/host', { replace: true });
+      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
       return;
     }
-    if (isReceptionOnlyUser(permissions) && location.pathname.startsWith('/host')) {
-      navigate('/reception', { replace: true });
+    if (isReceptionOnlyUser(permissions) && !isReceptionPortalPath(location.pathname)) {
+      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
     }
   }, [permissions, location.pathname, navigate]);
 

@@ -317,27 +317,45 @@ export function resolveDefaultHomeRoute(permissions = []) {
   return resolvePortalRoute(permissions);
 }
 
+/** True when the path belongs to the Reception Access Portal. */
+export function isReceptionPortalPath(pathname = '') {
+  const path = String(pathname || '');
+  return path === '/reception' || path.startsWith('/reception/');
+}
+
+/** True when the path belongs to the Host portal (includes legacy /executive). */
+export function isHostPortalPath(pathname = '') {
+  const path = String(pathname || '');
+  return path === '/host'
+    || path.startsWith('/host/')
+    || path === '/executive'
+    || path.startsWith('/executive/');
+}
+
 /** Prefer the user's primary portal; never send host-calendar users to /management. */
 export function resolveLoginRedirect(fromPath = '', permissions = []) {
   const homeRoute = resolveDefaultHomeRoute(permissions);
   const from = String(fromPath || '').trim();
-  const hasReception = permissionMatches(permissions, 'reception.dashboard');
 
-  // Host/calendar users (not reception desk) always land on the merged host dashboard.
+  // Reception desk users always stay in the reception portal.
+  if (isReceptionOnlyUser(permissions)) {
+    return isReceptionPortalPath(from) ? from : homeRoute;
+  }
+
+  // Host / executive calendar users always stay in the host portal.
+  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
+    return isHostPortalPath(from) ? (from.startsWith('/executive') ? homeRoute : from) : homeRoute;
+  }
+
+  // Broader host/calendar permission sets still default to the merged host dashboard.
   if (
-    !hasReception
-    && (
-      permissionMatches(permissions, 'executive.dashboard')
-      || permissionMatches(permissions, 'host.dashboard')
-    )
+    permissionMatches(permissions, 'executive.dashboard')
+    || permissionMatches(permissions, 'host.dashboard')
   ) {
     return homeRoute;
   }
 
   if (!from || from === '/' || from === '/login' || from.startsWith('/admin/login') || from.startsWith('/platform') || from.startsWith('/executive')) {
-    return homeRoute;
-  }
-  if (isExecutiveOnlyUser(permissions) && from.startsWith('/management')) {
     return homeRoute;
   }
   return from;

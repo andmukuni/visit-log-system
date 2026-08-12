@@ -11,7 +11,9 @@ import {
   getAccessiblePortals,
   isExecutiveOnlyUser,
   isHostOnlyUser,
+  isHostPortalPath,
   isReceptionOnlyUser,
+  isReceptionPortalPath,
   resolveDefaultHomeRoute,
   resolveLoginRedirect,
   resolvePrimaryPortal,
@@ -41,7 +43,7 @@ describe('portal login routing', () => {
 
   it('routes executive users to the merged host calendar on login', () => {
     assert.equal(resolveDefaultHomeRoute(EXECUTIVE_PORTAL_KEYS), '/host');
-    assert.equal(resolveLoginRedirect('/host/visitors', EXECUTIVE_PORTAL_KEYS), '/host');
+    assert.equal(resolveLoginRedirect('/host/visitors', EXECUTIVE_PORTAL_KEYS), '/host/visitors');
     assert.equal(resolveLoginRedirect('/login', EXECUTIVE_PORTAL_KEYS), '/host');
     assert.equal(resolveLoginRedirect('/executive', EXECUTIVE_PORTAL_KEYS), '/host');
   });
@@ -111,5 +113,39 @@ describe('portal login routing', () => {
     assert.equal(canAccessPortal('host', hasPermissionFactory(receptionPerms), receptionPerms), false);
     assert.deepEqual(getAccessiblePortals(hasPermissionFactory(hostEmployee), hostEmployee), []);
     assert.deepEqual(getAccessiblePortals(hasPermissionFactory(receptionPerms), receptionPerms), []);
+  });
+
+  it('locks reception-only users out of every non-reception route', () => {
+    assert.equal(isReceptionPortalPath('/reception'), true);
+    assert.equal(isReceptionPortalPath('/reception/calendar'), true);
+    assert.equal(isReceptionPortalPath('/host'), false);
+    assert.equal(isReceptionPortalPath('/admin/receptionists'), false);
+    assert.equal(isReceptionPortalPath('/security'), false);
+
+    assert.equal(resolveLoginRedirect('/host', receptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/admin', receptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/security/approvals', receptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/station', receptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/reception/check-in', receptionPerms), '/reception/check-in');
+
+    assert.equal(resolveLoginRedirect('/host', executiveReceptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/admin/receptionists', executiveReceptionPerms), '/reception/calendar');
+  });
+
+  it('locks host-only users out of every non-host route', () => {
+    assert.equal(isHostPortalPath('/host'), true);
+    assert.equal(isHostPortalPath('/host/appointments'), true);
+    assert.equal(isHostPortalPath('/executive'), true);
+    assert.equal(isHostPortalPath('/reception'), false);
+    assert.equal(isHostPortalPath('/admin'), false);
+    assert.equal(isHostPortalPath('/security'), false);
+
+    assert.equal(resolveLoginRedirect('/reception', hostEmployee), '/host');
+    assert.equal(resolveLoginRedirect('/admin', hostEmployee), '/host');
+    assert.equal(resolveLoginRedirect('/security', hostEmployee), '/host');
+    assert.equal(resolveLoginRedirect('/management', hostEmployee), '/host');
+    assert.equal(resolveLoginRedirect('/host/appointments', hostEmployee), '/host/appointments');
+    assert.equal(resolveLoginRedirect('/executive', ceoPerms), '/host');
+    assert.equal(resolveLoginRedirect('/reception/calendar', ceoPerms), '/host');
   });
 });
