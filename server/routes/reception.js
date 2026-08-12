@@ -25,6 +25,7 @@ import { generateId } from '../visitorSchema.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import {
   assertTargetInReceptionZones,
+  buildReceptionSearchClause,
   hostZoneFilterClause,
   officeZoneFilterClause,
   requireReceptionZoneContext,
@@ -789,11 +790,13 @@ export function createReceptionRouter() {
       }
 
       const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
-      const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
+      const zoneMatch = visitZoneMatchExpr(zoneReq.zoneIds);
       const search = String(req.query.search || req.query.q || '').trim();
       const status = String(req.query.status || '').trim();
       const limit = Math.min(200, Number(req.query.limit) || 100);
-      const params = [scope.organisation_id, ...site.params];
+
+      // Param order must follow SQL emission order: SELECT expr, then WHERE.
+      const params = [...zoneMatch.params, scope.organisation_id, ...site.params];
 
       let filters = '';
       if (status) {
@@ -801,25 +804,24 @@ export function createReceptionRouter() {
         params.push(status);
       }
       if (search) {
-        filters += ` AND (
-          v.full_name LIKE ?
-          OR vis.pass_code LIKE ?
-          OR h.name LIKE ?
-          OR v.company LIKE ?
-        )`;
-        const term = `%${search}%`;
-        params.push(term, term, term, term);
+        // Cross-zone rows are matchable on visitor name only — searching a
+        // company/host/pass code must never confirm a protected field of a
+        // visit outside this desk's zone.
+        const searchClause = buildReceptionSearchClause(zoneMatch, search);
+        filters += searchClause.sql;
+        params.push(...searchClause.params);
       }
+      params.push(limit);
 
       const [rows] = await pool.query(
-        `SELECT ${VISIT_SELECT_FIELDS}, ${zoneMatchSql} AS zone_match
+        `SELECT ${VISIT_SELECT_FIELDS}, ${zoneMatch.sql} AS zone_match
          FROM visits vis
          ${VISIT_JOINS}
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
          WHERE vis.organisation_id = ?${site.sql}${filters}
          ORDER BY vis.created_at DESC
          LIMIT ?`,
-        [...params, ...zoneMatchParams, limit],
+        params,
       );
 
       const perms = permissionsFromRequest(req);

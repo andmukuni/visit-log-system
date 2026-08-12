@@ -315,6 +315,37 @@ export function visitZoneMatchExpr(zoneIds, {
   return { sql, params: [...ids, ...ids] };
 }
 
+/**
+ * Search predicate for reception visit lists that now include cross-zone rows.
+ *
+ * Without this split, search is an inference oracle: a receptionist could type
+ * a company name, host name, or pass code and learn — from the mere presence of
+ * a restricted result row — a protected field of a visit outside their zone.
+ * In-zone rows keep the full-column search; cross-zone rows are matchable only
+ * on visitor name, which the restricted DTO already exposes anyway.
+ *
+ * The zone-match expression must be inlined (not referenced by its SELECT
+ * alias) because neither MySQL nor Postgres allows a SELECT alias in WHERE.
+ * Returned params are already in emission order.
+ */
+export function buildReceptionSearchClause(zoneMatch, term = '') {
+  const like = `%${term}%`;
+  const expr = zoneMatch?.sql ?? '0';
+  const exprParams = zoneMatch?.params ?? [];
+  return {
+    sql: ` AND (
+      (${expr} = 1 AND (
+        v.full_name LIKE ?
+        OR vis.pass_code LIKE ?
+        OR h.name LIKE ?
+        OR v.company LIKE ?
+      ))
+      OR (${expr} = 0 AND v.full_name LIKE ?)
+    )`,
+    params: [...exprParams, like, like, like, like, ...exprParams, like],
+  };
+}
+
 export async function assertTargetInReceptionZones(pool, {
   hostId = null,
   officeId = null,

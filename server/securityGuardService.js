@@ -344,13 +344,18 @@ export function visitSecurityScopeFilterClause(scopeCtx, {
   visitAlias = 'vis',
   zoneAlias = 'sec_zone',
   officeAlias = 'sec_ofc',
+  buildingJoinAvailable = true,
 } = {}) {
   if (!scopeCtx?.siteId) {
     return { sql: ' AND 1=0', params: [] };
   }
 
   const stationIds = scopeCtx.stationIds || [];
-  const buildingIds = scopeCtx.buildingIds || [];
+  // Callers whose query does not join zones/offices under the expected aliases
+  // must pass buildingJoinAvailable:false — referencing an unjoined alias would
+  // make the endpoint error out for that officer. Dropping the building
+  // predicate only ever narrows scope (site and gate still bind), never widens.
+  const buildingIds = buildingJoinAvailable ? (scopeCtx.buildingIds || []) : [];
   if (!stationIds.length && !buildingIds.length) {
     return { sql: ` AND ${visitAlias}.site_id = ?`, params: [scopeCtx.siteId] };
   }

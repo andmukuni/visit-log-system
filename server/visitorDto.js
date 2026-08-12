@@ -30,11 +30,19 @@ function firstPresent(row, keys) {
 export function buildFullExpectedVisitorDTO(row, {
   includeInviteToken = false,
   includeCheckInSignature = false,
+  includePrivateNotes = false,
+  includeRawIdNumber = false,
 } = {}) {
   if (!row) return row;
   const dto = { ...row, _accessLevel: 'full' };
   if (!includeInviteToken) delete dto.invite_token;
   if (!includeCheckInSignature) delete dto.check_in_signature;
+  // Logic.md: private host notes and raw ID numbers are not part of "full
+  // visitor information" for reception/gate viewers — no permission grants
+  // them today, and no frontend on these routes renders them. The masked
+  // id_number_masked variant is kept for the desk's identity checks.
+  if (!includePrivateNotes) delete dto.confidential_notes;
+  if (!includeRawIdNumber) delete dto.id_number;
   return dto;
 }
 

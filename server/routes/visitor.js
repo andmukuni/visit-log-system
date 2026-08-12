@@ -811,7 +811,9 @@ async function resolveVisitsRouterAccess(req) {
     return { viewer, mode: 'reception', extraSql: '', extraParams: [], zoneMatchSql: sql, zoneMatchParams: params };
   }
   if (viewer.securityContext) {
-    const { sql, params } = visitSecurityScopeFilterClause(viewer.securityContext);
+    // VISIT_JOINS provides no sec_zone/sec_ofc aliases, so the building
+    // predicate must be dropped here — site + gate scope still bind.
+    const { sql, params } = visitSecurityScopeFilterClause(viewer.securityContext, { buildingJoinAvailable: false });
     return { viewer, mode: 'security', extraSql: sql, extraParams: params, zoneMatchSql: null, zoneMatchParams: [] };
   }
   if (viewer.hostContext) {
