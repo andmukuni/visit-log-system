@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { LoadingButton, PhoneInput, SegmentedControl } from '../ui';
 import { useToast } from '../../context/ToastContext';
+import ExecutiveDatePicker from './ExecutiveDatePicker';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import {
@@ -150,6 +151,7 @@ export default function ExecutiveAppointmentModal({
   variant = 'modal',
 }) {
   const [activeTab, setActiveTab] = useState('details');
+  const [openDatePicker, setOpenDatePicker] = useState(null);
   const previousScheduleRef = useRef(null);
   const toast = useToast();
   const isPage = variant === 'page';
@@ -157,6 +159,7 @@ export default function ExecutiveAppointmentModal({
   useEffect(() => {
     if (!open) {
       setActiveTab('details');
+      setOpenDatePicker(null);
       previousScheduleRef.current = null;
     }
   }, [open]);
@@ -168,7 +171,12 @@ export default function ExecutiveAppointmentModal({
     document.body.style.overflow = 'hidden';
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (openDatePicker) {
+        setOpenDatePicker(null);
+        return;
+      }
+      onClose();
     };
     document.addEventListener('keydown', onKeyDown);
 
@@ -176,7 +184,7 @@ export default function ExecutiveAppointmentModal({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onClose, isPage]);
+  }, [open, onClose, isPage, openDatePicker]);
 
   if (!open || !draft) return null;
 
@@ -336,12 +344,13 @@ export default function ExecutiveAppointmentModal({
                       {form.allDay ? 'Date' : 'Starts'}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <SchedulePill
+                      <ExecutiveDatePicker
                         label={formatShortDate(startAt)}
                         value={toDateInputValue(startAt)}
-                        type="date"
                         min={todayMinDate}
-                        onChange={(event) => handleStartDate(event.target.value)}
+                        isOpen={openDatePicker === 'start'}
+                        onOpenChange={(nextOpen) => setOpenDatePicker(nextOpen ? 'start' : null)}
+                        onChange={handleStartDate}
                         ariaLabel={form.allDay ? 'Date' : 'Start date'}
                       />
                       {!form.allDay && (
@@ -374,12 +383,13 @@ export default function ExecutiveAppointmentModal({
                             ariaLabel="End time"
                           />
                           {!sameDay && (
-                            <SchedulePill
+                            <ExecutiveDatePicker
                               label={formatShortDate(endAt)}
                               value={toDateInputValue(endAt)}
-                              type="date"
                               min={todayMinDate}
-                              onChange={(event) => handleEndDate(event.target.value)}
+                              isOpen={openDatePicker === 'end'}
+                              onOpenChange={(nextOpen) => setOpenDatePicker(nextOpen ? 'end' : null)}
+                              onChange={handleEndDate}
                               ariaLabel="End date"
                             />
                           )}
