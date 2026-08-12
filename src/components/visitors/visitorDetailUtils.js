@@ -27,3 +27,11 @@ export function formatVisitHostLabel(visit, { empty = 'Not assigned' } = {}) {
   const position = getVisitHostPosition(visit);
   return position ? `${name} · ${position}` : name;
 }
+
+/** Gate / queue line — e.g. "CEO - Mr Daniel Sikatali" */
+export function formatVisitHostPositionLine(visit, { empty = '—' } = {}) {
+  const name = formatVisitHostName(visit, { empty: '' });
+  if (!name) return empty;
+  const position = getVisitHostPosition(visit);
+  return position ? `${position} - ${name}` : name;
+}

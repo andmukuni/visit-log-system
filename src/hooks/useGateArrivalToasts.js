@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { formatVisitHostPositionLine } from '../components/visitors/visitorDetailUtils';
 import { useToast } from '../context/ToastContext';
 import { formatTime } from '../utils/helpers';
 import { visitorApi } from '../utils/visitorApi';
@@ -59,7 +60,8 @@ export default function useGateArrivalToasts({ enabled = true } = {}) {
 
           const classification = String(row.classification || 'standard').toLowerCase();
           const tier = classification === 'vvip' ? 'VVIP' : classification === 'vip' ? 'VIP' : 'Guest';
-          const host = row.host_name ? ` for ${row.host_name}` : '';
+          const hostLine = formatVisitHostPositionLine(row, { empty: '' });
+          const host = hostLine ? ` for ${hostLine}` : '';
           const plates = row.expected_plates ? ` · ${row.expected_plates}` : '';
 
           toastRef.current.warning(

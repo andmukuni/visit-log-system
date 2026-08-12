@@ -388,6 +388,15 @@ export default function AdminReceptionistsPage() {
             }}
           />
           <IconButton
+            icon={Edit3}
+            label="Edit receptionist"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+          />
+          <IconButton
             icon={Trash2}
             label="Delete receptionist"
             iconSize={16}
@@ -401,7 +410,7 @@ export default function AdminReceptionistsPage() {
         </div>
       ),
     },
-  ], []);
+  ], [openShow]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,13 +21,67 @@ import {
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
+import { zonesForOrg } from '../../utils/adminStructureDefaults';
 
 const emptyForm = () => ({
+  organisationId: '',
   name: '',
   email: '',
   phone: '',
+  siteId: '',
+  zoneIds: [],
+  departmentId: '',
   status: 'active',
+  password: '',
 });
+
+function ZoneCheckboxField({
+  label,
+  zones,
+  selectedIds,
+  onChange,
+  required = false,
+  helpText = '',
+}) {
+  const toggleZone = (zoneId) => {
+    onChange(
+      selectedIds.includes(zoneId)
+        ? selectedIds.filter((id) => id !== zoneId)
+        : [...selectedIds, zoneId],
+    );
+  };
+
+  return (
+    <div>
+      {label ? (
+        <p className="mb-1.5 block text-sm font-medium text-navy-700">
+          {label} {required ? <span className="text-red-400">*</span> : null}
+        </p>
+      ) : null}
+      <div className="max-h-44 space-y-2 overflow-y-auto rounded-xl border border-navy-200 bg-navy-50 p-3">
+        {zones.length === 0 ? (
+          <p className="text-sm text-navy-400">No zones available for this site.</p>
+        ) : (
+          zones.map((zone) => (
+            <label
+              key={zone.value}
+              className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1 text-sm hover:bg-white/70"
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(zone.value)}
+                onChange={() => toggleZone(zone.value)}
+                className="mt-0.5 rounded border-navy-300 text-cyan-600 focus:ring-cyan-500"
+              />
+              <span className="font-medium text-navy-900">{zone.label}</span>
+            </label>
+          ))
+        )}
+      </div>
+      {helpText ? <p className="mt-1 text-xs text-navy-400">{helpText}</p> : null}
+    </div>
+  );
+}
 
 function DetailItem({ icon: Icon, label, value }) {
   return (
@@ -47,6 +101,9 @@ export default function AdminReceptionistDetailPage() {
   const toast = useToast();
 
   const [receptionist, setReceptionist] = useState(null);
+  const [departments, setDepartments] = useState([]);
+  const [sites, setSites] = useState([]);
+  const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -56,7 +113,16 @@ export default function AdminReceptionistDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      setReceptionist(await visitorApi.getReceptionist(id));
+      const [row, deptRows, siteRows, zoneRows] = await Promise.all([
+        visitorApi.getReceptionist(id),
+        visitorApi.getDepartments(),
+        visitorApi.getSites(),
+        visitorApi.getZones(),
+      ]);
+      setReceptionist(row || null);
+      setDepartments(Array.isArray(deptRows) ? deptRows : []);
+      setSites(Array.isArray(siteRows) ? siteRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
     } catch (err) {
       setReceptionist(null);
       toast.error(err?.message || 'Unable to load receptionist.');
@@ -69,13 +135,55 @@ export default function AdminReceptionistDetailPage() {
     void load();
   }, [load]);
 
+  const orgOptions = useMemo(() => {
+    if (!receptionist?.organisation_id) return [];
+    return [{
+      value: receptionist.organisation_id,
+      label: receptionist.organisation_name || 'Organisation',
+    }];
+  }, [receptionist]);
+
+  const siteOptions = useMemo(
+    () => sites
+      .filter((s) => s.status !== 'inactive')
+      .filter((s) => !form.organisationId || s.organisation_id === form.organisationId)
+      .map((s) => ({ value: s.id, label: s.name })),
+    [sites, form.organisationId],
+  );
+
+  const zoneOptions = useMemo(() => {
+    const list = zones.filter((z) => {
+      if (form.organisationId && z.organisation_id && z.organisation_id !== form.organisationId) return false;
+      if (form.siteId && z.site_id && z.site_id !== form.siteId) return false;
+      return true;
+    });
+    return list.map((z) => ({
+      value: z.id,
+      label: z.building_name ? `${z.name} · ${z.building_name}` : z.name,
+    }));
+  }, [zones, form.organisationId, form.siteId]);
+
+  const departmentOptions = useMemo(() => [
+    { value: '', label: 'No department (optional)' },
+    ...departments
+      .filter((d) => !form.organisationId || d.organisation_id === form.organisationId)
+      .map((d) => ({ value: d.id, label: d.code ? `${d.name} (${d.code})` : d.name })),
+  ], [departments, form.organisationId]);
+
   const openEdit = () => {
     if (!receptionist) return;
     setForm({
+      organisationId: receptionist.organisation_id || '',
       name: receptionist.name || '',
       email: receptionist.email || '',
       phone: receptionist.phone || '',
+      siteId: receptionist.site_id || '',
+      zoneIds: Array.isArray(receptionist.zone_ids) && receptionist.zone_ids.length
+        ? receptionist.zone_ids
+        : (receptionist.zone_id ? [receptionist.zone_id] : []),
+      departmentId: receptionist.department_id || '',
       status: receptionist.status || 'active',
+      password: '',
     });
     setModalOpen(true);
   };
@@ -86,8 +194,16 @@ export default function AdminReceptionistDetailPage() {
       toast.error('Receptionist name is required.');
       return;
     }
+    if (!form.siteId) {
+      toast.error('Site / branch is required.');
+      return;
+    }
+    if (!form.zoneIds.length) {
+      toast.error('Select at least one zone.');
+      return;
+    }
     if (!form.email.trim()) {
-      toast.error('Email is required.');
+      toast.error('Email is required for receptionist login.');
       return;
     }
     setSaving(true);
@@ -96,7 +212,11 @@ export default function AdminReceptionistDetailPage() {
         name: form.name,
         email: form.email,
         phone: form.phone,
+        siteId: form.siteId,
+        zoneIds: form.zoneIds,
+        departmentId: form.departmentId || null,
         status: form.status,
+        password: form.password || undefined,
       });
       toast.success('Receptionist updated.');
       setModalOpen(false);
@@ -217,7 +337,7 @@ export default function AdminReceptionistDetailPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title="Edit Receptionist"
-        subtitle="Update contact details and status. Change site or zones from the receptionists list."
+        subtitle="Organisation → Site + Zones → Receptionist (Reception portal access)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -237,28 +357,72 @@ export default function AdminReceptionistDetailPage() {
       >
         <div className="space-y-3">
           <FormField
-            label="Name"
+            label="Organisation"
+            name="organisationId"
+            type="select"
+            required
+            value={form.organisationId}
+            disabled
+            onChange={() => {}}
+            options={orgOptions}
+            helpText="Organisation cannot be changed after create."
+          />
+          <FormField
+            label="Full name"
             name="name"
             required
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Jane Doe"
+            placeholder="Grace Phiri"
           />
           <FormField
             label="Email"
             name="email"
-            type="email"
             required
             value={form.email}
             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-            placeholder="jane@example.com"
+            placeholder="reception@company.com"
+            helpText="Used for Reception portal login."
           />
           <FormField
             label="Phone"
             name="phone"
             value={form.phone}
             onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-            placeholder="+260 ..."
+            placeholder="+260..."
+          />
+          <FormField
+            label="Site / Branch"
+            name="siteId"
+            type="select"
+            required
+            value={form.siteId}
+            onChange={(e) => {
+              const siteId = e.target.value;
+              const nextZones = zonesForOrg(zones, form.organisationId, siteId);
+              setForm((prev) => ({
+                ...prev,
+                siteId,
+                zoneIds: prev.zoneIds.filter((zoneId) => nextZones.some((zone) => zone.id === zoneId)),
+              }));
+            }}
+            options={siteOptions}
+          />
+          <ZoneCheckboxField
+            label="Zones"
+            zones={zoneOptions}
+            selectedIds={form.zoneIds}
+            onChange={(zoneIds) => setForm((prev) => ({ ...prev, zoneIds }))}
+            required
+            helpText="Select every reception desk zone this receptionist can cover."
+          />
+          <FormField
+            label="Department"
+            name="departmentId"
+            type="select"
+            value={form.departmentId}
+            onChange={(e) => setForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+            options={departmentOptions}
           />
           <FormField
             label="Status"
@@ -270,6 +434,15 @@ export default function AdminReceptionistDetailPage() {
               { value: 'active', label: 'Active' },
               { value: 'inactive', label: 'Inactive' },
             ]}
+          />
+          <FormField
+            label="Reset password"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder="Leave blank to keep current"
+            helpText="Leave blank to keep the current password."
           />
         </div>
       </Modal>
