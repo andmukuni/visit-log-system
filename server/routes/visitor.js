@@ -2637,6 +2637,110 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.patch('/buildings/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const buildingId = req.params.id;
+
+      const [[existing]] = await pool.query(
+        `SELECT b.*, s.organisation_id, s.name AS site_name
+         FROM buildings b
+         JOIN sites s ON s.id = b.site_id
+         WHERE b.id = ?
+         LIMIT 1`,
+        [buildingId],
+      );
+      if (!existing) return res.status(404).json({ ok: false, message: 'Building not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this building.' });
+      }
+
+      const name = req.body?.name != null ? String(req.body.name).trim() : existing.name;
+      const siteId = req.body?.siteId != null || req.body?.site_id != null
+        ? String(req.body.siteId || req.body.site_id || '').trim()
+        : existing.site_id;
+
+      if (!name) return res.status(400).json({ ok: false, message: 'Building name is required.' });
+      if (!siteId) return res.status(400).json({ ok: false, message: 'Site is required.' });
+
+      if (siteId !== existing.site_id) {
+        const [[site]] = await pool.query(
+          'SELECT id FROM sites WHERE id = ? AND organisation_id = ? LIMIT 1',
+          [siteId, existing.organisation_id],
+        );
+        if (!site) {
+          return res.status(400).json({ ok: false, message: 'Site not found in this organisation.' });
+        }
+      }
+
+      await pool.query('UPDATE buildings SET name = ?, site_id = ? WHERE id = ?', [name, siteId, buildingId]);
+      const [[row]] = await pool.query(
+        `SELECT b.*,
+                s.name AS site_name,
+                s.organisation_id,
+                (SELECT COUNT(*) FROM zones z WHERE z.building_id = b.id) AS zone_count
+         FROM buildings b
+         JOIN sites s ON s.id = b.site_id
+         WHERE b.id = ?`,
+        [buildingId],
+      );
+      res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/buildings/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const buildingId = req.params.id;
+
+      const [[existing]] = await pool.query(
+        `SELECT b.*, s.organisation_id
+         FROM buildings b
+         JOIN sites s ON s.id = b.site_id
+         WHERE b.id = ?
+         LIMIT 1`,
+        [buildingId],
+      );
+      if (!existing) return res.status(404).json({ ok: false, message: 'Building not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this building.' });
+      }
+
+      const [[zoneCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM zones WHERE building_id = ?',
+        [buildingId],
+      );
+      if (Number(zoneCount?.count || 0) > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Remove or reassign zones in this building before deleting it.',
+        });
+      }
+
+      const [[officeCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM offices WHERE building_id = ?',
+        [buildingId],
+      );
+      if (Number(officeCount?.count || 0) > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Remove or reassign offices in this building before deleting it.',
+        });
+      }
+
+      await pool.query('DELETE FROM buildings WHERE id = ?', [buildingId]);
+      res.json({ ok: true, message: 'Building deleted.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/zones', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -2818,6 +2922,83 @@ export function createOrgAdminRouter() {
         [zoneId],
       );
       res.json({ ok: true, data: row });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/zones/:id', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const orgId = scope?.organisation_id;
+      const zoneId = req.params.id;
+
+      const [[existing]] = await pool.query(
+        `SELECT z.*, s.organisation_id
+         FROM zones z
+         JOIN buildings b ON b.id = z.building_id
+         JOIN sites s ON s.id = b.site_id
+         WHERE z.id = ?
+         LIMIT 1`,
+        [zoneId],
+      );
+      if (!existing) return res.status(404).json({ ok: false, message: 'Zone not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this zone.' });
+      }
+
+      const [[officeCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM offices WHERE zone_id = ?',
+        [zoneId],
+      );
+      if (Number(officeCount?.count || 0) > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Remove or reassign offices in this zone before deleting it.',
+        });
+      }
+
+      const [[hostCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM hosts WHERE zone_id = ?',
+        [zoneId],
+      );
+      if (Number(hostCount?.count || 0) > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Remove or reassign hosts linked to this zone before deleting it.',
+        });
+      }
+
+      let receptionistLinked = 0;
+      try {
+        const [[rzCount]] = await pool.query(
+          'SELECT COUNT(*) AS count FROM receptionist_zones WHERE zone_id = ?',
+          [zoneId],
+        );
+        receptionistLinked += Number(rzCount?.count || 0);
+      } catch {
+        // receptionist_zones may not exist on older schemas.
+      }
+      const [[rCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM receptionists WHERE zone_id = ?',
+        [zoneId],
+      );
+      receptionistLinked += Number(rCount?.count || 0);
+      if (receptionistLinked > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Remove or reassign receptionists covering this zone before deleting it.',
+        });
+      }
+
+      try {
+        await pool.query('DELETE FROM receptionist_zones WHERE zone_id = ?', [zoneId]);
+      } catch {
+        // Ignore if junction table missing.
+      }
+      await pool.query('DELETE FROM zones WHERE id = ?', [zoneId]);
+      res.json({ ok: true, message: 'Zone deleted.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

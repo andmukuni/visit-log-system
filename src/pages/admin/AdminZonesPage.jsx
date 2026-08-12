@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   ChevronDown,
@@ -11,9 +11,9 @@ import {
   Search,
   Shield,
   Layers3,
-  X,
   Edit3,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -22,6 +22,7 @@ import {
   Modal,
   FormField,
   LoadingButton,
+  ConfirmDialog,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
@@ -36,7 +37,12 @@ const ACCESS_LEVELS = [
   { value: 'high-security', label: 'High security' },
 ];
 
-const TABS = [
+const ENTITY_TABS = [
+  { id: 'buildings', label: 'Buildings', icon: Building2 },
+  { id: 'zones', label: 'Zones', icon: Layers3 },
+];
+
+const ZONE_FILTER_TABS = [
   { id: 'all', label: 'All Zones' },
   { id: 'public', label: 'Public', badgeKey: 'public' },
   { id: 'staff', label: 'Staff', badgeKey: 'staff' },
@@ -81,10 +87,15 @@ const KPI_ITEMS = [
   },
 ];
 
-const emptyForm = () => ({
+const emptyZoneForm = () => ({
   name: '',
   buildingId: '',
   accessLevel: 'public',
+});
+
+const emptyBuildingForm = () => ({
+  name: '',
+  siteId: '',
 });
 
 function normalizeAccess(level = '') {
@@ -169,20 +180,6 @@ function ZonesKpiRow({ kpis = {} }) {
   );
 }
 
-function DetailRow({ icon: Icon, label, value }) {
-  return (
-    <>
-      <Icon size={16} className="mt-0.5 shrink-0 text-gray-400" aria-hidden="true" />
-      <div className="min-w-0 pb-2">
-        <p className="text-xs font-medium leading-none text-gray-500">{label}</p>
-        <p className="mt-1 text-sm font-semibold leading-snug text-navy-900 break-words">
-          {value || '—'}
-        </p>
-      </div>
-    </>
-  );
-}
-
 function exportZonesCsv(rows) {
   const headers = ['Zone', 'Building', 'Site', 'Access level'];
   const lines = rows.map((row) => [
@@ -205,6 +202,27 @@ function exportZonesCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
+function exportBuildingsCsv(rows) {
+  const headers = ['Building', 'Site', 'Zones'];
+  const lines = rows.map((row) => [
+    row.name || '',
+    row.site_name || '',
+    Number(row.zone_count || 0),
+  ]);
+
+  const csv = [headers, ...lines]
+    .map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'buildings.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminZonesPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -212,6 +230,7 @@ export default function AdminZonesPage() {
   const canManageStructure = hasOrganisation && hasActiveOrganisation;
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const entity = searchParams.get('entity') === 'buildings' ? 'buildings' : 'zones';
   const tab = searchParams.get('tab') || 'all';
   const search = searchParams.get('search') || '';
   const access = searchParams.get('access') || '';
@@ -228,11 +247,16 @@ export default function AdminZonesPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(emptyZoneForm);
   const [saving, setSaving] = useState(false);
+
   const [buildingModalOpen, setBuildingModalOpen] = useState(false);
-  const [buildingForm, setBuildingForm] = useState({ name: '', siteId: '' });
+  const [editingBuilding, setEditingBuilding] = useState(null);
+  const [buildingForm, setBuildingForm] = useState(emptyBuildingForm);
   const [savingBuilding, setSavingBuilding] = useState(false);
+
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -258,7 +282,7 @@ export default function AdminZonesPage() {
       setSites(Array.isArray(siteRows) ? siteRows : []);
       setKpis(zones?.stats || {
         total: zones?.length || 0,
-        buildings: new Set((zones || []).map((z) => z.building_id)).size,
+        buildings: Array.isArray(buildingRows) ? buildingRows.length : 0,
         public: (zones || []).filter((z) => normalizeAccess(z.access_level) === 'public').length,
         staff: (zones || []).filter((z) => normalizeAccess(z.access_level) === 'staff').length,
         restricted: (zones || []).filter((z) => ['restricted', 'high-security'].includes(normalizeAccess(z.access_level))).length,
@@ -268,7 +292,7 @@ export default function AdminZonesPage() {
       setBuildings([]);
       setSites([]);
       setKpis({});
-      toast.error(err?.message || 'Unable to load zones.');
+      toast.error(err?.message || 'Unable to load buildings & zones.');
     } finally {
       setLoading(false);
     }
@@ -304,7 +328,7 @@ export default function AdminZonesPage() {
     }))
   ), [buildings]);
 
-  const filteredRows = useMemo(() => {
+  const filteredZones = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allRows.filter((row) => {
       const level = normalizeAccess(row.access_level);
@@ -320,6 +344,18 @@ export default function AdminZonesPage() {
     });
   }, [allRows, tab, access, siteId, search]);
 
+  const filteredBuildings = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return buildings.filter((row) => {
+      if (siteId && row.site_id !== siteId) return false;
+      if (!q) return true;
+      return [row.name, row.site_name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [buildings, siteId, search]);
+
+  const filteredRows = entity === 'buildings' ? filteredBuildings : filteredZones;
   const total = filteredRows.length;
   const pageRows = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -337,67 +373,24 @@ export default function AdminZonesPage() {
     navigate(`/admin/zones/${row.id}`);
   }, [navigate]);
 
-  const columns = useMemo(() => [
-    {
-      key: 'name',
-      label: 'Zone',
-      render: (_, row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.name}</p>
-          <p className="text-xs text-gray-500">{row.building_name || '—'}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'site_name',
-      label: 'Site / Branch',
-      render: (value) => <span className="text-sm text-gray-700">{value || '—'}</span>,
-    },
-    {
-      key: 'access_level',
-      label: 'Access',
-      render: (value) => <AccessBadge level={value} />,
-    },
-    {
-      key: 'actions',
-      label: '',
-      render: (_, row) => (
-        <IconButton
-          icon={Eye}
-          label="View zone"
-          iconSize={16}
-          onClick={(e) => {
-            e.stopPropagation();
-            openShow(row);
-          }}
-        />
-      ),
-    },
-  ], []);
-
-  const openCreate = () => {
+  const openCreateZone = () => {
     if (!canManageStructure) {
       toast.error('Create an organisation first. Buildings & zones cannot exist without an organisation.');
       return;
     }
+    if (!buildings.length) {
+      toast.error('Create a building first.');
+      return;
+    }
     setEditing(null);
     setForm({
-      ...emptyForm(),
+      ...emptyZoneForm(),
       buildingId: buildings[0]?.id || '',
     });
     setModalOpen(true);
   };
 
-  const openCreateBuilding = () => {
-    if (!canManageStructure) {
-      toast.error('Create an organisation first. Buildings cannot exist without an organisation.');
-      return;
-    }
-    setBuildingForm({ name: '', siteId: sites[0]?.id || '' });
-    setBuildingModalOpen(true);
-  };
-
-  const openEdit = (zone) => {
+  const openEditZone = (zone) => {
     setEditing(zone);
     setForm({
       name: zone.name || '',
@@ -407,7 +400,33 @@ export default function AdminZonesPage() {
     setModalOpen(true);
   };
 
-  const handleSave = async () => {
+  const openCreateBuilding = () => {
+    if (!canManageStructure) {
+      toast.error('Create an organisation first. Buildings cannot exist without an organisation.');
+      return;
+    }
+    if (!sites.length) {
+      toast.error('Create a site / branch first.');
+      return;
+    }
+    setEditingBuilding(null);
+    setBuildingForm({
+      ...emptyBuildingForm(),
+      siteId: sites[0]?.id || '',
+    });
+    setBuildingModalOpen(true);
+  };
+
+  const openEditBuilding = (building) => {
+    setEditingBuilding(building);
+    setBuildingForm({
+      name: building.name || '',
+      siteId: building.site_id || '',
+    });
+    setBuildingModalOpen(true);
+  };
+
+  const handleSaveZone = async () => {
     if (!form.name.trim()) {
       toast.error('Zone name is required.');
       return;
@@ -446,14 +465,17 @@ export default function AdminZonesPage() {
     }
     setSavingBuilding(true);
     try {
-      const created = await visitorApi.createBuilding(buildingForm);
-      toast.success('Building created.');
-      setBuildingModalOpen(false);
-      setBuildingForm({ name: '', siteId: '' });
-      await load();
-      if (created?.id) {
-        setForm((prev) => ({ ...prev, buildingId: created.id }));
+      if (editingBuilding?.id) {
+        await visitorApi.updateBuilding(editingBuilding.id, buildingForm);
+        toast.success('Building updated.');
+      } else {
+        await visitorApi.createBuilding(buildingForm);
+        toast.success('Building created.');
       }
+      setBuildingModalOpen(false);
+      setEditingBuilding(null);
+      setBuildingForm(emptyBuildingForm());
+      await load();
     } catch (err) {
       toast.error(err?.message || 'Could not save building.');
     } finally {
@@ -461,30 +483,174 @@ export default function AdminZonesPage() {
     }
   };
 
-  const handleSelect = openShow;
+  const handleDelete = async () => {
+    if (!deleteTarget?.id || !deleteTarget?.type) return;
+    setDeleting(true);
+    try {
+      if (deleteTarget.type === 'building') {
+        await visitorApi.deleteBuilding(deleteTarget.id);
+        toast.success('Building deleted.');
+      } else {
+        await visitorApi.deleteZone(deleteTarget.id);
+        toast.success('Zone deleted.');
+      }
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || `Could not delete ${deleteTarget.type}.`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const buildingColumns = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Building',
+      render: (_, row) => (
+        <div>
+          <p className="font-medium text-gray-900">{row.name}</p>
+          <p className="text-xs text-gray-500">{row.site_name || '—'}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'site_name',
+      label: 'Site / Branch',
+      render: (value) => <span className="text-sm text-gray-700">{value || '—'}</span>,
+    },
+    {
+      key: 'zone_count',
+      label: 'Zones',
+      render: (value) => <span className="tabular-nums text-sm text-gray-800">{Number(value || 0)}</span>,
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Edit3}
+            label="Edit building"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditBuilding(row);
+            }}
+          />
+          <IconButton
+            icon={Trash2}
+            label="Delete building"
+            iconSize={16}
+            variant="ghost"
+            className="text-rose-600 hover:bg-rose-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget({ type: 'building', id: row.id, name: row.name });
+            }}
+          />
+        </div>
+      ),
+    },
+  ], []);
+
+  const zoneColumns = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Zone',
+      render: (_, row) => (
+        <div>
+          <p className="font-medium text-gray-900">{row.name}</p>
+          <p className="text-xs text-gray-500">{row.building_name || '—'}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'site_name',
+      label: 'Site / Branch',
+      render: (value) => <span className="text-sm text-gray-700">{value || '—'}</span>,
+    },
+    {
+      key: 'access_level',
+      label: 'Access',
+      render: (value) => <AccessBadge level={value} />,
+    },
+    {
+      key: 'actions',
+      label: '',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Eye}
+            label="View zone"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openShow(row);
+            }}
+          />
+          <IconButton
+            icon={Edit3}
+            label="Edit zone"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditZone(row);
+            }}
+          />
+          <IconButton
+            icon={Trash2}
+            label="Delete zone"
+            iconSize={16}
+            variant="ghost"
+            className="text-rose-600 hover:bg-rose-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget({ type: 'zone', id: row.id, name: row.name });
+            }}
+          />
+        </div>
+      ),
+    },
+  ], [openShow]);
 
   const pageActions = (
     <div className="flex items-center gap-1.5 sm:gap-2">
-      <button
-        type="button"
-        onClick={openCreateBuilding}
-        disabled={!canManageStructure || orgLoading}
-        className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-navy-800 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
-      >
-        <Building2 size={14} strokeWidth={2.5} aria-hidden="true" />
-        <span className="hidden sm:inline">New Building</span>
-        <span className="sm:hidden">Building</span>
-      </button>
-      <button
-        type="button"
-        onClick={openCreate}
-        disabled={!canManageStructure || orgLoading}
-        className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
-      >
-        <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
-        <span className="hidden sm:inline">New Zone</span>
-        <span className="sm:hidden">New</span>
-      </button>
+      {entity === 'buildings' ? (
+        <button
+          type="button"
+          onClick={openCreateBuilding}
+          disabled={!canManageStructure || orgLoading || !sites.length}
+          className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+        >
+          <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
+          <span className="hidden sm:inline">New Building</span>
+          <span className="sm:hidden">New</span>
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={openCreateBuilding}
+            disabled={!canManageStructure || orgLoading || !sites.length}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-navy-800 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+          >
+            <Building2 size={14} strokeWidth={2.5} aria-hidden="true" />
+            <span className="hidden sm:inline">New Building</span>
+            <span className="sm:hidden">Building</span>
+          </button>
+          <button
+            type="button"
+            onClick={openCreateZone}
+            disabled={!canManageStructure || orgLoading || !buildings.length}
+            className="inline-flex items-center gap-1.5 rounded-md bg-navy-900 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+          >
+            <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
+            <span className="hidden sm:inline">New Zone</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -509,14 +675,19 @@ export default function AdminZonesPage() {
           <div className="min-w-0 flex-1">
             <div className="border-b border-gray-200">
               <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
-                {TABS.map(({ id, label, badgeKey }) => {
-                  const active = tab === id;
-                  const badge = badgeKey ? tabStats[badgeKey] : null;
+                {ENTITY_TABS.map(({ id, label, icon: Icon }) => {
+                  const active = entity === id;
+                  const badge = id === 'buildings' ? buildings.length : allRows.length;
                   return (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => updateParams({ tab: id, page: 1 })}
+                      onClick={() => updateParams({
+                        entity: id === 'zones' ? '' : id,
+                        tab: '',
+                        access: '',
+                        page: 1,
+                      })}
                       className={`relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold transition-colors sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm ${
                         active
                           ? 'text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8]'
@@ -524,18 +695,49 @@ export default function AdminZonesPage() {
                       }`}
                     >
                       <span className="inline-flex items-center gap-2">
+                        <Icon size={14} aria-hidden="true" />
                         {label}
-                        {badge > 0 && (
-                          <span className="inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white">
-                            {badge > 9 ? '9+' : badge}
-                          </span>
-                        )}
+                        <span className={`tabular-nums ${active ? 'text-[#1a73e8]' : 'text-gray-400'}`}>
+                          {badge}
+                        </span>
                       </span>
                     </button>
                   );
                 })}
               </div>
             </div>
+
+            {entity === 'zones' ? (
+              <div className="border-b border-gray-200">
+                <div className="flex gap-0 overflow-x-auto px-4 pt-0.5 sm:px-5">
+                  {ZONE_FILTER_TABS.map(({ id, label, badgeKey }) => {
+                    const active = tab === id;
+                    const badge = badgeKey ? tabStats[badgeKey] : null;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateParams({ tab: id === 'all' ? '' : id, page: 1 })}
+                        className={`relative shrink-0 whitespace-nowrap px-3 pb-2 pt-2 text-xs font-semibold transition-colors sm:px-4 sm:pb-2.5 sm:pt-2.5 sm:text-sm ${
+                          active
+                            ? 'text-navy-900 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#1a73e8]'
+                            : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          {label}
+                          {badge > 0 && (
+                            <span className="inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-violet-600 px-1.5 text-[10px] font-bold text-white">
+                              {badge > 9 ? '9+' : badge}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="border-b border-gray-200 px-4 py-2 sm:px-5 sm:py-2.5">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -549,7 +751,11 @@ export default function AdminZonesPage() {
                     type="search"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder="Search by zone, building or site..."
+                    placeholder={
+                      entity === 'buildings'
+                        ? 'Search buildings or sites...'
+                        : 'Search by zone, building or site...'
+                    }
                     className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#1a73e8] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/15"
                   />
                 </label>
@@ -562,18 +768,24 @@ export default function AdminZonesPage() {
                     onChange={(value) => updateParams({ site: value, page: 1 })}
                     options={siteOptions}
                   />
-                  <FilterDropdown
-                    label="Access"
-                    icon={Filter}
-                    value={access}
-                    onChange={(value) => updateParams({ access: value, page: 1 })}
-                    options={accessOptions}
-                  />
+                  {entity === 'zones' ? (
+                    <FilterDropdown
+                      label="Access"
+                      icon={Filter}
+                      value={access}
+                      onChange={(value) => updateParams({ access: value, page: 1 })}
+                      options={accessOptions}
+                    />
+                  ) : null}
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => exportZonesCsv(filteredRows)}
+                  onClick={() => (
+                    entity === 'buildings'
+                      ? exportBuildingsCsv(filteredBuildings)
+                      : exportZonesCsv(filteredZones)
+                  )}
                   className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm lg:self-center"
                 >
                   <Download size={14} aria-hidden="true" />
@@ -584,16 +796,24 @@ export default function AdminZonesPage() {
 
             <DataTable
               embedded
-              columns={columns}
+              columns={entity === 'buildings' ? buildingColumns : zoneColumns}
               data={pageRows}
               loading={loading}
-              emptyTitle={!canManageStructure ? 'No organisation yet' : 'No zones match your filters.'}
+              emptyTitle={
+                !canManageStructure
+                  ? 'No organisation yet'
+                  : entity === 'buildings'
+                    ? 'No buildings found.'
+                    : 'No zones match your filters.'
+              }
               emptyDescription={
                 !canManageStructure
                   ? 'Create an organisation first. Buildings & zones cannot exist without an organisation.'
-                  : 'Try adjusting your search or create a new zone.'
+                  : entity === 'buildings'
+                    ? 'Create a building under a site / branch.'
+                    : 'Try adjusting your search or create a new zone.'
               }
-              onRowClick={openShow}
+              onRowClick={entity === 'zones' ? openShow : openEditBuilding}
               serverPagination
               page={page}
               pageSize={pageSize}
@@ -623,7 +843,7 @@ export default function AdminZonesPage() {
             >
               Cancel
             </button>
-            <LoadingButton loading={saving} onClick={handleSave}>
+            <LoadingButton loading={saving} onClick={handleSaveZone}>
               {editing ? 'Save changes' : 'Create zone'}
             </LoadingButton>
           </div>
@@ -664,8 +884,8 @@ export default function AdminZonesPage() {
       <Modal
         isOpen={buildingModalOpen}
         onClose={() => !savingBuilding && setBuildingModalOpen(false)}
-        title="New Building"
-        subtitle="Create a building under a site / branch."
+        title={editingBuilding ? 'Edit Building' : 'New Building'}
+        subtitle="Create or update a building under a site / branch."
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -678,7 +898,7 @@ export default function AdminZonesPage() {
               Cancel
             </button>
             <LoadingButton loading={savingBuilding} onClick={handleSaveBuilding}>
-              Create building
+              {editingBuilding ? 'Save changes' : 'Create building'}
             </LoadingButton>
           </div>
         )}
@@ -706,6 +926,21 @@ export default function AdminZonesPage() {
           />
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title={deleteTarget?.type === 'building' ? 'Delete building?' : 'Delete zone?'}
+        message={
+          deleteTarget
+            ? `Remove ${deleteTarget.name}. This cannot be undone.`
+            : 'Are you sure you want to proceed?'
+        }
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

@@ -169,8 +169,11 @@ export const visitorApi = {
   getZone: (id) => apiFetch(`/admin/org/zones/${id}`),
   createZone: (body) => apiFetch('/admin/org/zones', { method: 'POST', body: JSON.stringify(body) }),
   updateZone: (id, body) => apiFetch(`/admin/org/zones/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteZone: (id) => apiFetch(`/admin/org/zones/${id}`, { method: 'DELETE' }),
   getBuildings: () => apiFetch('/admin/org/buildings'),
   createBuilding: (body) => apiFetch('/admin/org/buildings', { method: 'POST', body: JSON.stringify(body) }),
+  updateBuilding: (id, body) => apiFetch(`/admin/org/buildings/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteBuilding: (id) => apiFetch(`/admin/org/buildings/${id}`, { method: 'DELETE' }),
   getStations: async () => {
     const res = await fetch(`${API_BASE}/admin/org/stations`, {
       headers: { ...getAdminAuthHeaders() },
