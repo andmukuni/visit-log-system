@@ -8,16 +8,7 @@ import TopProgressBar from './components/ui/TopProgressBar';
 import { useAuth } from './context/AuthContext';
 import { purgeInvalidAuthState } from './utils/authHeaders';
 import { APP_NAME_SHORT } from '../shared/branding.js';
-import {
-  isExecutiveOnlyUser,
-  isHostOnlyUser,
-  isHostPortalLockedUser,
-  isHostPortalPath,
-  isPortalLockExemptPath,
-  isReceptionPortalLockedUser,
-  isReceptionPortalPath,
-  resolveDefaultHomeRoute,
-} from '../shared/portalNavigation.js';
+import { resolvePortalLockRedirect } from '../shared/portalNavigation.js';
 
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
@@ -278,27 +269,9 @@ function AppRoot() {
     roleSlugs,
   } = useAuth();
 
-  const homeRoute = permissions?.length
-    ? resolveDefaultHomeRoute(permissions, roleSlugs)
-    : null;
-  const exemptPath = isPortalLockExemptPath(location.pathname);
-  const lockToReception = Boolean(
-    permissions?.length
-    && isReceptionPortalLockedUser(permissions, roleSlugs)
-    && !isReceptionPortalPath(location.pathname)
-    && !exemptPath,
-  );
-  const lockToHost = Boolean(
-    permissions?.length
-    && !isReceptionPortalLockedUser(permissions, roleSlugs)
-    && (
-      isExecutiveOnlyUser(permissions)
-      || isHostOnlyUser(permissions)
-      || isHostPortalLockedUser(permissions, roleSlugs)
-    )
-    && !isHostPortalPath(location.pathname)
-    && !exemptPath,
-  );
+  // One rule, defined and tested in shared/portalNavigation.js: a host or desk
+  // user may never navigate outside their own portal, whatever URL they type.
+  const lockRedirect = resolvePortalLockRedirect(location.pathname, permissions, roleSlugs);
 
   const openAdminLogin = () => {
     dismissIdleLogoutPrompt();
@@ -306,8 +279,8 @@ function AppRoot() {
     navigate('/login', { state: { from: { pathname: location.pathname } } });
   };
 
-  if (lockToReception || lockToHost) {
-    return <Navigate to={homeRoute} replace />;
+  if (lockRedirect && lockRedirect !== location.pathname) {
+    return <Navigate to={lockRedirect} replace />;
   }
 
   return (

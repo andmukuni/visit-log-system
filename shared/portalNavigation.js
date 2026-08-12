@@ -442,6 +442,46 @@ export function resolveLoginRedirect(fromPath = '', permissions = [], roleSlugs 
   return from;
 }
 
+/**
+ * Single source of truth for the in-app portal lock.
+ *
+ * Given where the user is trying to go, returns the path they must be sent to
+ * instead, or null if they may stay. Desk-locked users (reception) and
+ * host/executive users can never navigate out of their own portal, whatever
+ * URL they type or bookmark.
+ *
+ * Extracted from AppRoot so the rule is directly testable — it is an
+ * authorisation decision, not presentation logic.
+ *
+ * @returns {string|null} redirect target, or null to allow
+ */
+export function resolvePortalLockRedirect(pathname = '', permissions = [], roleSlugs = []) {
+  if (!permissions?.length) return null;
+  if (isPortalLockExemptPath(pathname)) return null;
+
+  const homeRoute = resolveDefaultHomeRoute(permissions, roleSlugs);
+
+  // Reception desk lock wins when both apply (a mixed account is a desk user).
+  if (isReceptionPortalLockedUser(permissions, roleSlugs)) {
+    return isReceptionPortalPath(pathname) ? null : homeRoute;
+  }
+
+  const hostLocked = isExecutiveOnlyUser(permissions)
+    || isHostOnlyUser(permissions)
+    || isHostPortalLockedUser(permissions, roleSlugs);
+
+  if (hostLocked) {
+    // /executive is a legacy alias for the host portal — send those to the
+    // canonical /host route rather than leaving the user on a stale prefix.
+    if (isHostPortalPath(pathname)) {
+      return pathname.startsWith('/executive') ? homeRoute : null;
+    }
+    return homeRoute;
+  }
+
+  return null;
+}
+
 export function canAccessPortal(portalId, hasPermission, permissions = [], roleSlugs = []) {
   if (isReceptionPortalLockedUser(permissions, roleSlugs) && portalId !== 'reception') {
     return false;

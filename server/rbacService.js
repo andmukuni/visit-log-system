@@ -201,6 +201,17 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/reception/queue-host') || path.includes('/reception/in-meeting')) return 'reception.host.queue';
   if (path.includes('/reception/request-approval')) return 'reception.approvals.track';
   if (path.includes('/reception/occupancy')) return 'reception.occupancy';
+  if (path.includes('/reception/register')) return 'reception.visitors.register';
+  // The reception visit routes are nested as /reception/visits/:id/<action>, so
+  // the flat '/reception/queue-host' style checks above never matched them and
+  // they fell through to the generic '/visits' handler, which demands
+  // station.* permissions no reception role holds — 403ing the visitor log,
+  // visit detail and the entire queue-to-host desk workflow.
+  if (path.includes('/reception/visits')) {
+    if (path.includes('/queue-host') || path.includes('/in-meeting')) return 'reception.host.queue';
+    if (path.includes('/request-approval')) return 'reception.approvals.track';
+    return 'reception.visitors.view';
+  }
 
   if (path.includes('/host/dashboard')) return 'host.dashboard';
   if (path.includes('/host/reference-data') || path.includes('/host/invite')) return 'host.invite';
