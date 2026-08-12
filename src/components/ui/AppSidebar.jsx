@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { ChevronDown, X } from 'lucide-react';
 import NavIcon from './NavIcon';
 import { getKpiAccentBgClass } from './PortalKpiCard';
@@ -24,13 +24,107 @@ const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentI
   );
 });
 
+function resolveZonesSplitActive(pathname, search) {
+  const onZonesArea = pathname === '/admin/zones' || pathname.startsWith('/admin/zones/');
+  if (!onZonesArea) {
+    return { any: false, buildings: false, zones: false };
+  }
+  if (pathname.startsWith('/admin/zones/') && pathname !== '/admin/zones/') {
+    return { any: true, buildings: false, zones: true };
+  }
+  const entity = new URLSearchParams(search).get('entity');
+  const buildings = entity === 'buildings';
+  return { any: true, buildings, zones: !buildings };
+}
+
+const SidebarSplitNavLink = memo(function SidebarSplitNavLink({
+  item,
+  onNavigate,
+  accentIndex = 0,
+  executiveTheme = false,
+  badgeCounts = {},
+}) {
+  const location = useLocation();
+  const active = resolveZonesSplitActive(location.pathname, location.search);
+  const [left, right] = item.split || [];
+
+  const halfClass = (isActive) => {
+    if (isActive) {
+      return executiveTheme
+        ? 'bg-navy-900/80 text-amber-300'
+        : 'bg-cyan-600/20 text-cyan-300';
+    }
+    return 'text-navy-300 hover:bg-navy-800 hover:text-white';
+  };
+
+  const renderHalf = (half, isActive) => {
+    if (!half) return null;
+    const countRaw = half.badgeKey ? badgeCounts[half.badgeKey] : null;
+    const countValue = countRaw != null && Number.isFinite(Number(countRaw)) ? Number(countRaw) : null;
+    return (
+      <Link
+        to={half.to}
+        onClick={() => onNavigate?.()}
+        aria-label={half.label}
+        aria-current={isActive ? 'page' : undefined}
+        className={`group/half relative flex min-w-0 flex-1 items-center justify-center gap-1 px-1.5 py-2 text-[11px] font-semibold transition-colors sm:text-xs ${halfClass(isActive)}`}
+      >
+        <span className="truncate">{half.label}</span>
+        {countValue != null ? (
+          <span className="inline-flex min-h-[16px] min-w-[16px] shrink-0 items-center justify-center rounded-full bg-[#1a73e8] px-1 text-[9px] font-bold text-white">
+            {countValue > 99 ? '99+' : countValue}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
+
+  return (
+    <div
+      className={`group relative flex items-center gap-2 -mx-4 py-1.5 pl-7 pr-2 text-sm font-medium rounded-r-xl ${
+        active.any
+          ? executiveTheme
+            ? 'before:absolute before:left-0 before:top-1/2 before:h-8 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-400'
+            : ''
+          : ''
+      }`}
+      aria-label={item.name}
+    >
+      <SidebarNavIcon
+        iconKey={item.key}
+        isActive={active.any}
+        accentIndex={accentIndex}
+        executiveTheme={executiveTheme}
+      />
+      <div className="flex min-w-0 flex-1 overflow-hidden rounded-lg border border-navy-700/90 bg-navy-950/40">
+        {renderHalf(left, active.buildings)}
+        <span className="w-px shrink-0 self-stretch bg-navy-700" aria-hidden="true" />
+        {renderHalf(right, active.zones)}
+      </div>
+    </div>
+  );
+});
+
 const SidebarNavLink = memo(function SidebarNavLink({
   item,
   onNavigate,
   accentIndex = 0,
   executiveTheme = false,
   badgeCount = null,
+  badgeCounts = {},
 }) {
+  if (Array.isArray(item.split) && item.split.length >= 2) {
+    return (
+      <SidebarSplitNavLink
+        item={item}
+        onNavigate={onNavigate}
+        accentIndex={accentIndex}
+        executiveTheme={executiveTheme}
+        badgeCounts={badgeCounts}
+      />
+    );
+  }
+
   const resolveActiveState = (navIsActive) => {
     if (item.sharedRouteKey && !item.isPrimaryRoute && navIsActive) return false;
     return navIsActive;
@@ -106,6 +200,7 @@ const SidebarNavSection = memo(function SidebarNavSection({
             onNavigate={onNavigate}
             executiveTheme={executiveTheme}
             badgeCount={item.badgeKey ? badgeCounts[item.badgeKey] ?? null : null}
+            badgeCounts={badgeCounts}
           />
         ))}
       </div>

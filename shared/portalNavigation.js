@@ -80,7 +80,10 @@ export const PORTAL_NAVIGATION = {
     // Hierarchy setup order: Org → Site → Building/Zone → Station → Dept → Office → Positions → People → visitor policy
     { key: 'organisations', name: 'Organisations', to: '/admin/organisations', permission: 'admin.organisations', section: 'organisation', badgeKey: 'organisations' },
     { key: 'sites', name: 'Sites & Branches', to: '/admin/sites', permission: 'admin.sites', section: 'organisation', badgeKey: 'sites' },
-    { key: 'zones', name: 'Buildings & Zones', to: '/admin/zones', permission: 'admin.zones', section: 'organisation', badgeKey: 'zones' },
+    { key: 'zones', name: 'Buildings & Zones', to: '/admin/zones', permission: 'admin.zones', section: 'organisation', badgeKey: 'zones', split: [
+      { key: 'buildings', label: 'Buildings', to: '/admin/zones?entity=buildings', badgeKey: 'buildings' },
+      { key: 'zones', label: 'Zones', to: '/admin/zones', badgeKey: 'zones' },
+    ] },
     { key: 'stations', name: 'Stations & Gates', to: '/admin/stations', permission: 'admin.stations', section: 'organisation', badgeKey: 'stations' },
     { key: 'departments', name: 'Departments', to: '/admin/departments', permission: 'admin.departments', section: 'organisation', badgeKey: 'departments' },
     { key: 'offices', name: 'Offices', to: '/admin/offices', permission: 'admin.offices', section: 'organisation', badgeKey: 'offices' },

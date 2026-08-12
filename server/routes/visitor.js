@@ -2030,6 +2030,7 @@ export function createOrgAdminRouter() {
       const [
         organisations,
         sites,
+        buildings,
         zones,
         stations,
         departments,
@@ -2049,6 +2050,14 @@ export function createOrgAdminRouter() {
           'SELECT COUNT(*) AS count FROM sites WHERE organisation_id = ?',
           [orgId],
           'SELECT COUNT(*) AS count FROM sites',
+        ),
+        countOne(
+          `SELECT COUNT(*) AS count
+           FROM buildings b
+           JOIN sites s ON s.id = b.site_id
+           WHERE s.organisation_id = ?`,
+          [orgId],
+          'SELECT COUNT(*) AS count FROM buildings',
         ),
         countOne(
           `SELECT COUNT(*) AS count
@@ -2105,6 +2114,7 @@ export function createOrgAdminRouter() {
         data: {
           organisations,
           sites,
+          buildings,
           zones,
           stations,
           departments,
