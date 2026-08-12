@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import pool from './db.js';
 import { hashPassword } from './auth.js';
-import { generateId, seedOfficeHierarchy } from './visitorSchema.js';
+import { generateId } from './visitorSchema.js';
 import { createAppointmentForVisit } from './accessSchema.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -91,8 +91,7 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
     return { skipped: true, reason: 'no_organisation' };
   }
 
-  await seedOfficeHierarchy(poolConn);
-
+  // Never wipe/reset locations from portal-user seed — only ensure schema if empty elsewhere.
   const [[site]] = await poolConn.query('SELECT id FROM sites WHERE organisation_id = ? LIMIT 1', [org.id]);
   const [[station]] = site?.id
     ? await poolConn.query('SELECT id FROM stations WHERE site_id = ? LIMIT 1', [site.id])
@@ -121,28 +120,25 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
 
   const passwordHash = hashPassword(DEV_PORTAL_PASSWORD);
   let created = 0;
-  let updated = 0;
+  let skippedExisting = 0;
 
   for (const portalUser of PORTAL_USERS) {
     const email = portalUser.email.toLowerCase();
     const [[existing]] = await poolConn.query('SELECT id FROM users WHERE email = ?', [email]);
-    let userId = existing?.id;
 
-    if (!userId) {
-      userId = `usr-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-      await poolConn.query(
-        `INSERT INTO users (id, name, email, phone, password_hash, role, email_verified)
-         VALUES (?, ?, ?, '', ?, 'user', 1)`,
-        [userId, portalUser.name, email, passwordHash],
-      );
-      created += 1;
-    } else if (force) {
-      await poolConn.query(
-        'UPDATE users SET name = ?, password_hash = ?, email_verified = 1 WHERE id = ?',
-        [portalUser.name, passwordHash, userId],
-      );
-      updated += 1;
+    // Create-only: never overwrite passwords, names, scopes, or host rows for accounts at rest.
+    if (existing?.id) {
+      skippedExisting += 1;
+      continue;
     }
+
+    const userId = `usr-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    await poolConn.query(
+      `INSERT INTO users (id, name, email, phone, password_hash, role, email_verified)
+       VALUES (?, ?, ?, '', ?, 'user', 1)`,
+      [userId, portalUser.name, email, passwordHash],
+    );
+    created += 1;
 
     let office = defaultOffice;
     let departmentId = dept?.id || defaultOffice?.department_id || null;
@@ -156,12 +152,7 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
 
     await poolConn.query(
       `INSERT INTO user_scopes (user_id, organisation_id, site_id, station_id, department_id, office_id)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         site_id = VALUES(site_id),
-         station_id = VALUES(station_id),
-         department_id = VALUES(department_id),
-         office_id = VALUES(office_id)`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [userId, org.id, site?.id || null, station?.id || null, departmentId, office?.id || null],
     );
 
@@ -180,12 +171,7 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
         'SELECT id FROM hosts WHERE LOWER(email) = ? LIMIT 1',
         [email],
       );
-      if (existingHost?.id) {
-        await poolConn.query(
-          'UPDATE hosts SET user_id = ?, name = ?, department_id = ?, site_id = ?, office_id = ? WHERE id = ?',
-          [userId, portalUser.name, departmentId, site?.id || null, office?.id || null, existingHost.id],
-        );
-      } else {
+      if (!existingHost?.id) {
         await poolConn.query(
           `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, user_id, name, email, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
@@ -195,13 +181,10 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
     }
   }
 
-  console.log(`[seed] Portal users ready (${created} created, ${updated} updated). Password: demo1234`);
-  if (process.env.SEED_DEMO_VISITS === '1') {
-    await seedHostDemoVisit(poolConn);
-    await seedExecutiveDemoVisits(poolConn);
-    await seedEmployeeAppointments(poolConn);
-  }
-  return { skipped: false, created, updated };
+  console.log(
+    `[seed] Portal users create-only (${created} created, ${skippedExisting} existing left untouched). New accounts use password: ${DEV_PORTAL_PASSWORD}`,
+  );
+  return { skipped: false, created, updated: 0, skippedExisting };
 }
 
 async function seedHostDemoVisit(poolConn = pool) {

@@ -8,7 +8,6 @@ import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
 import { ensureAccessSchema, seedAccessData } from './accessSchema.js';
-import { seedPortalUsers, seedSampleVisits } from './seedPortalUsers.js';
 import { ensureSettingsSchema, seedSettingsData } from './settingsSchema.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -75,8 +74,6 @@ export async function bootstrapDatabase() {
   await seedPlatformData();
   await seedAccessData();
   await seedSettingsData();
-  await seedPortalUsers();
-  if (process.env.SEED_DEMO_VISITS === '1') {
-    await seedSampleVisits();
-  }
+  // Intentionally do NOT seed portal demo users / sample visits on boot.
+  // Those scripts overwrite passwords, scopes, and host rows and break live accounts.
 }

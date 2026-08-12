@@ -14,8 +14,8 @@
     "seed:demo": "node server/scripts/seedDemo.js",
     "seed:demo:force": "node server/scripts/seedDemo.js --force",
     "seed:demo:remote": "node server/scripts/seedDemo.js --target=remote",
-    "seed:portal-users": "node server/scripts/seedPortalUsersCli.js --force",
-    "seed:portal-users:remote": "node server/scripts/seedPortalUsersCli.js --force --url=",
+    "seed:portal-users": "node server/scripts/seedPortalUsersCli.js",
+    "seed:portal-users:remote": "node server/scripts/seedPortalUsersCli.js --url=",
     "seed:location": "node server/scripts/seedLocationStructureCli.js",
     "seed:employee-appointments": "node server/scripts/seedEmployeeAppointmentsCli.js --force",
     "db:reset-operational": "node server/scripts/resetOperationalData.js"

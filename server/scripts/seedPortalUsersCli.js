@@ -62,13 +62,18 @@ async function resolvePool() {
 async function main() {
   const pool = await resolvePool();
   try {
-    const result = await seedPortalUsers(pool, { force: true });
+    // Create-only: never resets passwords or overwrites scopes/hosts for existing users.
+    // --force only bypasses the production NODE_ENV guard for empty-environment bootstrap.
+    const result = await seedPortalUsers(pool, { force });
     if (result.skipped) {
       console.log('[seed:portal-users] Skipped:', result.reason || 'production guard');
       process.exitCode = 1;
       return;
     }
-    console.log('[seed:portal-users] Done.');
+    console.log('[seed:portal-users] Done.', {
+      created: result.created,
+      skippedExisting: result.skippedExisting,
+    });
   } finally {
     await pool.end?.();
   }
