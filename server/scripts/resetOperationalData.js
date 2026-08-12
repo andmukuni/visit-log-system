@@ -24,6 +24,20 @@ const targetArg = args.find((arg) => arg.startsWith('--target='));
 const urlArg = args.find((arg) => arg.startsWith('--url='));
 const target = targetArg?.split('=')[1] || 'local';
 
+// This script DELETEs every operational table (visits, visitors, audit_logs,
+// notifications, ...). It had no production guard, so wiring it as a
+// post-deploy command — or running it with a production DATABASE_URL in the
+// environment — would destroy live data with no confirmation. Require an
+// explicit, deliberate opt-in.
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DESTRUCTIVE_RESET !== '1') {
+  console.error(
+    '[reset] Refusing to wipe operational data with NODE_ENV=production.\n'
+    + '        This deletes all visits, visitors, vehicles and audit logs.\n'
+    + '        Set ALLOW_DESTRUCTIVE_RESET=1 only if you have a verified backup.',
+  );
+  process.exit(1);
+}
+
 const OPERATIONAL_TABLES = [
   'notification_deliveries',
   'notifications',

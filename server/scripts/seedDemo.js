@@ -15,6 +15,17 @@ dotenv.config();
 const args = process.argv.slice(2);
 const force = args.includes('--force');
 const bootstrap = args.includes('--bootstrap');
+
+// Demo seeding writes illustrative records and, with --force, overwrites them.
+// It must never run unattended against production — a post-deploy hook that
+// invokes it would keep re-seeding live data on every push.
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== '1') {
+  console.error(
+    '[seed:demo] Refusing to seed demo data with NODE_ENV=production.\n'
+    + '           Set ALLOW_DEMO_SEED=1 only if you intend to write demo records to this database.',
+  );
+  process.exit(1);
+}
 const targetArg = args.find((arg) => arg.startsWith('--target='));
 const urlArg = args.find((arg) => arg.startsWith('--url='));
 const target = targetArg?.split('=')[1] || 'local';
