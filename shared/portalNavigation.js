@@ -207,7 +207,11 @@ export function groupNavItems(items) {
 /** CEO/DCEO (and similar) scoped to the personal host/calendar portal only. */
 export function isExecutiveOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
-  return has('executive.dashboard') && !has('management.dashboard') && !has('admin.dashboard');
+  return has('executive.dashboard')
+    && !has('management.dashboard')
+    && !has('admin.dashboard')
+    && !has('reception.dashboard')
+    && !has('security.dashboard');
 }
 
 /** Reception desk users — cannot switch into host or other portals. */
@@ -215,7 +219,6 @@ export function isReceptionOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
   return has('reception.dashboard')
     && !has('host.dashboard')
-    && !has('executive.dashboard')
     && !has('admin.dashboard')
     && !has('management.dashboard')
     && !has('security.dashboard')
@@ -235,12 +238,12 @@ export function isHostOnlyUser(permissions = []) {
 }
 
 export function resolvePrimaryPortal(hasPermission, permissions = []) {
-  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
-    return 'host';
+  if (isReceptionOnlyUser(permissions) || permissionMatches(permissions, 'reception.dashboard')) {
+    return 'reception';
   }
 
-  if (isReceptionOnlyUser(permissions)) {
-    return 'reception';
+  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
+    return 'host';
   }
 
   if (
@@ -250,8 +253,8 @@ export function resolvePrimaryPortal(hasPermission, permissions = []) {
     return 'host';
   }
 
-  if (permissionMatches(permissions, 'reception.dashboard')) {
-    return 'reception';
+  if (permissionMatches(permissions, 'security.dashboard')) {
+    return 'security';
   }
 
   for (const portalId of PORTAL_PRIORITY) {
@@ -294,19 +297,22 @@ export function resolvePortalRoute(permissions = []) {
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
-/** Default home route after sign-in — calendar dashboard for host/executive users. */
+/** Default home route after sign-in — role portal home by permission precedence. */
 export function resolveDefaultHomeRoute(permissions = []) {
+  if (permissionMatches(permissions, 'reception.calendar')) {
+    return `${PORTALS.reception.routePrefix}/calendar`;
+  }
+  if (permissionMatches(permissions, 'reception.dashboard')) {
+    return PORTALS.reception.routePrefix;
+  }
   if (
     permissionMatches(permissions, 'executive.dashboard')
     || permissionMatches(permissions, 'host.dashboard')
   ) {
     return PORTALS.host.routePrefix;
   }
-  if (permissionMatches(permissions, 'reception.calendar')) {
-    return `${PORTALS.reception.routePrefix}/calendar`;
-  }
-  if (permissionMatches(permissions, 'reception.dashboard')) {
-    return PORTALS.reception.routePrefix;
+  if (permissionMatches(permissions, 'security.dashboard')) {
+    return PORTALS.security.routePrefix;
   }
   return resolvePortalRoute(permissions);
 }
@@ -315,11 +321,15 @@ export function resolveDefaultHomeRoute(permissions = []) {
 export function resolveLoginRedirect(fromPath = '', permissions = []) {
   const homeRoute = resolveDefaultHomeRoute(permissions);
   const from = String(fromPath || '').trim();
+  const hasReception = permissionMatches(permissions, 'reception.dashboard');
 
-  // Calendar/host users always land on the merged host dashboard after sign-in.
+  // Host/calendar users (not reception desk) always land on the merged host dashboard.
   if (
-    permissionMatches(permissions, 'executive.dashboard')
-    || permissionMatches(permissions, 'host.dashboard')
+    !hasReception
+    && (
+      permissionMatches(permissions, 'executive.dashboard')
+      || permissionMatches(permissions, 'host.dashboard')
+    )
   ) {
     return homeRoute;
   }

@@ -11,7 +11,13 @@ import {
   hasAnyPermission,
 } from '../shared/rbacPermissions.js';
 import { resolveVisitRoutePermissions } from '../server/rbacService.js';
-import { resolveDefaultHomeRoute, PORTALS } from '../shared/portalNavigation.js';
+import {
+  isExecutiveOnlyUser,
+  isReceptionOnlyUser,
+  resolveDefaultHomeRoute,
+  resolveLoginRedirect,
+  PORTALS,
+} from '../shared/portalNavigation.js';
 import {
   hostZoneFilterClause,
   visitZoneFilterClause,
@@ -45,6 +51,15 @@ describe('reception RBAC', () => {
 
   it('routes reception users to calendar home', () => {
     assert.equal(resolveDefaultHomeRoute(RECEPTION_KEYS), `${PORTALS.reception.routePrefix}/calendar`);
+  });
+
+  it('routes executive_reception to reception calendar instead of host', () => {
+    const role = DEFAULT_ADMIN_ROLES.find((r) => r.slug === 'executive_reception');
+    assert.ok(role);
+    assert.equal(isReceptionOnlyUser(role.permissions), true);
+    assert.equal(isExecutiveOnlyUser(role.permissions), false);
+    assert.equal(resolveDefaultHomeRoute(role.permissions), `${PORTALS.reception.routePrefix}/calendar`);
+    assert.equal(resolveLoginRedirect('/login', role.permissions), `${PORTALS.reception.routePrefix}/calendar`);
   });
 });
 

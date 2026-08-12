@@ -4,6 +4,7 @@ import {
   DEFAULT_ADMIN_ROLES,
   EXECUTIVE_PORTAL_KEYS,
   permissionMatches,
+  RECEPTION_KEYS,
 } from '../shared/rbacPermissions.js';
 import {
   canAccessPortal,
@@ -15,13 +16,14 @@ import {
   resolveLoginRedirect,
   resolvePrimaryPortal,
 } from '../shared/portalNavigation.js';
-import { RECEPTION_KEYS } from '../shared/rbacPermissions.js';
 
 const hostRole = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'host');
 const hostEmployee = hostRole?.permissions || [];
 const ceoRole = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'ceo');
 const ceoPerms = ceoRole?.permissions || [];
 const receptionPerms = RECEPTION_KEYS;
+const executiveReceptionPerms = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'executive_reception')?.permissions || [];
+const securityManagerPerms = DEFAULT_ADMIN_ROLES.find((role) => role.slug === 'security_manager')?.permissions || [];
 
 function hasPermissionFactory(permissions = []) {
   return (key) => permissionMatches(permissions, key);
@@ -50,6 +52,49 @@ describe('portal login routing', () => {
     assert.equal(
       resolvePrimaryPortal(hasPermissionFactory(hostEmployee), hostEmployee),
       'host',
+    );
+  });
+
+  it('routes main reception users to the reception calendar', () => {
+    assert.equal(resolveDefaultHomeRoute(receptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/login', receptionPerms), '/reception/calendar');
+    assert.equal(
+      resolvePrimaryPortal(hasPermissionFactory(receptionPerms), receptionPerms),
+      'reception',
+    );
+  });
+
+  it('routes executive reception to reception, not host', () => {
+    assert.equal(isExecutiveOnlyUser(executiveReceptionPerms), false);
+    assert.equal(isReceptionOnlyUser(executiveReceptionPerms), true);
+    assert.equal(isHostOnlyUser(executiveReceptionPerms), false);
+    assert.equal(resolveDefaultHomeRoute(executiveReceptionPerms), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/login', executiveReceptionPerms), '/reception/calendar');
+    assert.equal(
+      resolveLoginRedirect('/reception/check-in', executiveReceptionPerms),
+      '/reception/check-in',
+    );
+    assert.equal(
+      resolvePrimaryPortal(hasPermissionFactory(executiveReceptionPerms), executiveReceptionPerms),
+      'reception',
+    );
+    assert.equal(
+      canAccessPortal('host', hasPermissionFactory(executiveReceptionPerms), executiveReceptionPerms),
+      false,
+    );
+    assert.deepEqual(
+      getAccessiblePortals(hasPermissionFactory(executiveReceptionPerms), executiveReceptionPerms),
+      [],
+    );
+  });
+
+  it('routes security managers to the security portal', () => {
+    assert.equal(isExecutiveOnlyUser(securityManagerPerms), false);
+    assert.equal(resolveDefaultHomeRoute(securityManagerPerms), '/security');
+    assert.equal(resolveLoginRedirect('/login', securityManagerPerms), '/security');
+    assert.equal(
+      resolvePrimaryPortal(hasPermissionFactory(securityManagerPerms), securityManagerPerms),
+      'security',
     );
   });
 
