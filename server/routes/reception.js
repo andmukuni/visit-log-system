@@ -152,7 +152,8 @@ async function fetchCheckInAppointments(scope, visitType = 'walk-in', zoneIds = 
        CASE WHEN vis.status IN ('arrived_at_gate', 'entered_premises') THEN 0 ELSE 1 END,
        COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) ASC
      LIMIT 200`,
-    [...params, ...zoneMatchParams],
+    // zone_match sits in the SELECT list, so its params bind FIRST.
+    [...zoneMatchParams, ...params],
   );
 
   return rows;
@@ -292,7 +293,7 @@ export function createReceptionRouter() {
          WHERE vis.organisation_id = ?${recentSiteFilter}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
-        [...recentParams, ...recentZoneMatchParams],
+        [...recentZoneMatchParams, ...recentParams],
       );
       // Activity feed rows aren't full visit records — shape them by hand
       // rather than forcing them through the visit DTO builders.
@@ -456,7 +457,7 @@ export function createReceptionRouter() {
            ${dateFilter}
          ORDER BY COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) ASC
          LIMIT 500`,
-        [...params, ...zoneMatchParams],
+        [...zoneMatchParams, ...params],
       );
 
       const perms = permissionsFromRequest(req);
@@ -588,7 +589,7 @@ export function createReceptionRouter() {
            AND vis.status IN (${placeholders})
          ORDER BY COALESCE(ve.created_at, vis.checked_in_at, vis.updated_at) ASC
          LIMIT 200`,
-        [scope.organisation_id, ...site.params, ...statuses, ...zoneMatchParams],
+        [...zoneMatchParams, scope.organisation_id, ...site.params, ...statuses],
       );
 
       const perms = permissionsFromRequest(req);
@@ -633,7 +634,7 @@ export function createReceptionRouter() {
          WHERE vis.organisation_id = ?${site.sql}
            AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')
          ORDER BY vis.checked_in_at DESC`,
-        [...params, ...zoneMatchParams],
+        [...zoneMatchParams, ...params],
       );
 
       const perms = permissionsFromRequest(req);
