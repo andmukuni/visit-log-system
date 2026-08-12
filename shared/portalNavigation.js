@@ -382,8 +382,19 @@ export function canAccessPortal(portalId, hasPermission, permissions = []) {
   return getVisibleNavItems(portalId, hasPermission).length > 0;
 }
 
+/** True when the user may use the navbar portal switcher (admins only). */
+export function canUsePortalSwitcher(permissions = []) {
+  return permissionMatches(permissions, 'admin.dashboard')
+    || permissionMatches(permissions, 'platform.dashboard');
+}
+
 /** Portals the signed-in user can access (for sidebar switcher). */
 export function getAccessiblePortals(hasPermission, permissions = []) {
+  // Only org/platform admins may switch portals. Desk roles stay locked.
+  if (!canUsePortalSwitcher(permissions)) {
+    return [];
+  }
+
   // Host-only and reception-only users stay locked to their portal (no switcher).
   if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isReceptionOnlyUser(permissions)) {
     return [];

@@ -8,6 +8,7 @@ import {
 } from '../shared/rbacPermissions.js';
 import {
   canAccessPortal,
+  canUsePortalSwitcher,
   getAccessiblePortals,
   isExecutiveOnlyUser,
   isHostOnlyUser,
@@ -113,6 +114,25 @@ describe('portal login routing', () => {
     assert.equal(canAccessPortal('host', hasPermissionFactory(receptionPerms), receptionPerms), false);
     assert.deepEqual(getAccessiblePortals(hasPermissionFactory(hostEmployee), hostEmployee), []);
     assert.deepEqual(getAccessiblePortals(hasPermissionFactory(receptionPerms), receptionPerms), []);
+  });
+
+  it('shows the portal switcher only for admin (or platform) users', () => {
+    const adminPerms = ['admin.dashboard', 'admin.visitors', 'reception.dashboard', 'host.dashboard'];
+    const mixedDeskPerms = [...receptionPerms, 'host.dashboard', 'host.invite'];
+
+    assert.equal(canUsePortalSwitcher(adminPerms), true);
+    assert.equal(canUsePortalSwitcher(['platform.dashboard']), true);
+    assert.equal(canUsePortalSwitcher(receptionPerms), false);
+    assert.equal(canUsePortalSwitcher(hostEmployee), false);
+    assert.equal(canUsePortalSwitcher(mixedDeskPerms), false);
+    assert.equal(canUsePortalSwitcher(securityManagerPerms), false);
+
+    assert.ok(getAccessiblePortals(hasPermissionFactory(adminPerms), adminPerms).length > 0);
+    assert.deepEqual(getAccessiblePortals(hasPermissionFactory(mixedDeskPerms), mixedDeskPerms), []);
+    assert.deepEqual(
+      getAccessiblePortals(hasPermissionFactory(securityManagerPerms), securityManagerPerms),
+      [],
+    );
   });
 
   it('locks reception-only users out of every non-reception route', () => {
