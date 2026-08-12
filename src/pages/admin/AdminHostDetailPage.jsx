@@ -26,6 +26,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 import { zonesForOrg } from '../../utils/adminStructureDefaults';
+import { formatOfficeLabel } from '../../utils/helpers';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'No title' },
@@ -145,7 +146,7 @@ export default function AdminHostDetailPage() {
       { value: '', label: 'No office (optional)' },
       ...list.map((ofc) => ({
         value: ofc.id,
-        label: `#${ofc.office_number}${ofc.name ? ` · ${ofc.name}` : ''}`,
+        label: formatOfficeLabel(ofc),
       })),
     ];
   }, [offices, form]);
@@ -416,7 +417,12 @@ export default function AdminHostDetailPage() {
               <DetailItem
                 icon={DoorClosed}
                 label="Office"
-                value={host.office_number ? `#${host.office_number}${host.office_name ? ` · ${host.office_name}` : ''}` : null}
+                value={host.office_number || host.office_name
+                  ? formatOfficeLabel({
+                    office_number: host.office_number,
+                    name: host.office_name,
+                  })
+                  : null}
               />
             </div>
           </section>

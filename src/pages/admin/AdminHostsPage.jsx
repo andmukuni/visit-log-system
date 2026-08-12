@@ -23,6 +23,7 @@ import {
   resolveDefaultOrganisationId,
   zonesForOrg,
 } from '../../utils/adminStructureDefaults';
+import { formatOfficeLabel } from '../../utils/helpers';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'No title' },
@@ -218,7 +219,7 @@ export default function AdminHostsPage() {
       { value: '', label: 'No office (optional)' },
       ...list.map((ofc) => ({
         value: ofc.id,
-        label: `#${ofc.office_number}${ofc.name ? ` · ${ofc.name}` : ''}`,
+        label: formatOfficeLabel(ofc),
       })),
     ];
   }, [offices, form.organisationId, form.departmentId, form.siteId, form.zoneId]);

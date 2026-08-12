@@ -182,3 +182,14 @@ export function formatPhoneDisplay(countryCode, nationalNumber) {
   const national = full.slice(dial.length);
   return `${dial} ${national}`;
 }
+
+/** Office select/detail label — avoids "#Name · Name" when number and name match. */
+export function formatOfficeLabel(office) {
+  if (!office) return '—';
+  const number = String(office.office_number || '').trim();
+  const name = String(office.name || office.office_name || '').trim();
+  if (number && name && number.toLowerCase() === name.toLowerCase()) return number;
+  if (number && name) return `#${number} · ${name}`;
+  if (number) return `#${number}`;
+  return name || '—';
+}
