@@ -216,9 +216,8 @@ export function isExecutiveOnlyUser(permissions = []) {
 }
 
 /**
- * Reception desk users — locked to /reception.
- * Note: executive_reception may also have executive.* keys; host.dashboard is what
- * distinguishes a real host account from a reception desk account.
+ * Reception desk users — locked to /reception (permission-only fallback).
+ * Prefer isReceptionPortalLockedUser when role_slugs are available.
  */
 export function isReceptionOnlyUser(permissions = []) {
   const has = (key) => permissionMatches(permissions, key);
@@ -254,11 +253,44 @@ export function isHostOnlyUser(permissions = []) {
     && !has('platform.dashboard');
 }
 
+/** Assigned role slugs that mean "reception desk identity". */
+export const RECEPTION_LOCK_ROLE_SLUGS = new Set([
+  'main_reception',
+  'executive_reception',
+  'receptionist',
+]);
+
+/** Assigned role slugs that mean "host / executive calendar identity". */
+export const HOST_LOCK_ROLE_SLUGS = new Set([
+  'host',
+  'ceo',
+  'dceo',
+  'ceo_secretary',
+  'dceo_secretary',
+]);
+
+export function hasReceptionLockRole(roleSlugs = []) {
+  return (roleSlugs || []).some((slug) => RECEPTION_LOCK_ROLE_SLUGS.has(String(slug || '').trim()));
+}
+
+export function hasHostLockRole(roleSlugs = []) {
+  return (roleSlugs || []).some((slug) => HOST_LOCK_ROLE_SLUGS.has(String(slug || '').trim()));
+}
+
+/** Reception desk lock — role slug wins over mixed host permissions. */
+export function isReceptionPortalLockedUser(permissions = [], roleSlugs = []) {
+  if (hasReceptionLockRole(roleSlugs)) return true;
+  return isReceptionOnlyUser(permissions);
+}
+
 /**
- * True host accounts locked to /host (even if they also have reception permissions).
- * Distinct from executive_reception, which has executive.* but not host.dashboard.
+ * Host portal lock. Reception desk roles always win if both are assigned.
+ * Hosts with only an accidental reception.* permission (no reception role) stay on /host.
  */
-export function isHostPortalLockedUser(permissions = []) {
+export function isHostPortalLockedUser(permissions = [], roleSlugs = []) {
+  if (hasReceptionLockRole(roleSlugs)) return false;
+  if (hasHostLockRole(roleSlugs)) return true;
+
   const has = (key) => permissionMatches(permissions, key);
   return has('host.dashboard')
     && !has('admin.dashboard')
@@ -267,17 +299,19 @@ export function isHostPortalLockedUser(permissions = []) {
     && !has('platform.dashboard');
 }
 
-export function resolvePrimaryPortal(hasPermission, permissions = []) {
-  // Reception desk first (includes executive_reception with executive.* but no host.dashboard).
-  if (isReceptionOnlyUser(permissions)) {
+export function resolvePrimaryPortal(hasPermission, permissions = [], roleSlugs = []) {
+  if (isReceptionPortalLockedUser(permissions, roleSlugs)) {
     return 'reception';
   }
 
-  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
+  if (
+    isExecutiveOnlyUser(permissions)
+    || isHostOnlyUser(permissions)
+    || isHostPortalLockedUser(permissions, roleSlugs)
+  ) {
     return 'host';
   }
 
-  // Real host accounts win over incidental reception permissions.
   if (
     permissionMatches(permissions, 'host.dashboard')
     || permissionMatches(permissions, 'executive.dashboard')
@@ -327,22 +361,23 @@ export function defaultPortalBreadcrumbs(pathname = '', pageTitle = '') {
 }
 
 /** Default post-login route for a permission set. */
-export function resolvePortalRoute(permissions = []) {
+export function resolvePortalRoute(permissions = [], roleSlugs = []) {
   const hasPermission = (key) => permissionMatches(permissions, key);
-  const portalId = resolvePrimaryPortal(hasPermission, permissions);
+  const portalId = resolvePrimaryPortal(hasPermission, permissions, roleSlugs);
   return PORTALS[portalId]?.routePrefix || '/admin';
 }
 
-/** Default home route after sign-in — role portal home by permission precedence. */
-export function resolveDefaultHomeRoute(permissions = []) {
-  if (isReceptionOnlyUser(permissions)) {
+/** Default home route after sign-in — role portal home by role/permission precedence. */
+export function resolveDefaultHomeRoute(permissions = [], roleSlugs = []) {
+  if (isReceptionPortalLockedUser(permissions, roleSlugs)) {
     if (permissionMatches(permissions, 'reception.calendar')) {
       return `${PORTALS.reception.routePrefix}/calendar`;
     }
     return PORTALS.reception.routePrefix;
   }
   if (
-    permissionMatches(permissions, 'host.dashboard')
+    isHostPortalLockedUser(permissions, roleSlugs)
+    || permissionMatches(permissions, 'host.dashboard')
     || permissionMatches(permissions, 'executive.dashboard')
   ) {
     return PORTALS.host.routePrefix;
@@ -356,7 +391,7 @@ export function resolveDefaultHomeRoute(permissions = []) {
   if (permissionMatches(permissions, 'security.dashboard')) {
     return PORTALS.security.routePrefix;
   }
-  return resolvePortalRoute(permissions);
+  return resolvePortalRoute(permissions, roleSlugs);
 }
 
 /** True when the path belongs to the Reception Access Portal. */
@@ -375,21 +410,25 @@ export function isHostPortalPath(pathname = '') {
 }
 
 /** Prefer the user's primary portal; never send host-calendar users to /management. */
-export function resolveLoginRedirect(fromPath = '', permissions = []) {
-  const homeRoute = resolveDefaultHomeRoute(permissions);
+export function resolveLoginRedirect(fromPath = '', permissions = [], roleSlugs = []) {
+  const homeRoute = resolveDefaultHomeRoute(permissions, roleSlugs);
   const from = String(fromPath || '').trim();
 
-  // Reception desk users always stay in the reception portal.
-  if (isReceptionOnlyUser(permissions)) {
+  // Reception desk users (role or clean permission set) always stay in /reception.
+  if (isReceptionPortalLockedUser(permissions, roleSlugs)) {
     return isReceptionPortalPath(from) ? from : homeRoute;
   }
 
   // Host / executive calendar users always stay in the host portal.
-  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) {
+  if (
+    isExecutiveOnlyUser(permissions)
+    || isHostOnlyUser(permissions)
+    || isHostPortalLockedUser(permissions, roleSlugs)
+  ) {
     return isHostPortalPath(from) ? (from.startsWith('/executive') ? homeRoute : from) : homeRoute;
   }
 
-  // Host accounts (even with extra reception perms) stay on the host portal.
+  // Host accounts with host.dashboard (and no reception lock role) stay on /host.
   if (
     permissionMatches(permissions, 'executive.dashboard')
     || permissionMatches(permissions, 'host.dashboard')
@@ -403,14 +442,14 @@ export function resolveLoginRedirect(fromPath = '', permissions = []) {
   return from;
 }
 
-export function canAccessPortal(portalId, hasPermission, permissions = []) {
-  if (
-    (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isHostPortalLockedUser(permissions))
-    && portalId !== 'host'
-  ) {
+export function canAccessPortal(portalId, hasPermission, permissions = [], roleSlugs = []) {
+  if (isReceptionPortalLockedUser(permissions, roleSlugs) && portalId !== 'reception') {
     return false;
   }
-  if (isReceptionOnlyUser(permissions) && portalId !== 'reception') {
+  if (
+    (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isHostPortalLockedUser(permissions, roleSlugs))
+    && portalId !== 'host'
+  ) {
     return false;
   }
   if (portalId === 'host') {
@@ -433,14 +472,19 @@ export function canUsePortalSwitcher(permissions = []) {
 }
 
 /** Portals the signed-in user can access (for sidebar switcher). */
-export function getAccessiblePortals(hasPermission, permissions = []) {
+export function getAccessiblePortals(hasPermission, permissions = [], roleSlugs = []) {
   // Only org/platform admins may switch portals. Desk roles stay locked.
   if (!canUsePortalSwitcher(permissions)) {
     return [];
   }
 
   // Host-only and reception-only users stay locked to their portal (no switcher).
-  if (isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions) || isReceptionOnlyUser(permissions)) {
+  if (
+    isExecutiveOnlyUser(permissions)
+    || isHostOnlyUser(permissions)
+    || isReceptionPortalLockedUser(permissions, roleSlugs)
+    || isHostPortalLockedUser(permissions, roleSlugs)
+  ) {
     return [];
   }
 

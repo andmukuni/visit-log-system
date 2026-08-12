@@ -21,7 +21,8 @@ export default function LoginPage() {
 
   const from = location.state?.from?.pathname;
   const perms = user?.permissions || user?.admin_permissions || [];
-  const loginRedirect = resolveLoginRedirect(from, perms);
+  const roleSlugs = Array.isArray(user?.role_slugs) ? user.role_slugs : [];
+  const loginRedirect = resolveLoginRedirect(from, perms, roleSlugs);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,7 +71,11 @@ export default function LoginPage() {
     const session = await login(email, password);
     if (session) {
       toast.success('Signed in successfully.');
-      const portalRoute = resolveLoginRedirect(from, session.permissions || session.admin_permissions || []);
+      const portalRoute = resolveLoginRedirect(
+        from,
+        session.permissions || session.admin_permissions || [],
+        session.role_slugs || [],
+      );
       navigate(portalRoute, { replace: true });
     }
   };

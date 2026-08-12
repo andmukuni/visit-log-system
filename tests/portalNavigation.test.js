@@ -16,6 +16,7 @@ import {
   isHostPortalPath,
   isPortalLockExemptPath,
   isReceptionOnlyUser,
+  isReceptionPortalLockedUser,
   isReceptionPortalPath,
   resolveDefaultHomeRoute,
   resolveLoginRedirect,
@@ -189,5 +190,34 @@ describe('portal login routing', () => {
     assert.equal(resolveLoginRedirect('/host/appointments', hostEmployee), '/host/appointments');
     assert.equal(resolveLoginRedirect('/executive', ceoPerms), '/host');
     assert.equal(resolveLoginRedirect('/reception/calendar', ceoPerms), '/host');
+  });
+
+  it('locks by assigned role slug when permissions are mixed', () => {
+    const mixedHostReception = [...hostEmployee, 'reception.dashboard', 'reception.calendar'];
+
+    // Role slugs say "reception desk" even though permissions also include host.dashboard.
+    assert.equal(isReceptionPortalLockedUser(mixedHostReception, ['main_reception', 'host']), true);
+    assert.equal(isHostPortalLockedUser(mixedHostReception, ['main_reception', 'host']), false);
+    assert.equal(resolveDefaultHomeRoute(mixedHostReception, ['main_reception', 'host']), '/reception/calendar');
+    assert.equal(resolveLoginRedirect('/host', mixedHostReception, ['main_reception', 'host']), '/reception/calendar');
+    assert.equal(
+      canAccessPortal('host', hasPermissionFactory(mixedHostReception), mixedHostReception, ['main_reception', 'host']),
+      false,
+    );
+  });
+
+  it('keeps a host-role user on /host when only an accidental reception permission is attached', () => {
+    const hostWithStrayReceptionPerm = [...hostEmployee, 'reception.dashboard'];
+
+    assert.equal(isReceptionPortalLockedUser(hostWithStrayReceptionPerm, ['host']), false);
+    assert.equal(isHostPortalLockedUser(hostWithStrayReceptionPerm, ['host']), true);
+    assert.equal(resolveDefaultHomeRoute(hostWithStrayReceptionPerm, ['host']), '/host');
+    assert.equal(resolveLoginRedirect('/login', hostWithStrayReceptionPerm, ['host']), '/host');
+  });
+
+  it('locks executive_reception role slug to reception', () => {
+    assert.equal(isReceptionPortalLockedUser(executiveReceptionPerms, ['executive_reception']), true);
+    assert.equal(isHostPortalLockedUser(executiveReceptionPerms, ['executive_reception']), false);
+    assert.equal(resolveDefaultHomeRoute(executiveReceptionPerms, ['executive_reception']), '/reception/calendar');
   });
 });

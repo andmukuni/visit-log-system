@@ -35,6 +35,9 @@ function getStoredSession() {
     if (!Array.isArray(session.permissions)) {
       session.permissions = session.admin_permissions || [];
     }
+    if (!Array.isArray(session.role_slugs)) {
+      session.role_slugs = [];
+    }
     return session;
   } catch {
     clearAdminAuthStorage();
@@ -81,6 +84,7 @@ export function AuthProvider({ children }) {
       }
 
       const permissions = Array.isArray(userData.admin_permissions) ? userData.admin_permissions : [];
+      const roleSlugs = Array.isArray(userData.role_slugs) ? userData.role_slugs : [];
       const session = {
         id: userData.id,
         email: userData.email,
@@ -88,6 +92,7 @@ export function AuthProvider({ children }) {
         role: userData.role,
         permissions,
         admin_permissions: permissions,
+        role_slugs: roleSlugs,
         loggedInAt: Date.now(),
         expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       };
@@ -188,6 +193,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const permissions = user?.permissions || user?.admin_permissions || [];
+  const roleSlugs = Array.isArray(user?.role_slugs) ? user.role_slugs : [];
 
   const hasPermission = useCallback((key) => {
     if (!user) return false;
@@ -207,6 +213,7 @@ export function AuthProvider({ children }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) return;
       const nextPerms = json.data?.permissions || [];
+      const nextRoleSlugs = Array.isArray(json.data?.role_slugs) ? json.data.role_slugs : [];
       if (json.token) {
         localStorage.setItem('mm_admin_token', String(json.token));
       }
@@ -216,6 +223,7 @@ export function AuthProvider({ children }) {
           ...prev,
           permissions: nextPerms,
           admin_permissions: nextPerms,
+          role_slugs: nextRoleSlugs,
         };
         localStorage.setItem('mm_auth_session', JSON.stringify(nextSession));
         return nextSession;
@@ -238,6 +246,9 @@ export function AuthProvider({ children }) {
         ...patch,
         permissions: prev.permissions || prev.admin_permissions || [],
         admin_permissions: prev.admin_permissions || prev.permissions || [],
+        role_slugs: Array.isArray(patch.role_slugs)
+          ? patch.role_slugs
+          : (prev.role_slugs || []),
       };
       localStorage.setItem('mm_auth_session', JSON.stringify(nextSession));
       return nextSession;
@@ -249,6 +260,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         permissions,
+        roleSlugs,
         isAuthenticated,
         isLoading,
         loginError,

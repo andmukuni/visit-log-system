@@ -201,17 +201,17 @@ function ShellBody({ portalId, title }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isKiosk = isGateEntryKiosk(location.pathname);
-  const { permissions, hasPermission } = useAuth();
+  const { permissions, roleSlugs, hasPermission } = useAuth();
   useEffect(() => {
     if (!permissions.length) return;
     if ((isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) && portalId === 'management') {
       navigate('/host', { replace: true });
       return;
     }
-    if (!canAccessPortal(portalId, hasPermission, permissions)) {
-      navigate(resolveDefaultHomeRoute(permissions), { replace: true });
+    if (!canAccessPortal(portalId, hasPermission, permissions, roleSlugs)) {
+      navigate(resolveDefaultHomeRoute(permissions, roleSlugs), { replace: true });
     }
-  }, [portalId, permissions, hasPermission, navigate]);
+  }, [portalId, permissions, roleSlugs, hasPermission, navigate]);
 
   useEffect(() => {
     if (portalId === 'host' || portalId === 'executive') {

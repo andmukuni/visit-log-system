@@ -31,7 +31,7 @@ function MenuLink({ to, icon: Icon, children, onSelect, external = false }) {
 }
 
 export default function AdminUserMenu({ compact = false }) {
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout, hasPermission, roleSlugs } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -75,7 +75,7 @@ export default function AdminUserMenu({ compact = false }) {
 
   const canSettings = hasPermission('admin.settings');
   const canAccessControl = hasPermission('admin.rbac');
-  const dashboardRoute = resolveDefaultHomeRoute(user?.permissions || user?.admin_permissions || []);
+  const dashboardRoute = resolveDefaultHomeRoute(user?.permissions || user?.admin_permissions || [], roleSlugs);
 
   return (
     <div ref={rootRef} className="relative">

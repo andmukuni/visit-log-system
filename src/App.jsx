@@ -14,7 +14,7 @@ import {
   isHostPortalLockedUser,
   isHostPortalPath,
   isPortalLockExemptPath,
-  isReceptionOnlyUser,
+  isReceptionPortalLockedUser,
   isReceptionPortalPath,
   resolveDefaultHomeRoute,
 } from '../shared/portalNavigation.js';
@@ -275,22 +275,26 @@ function AppRoot() {
     dismissIdleLogoutPrompt,
     adminIdleTimeoutMinutes,
     permissions,
+    roleSlugs,
   } = useAuth();
 
-  const homeRoute = permissions?.length ? resolveDefaultHomeRoute(permissions) : null;
+  const homeRoute = permissions?.length
+    ? resolveDefaultHomeRoute(permissions, roleSlugs)
+    : null;
   const exemptPath = isPortalLockExemptPath(location.pathname);
   const lockToReception = Boolean(
     permissions?.length
-    && isReceptionOnlyUser(permissions)
+    && isReceptionPortalLockedUser(permissions, roleSlugs)
     && !isReceptionPortalPath(location.pathname)
     && !exemptPath,
   );
   const lockToHost = Boolean(
     permissions?.length
+    && !isReceptionPortalLockedUser(permissions, roleSlugs)
     && (
       isExecutiveOnlyUser(permissions)
       || isHostOnlyUser(permissions)
-      || isHostPortalLockedUser(permissions)
+      || isHostPortalLockedUser(permissions, roleSlugs)
     )
     && !isHostPortalPath(location.pathname)
     && !exemptPath,

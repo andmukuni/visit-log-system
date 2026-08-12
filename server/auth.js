@@ -142,13 +142,18 @@ export function createAuthService({ secret, adminApiKey = '', allPermissionKeys 
     });
   }
 
-  function signUserToken(user, { adminPermissions = [], canAccessAdmin = false } = {}) {
+  function signUserToken(user, {
+    adminPermissions = [],
+    roleSlugs = [],
+    canAccessAdmin = false,
+  } = {}) {
     const iat = Math.floor(Date.now() / 1000);
     const exp = iat + 7 * 24 * 60 * 60;
     const tokenPayload = { sub: user.id, role: user.role || 'user', iat, exp };
     if (canAccessAdmin) {
       tokenPayload.admin = true;
       tokenPayload.permissions = adminPermissions;
+      tokenPayload.role_slugs = Array.isArray(roleSlugs) ? roleSlugs : [];
     }
     return signJwtHmacSha256(tokenPayload, secret);
   }

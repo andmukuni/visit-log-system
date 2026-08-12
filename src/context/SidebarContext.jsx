@@ -9,7 +9,7 @@ import {
 
 const SidebarContext = createContext(null);
 
-function buildSidebarSnapshot(portalId, hasPermission, permissions = [], extraItems = []) {
+function buildSidebarSnapshot(portalId, hasPermission, permissions = [], roleSlugs = [], extraItems = []) {
   const staticItems = getVisibleNavItems(portalId, hasPermission);
   const mergedItems = [...staticItems];
 
@@ -26,7 +26,8 @@ function buildSidebarSnapshot(portalId, hasPermission, permissions = [], extraIt
   }
 
   const { primary, organisation, system, settings } = groupNavItems(mergedItems);
-  const accessiblePortals = getAccessiblePortals(hasPermission, permissions).filter((portal) => portal.id !== portalId);
+  const accessiblePortals = getAccessiblePortals(hasPermission, permissions, roleSlugs)
+    .filter((portal) => portal.id !== portalId);
   const portalMeta = PORTALS[portalId];
   const sectionLabels = portalMeta?.navSections || { primary: 'Overview', system: 'System' };
 
@@ -52,16 +53,22 @@ export function SidebarProvider({ portalId, children }) {
     return [...perms].sort().join('|');
   }, [user?.permissions, user?.admin_permissions]);
 
+  const roleSlugsKey = useMemo(() => {
+    const roles = user?.role_slugs || [];
+    return [...roles].sort().join('|');
+  }, [user?.role_slugs]);
+
   const extraNavKey = useMemo(
     () => extraNavItems.map((item) => item.key).join('|'),
     [extraNavItems],
   );
 
   const permissions = user?.permissions || user?.admin_permissions || [];
+  const roleSlugs = Array.isArray(user?.role_slugs) ? user.role_slugs : [];
 
   const snapshot = useMemo(
-    () => buildSidebarSnapshot(portalId, hasPermission, permissions, extraNavItems),
-    [portalId, permissionsKey, extraNavKey, hasPermission, permissions, extraNavItems],
+    () => buildSidebarSnapshot(portalId, hasPermission, permissions, roleSlugs, extraNavItems),
+    [portalId, permissionsKey, roleSlugsKey, extraNavKey, hasPermission, permissions, roleSlugs, extraNavItems],
   );
 
   const registerNavItems = useCallback((items) => {

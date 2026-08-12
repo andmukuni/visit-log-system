@@ -156,6 +156,22 @@ export async function loadUserAdminPermissions(pool, userId, { legacyRole = '' }
   return keys;
 }
 
+/** Assigned admin role slugs for portal locking (reception vs host). */
+export async function loadUserRoleSlugs(pool, userId) {
+  const uid = String(userId || '').trim();
+  if (!uid) return [];
+
+  const [rows] = await pool.query(
+    `SELECT ar.slug
+     FROM user_admin_roles uar
+     INNER JOIN admin_roles ar ON ar.id = uar.role_id
+     WHERE uar.user_id = ?`,
+    [uid],
+  );
+
+  return [...new Set(rows.map((row) => String(row.slug || '').trim()).filter(Boolean))];
+}
+
 export function userCanAccessAdmin(legacyRole, permissions = []) {
   if (String(legacyRole || '').toLowerCase() === 'admin') return true;
   return Array.isArray(permissions) && permissions.length > 0;

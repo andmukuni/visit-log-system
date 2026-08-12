@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../auth.js';
 import { rateLimitByKey } from '../securityHelpers.js';
 import {
   loadUserAdminPermissions,
+  loadUserRoleSlugs,
   userCanAccessAdmin,
 } from '../rbacService.js';
 import { getSecuritySettings } from '../services/adminSettingsService.js';
@@ -65,15 +66,18 @@ export function createAuthRouter({ authService }) {
       }
 
       const adminPermissions = await loadUserAdminPermissions(pool, user.id, { legacyRole: user.role });
+      const roleSlugs = await loadUserRoleSlugs(pool, user.id);
       const canAccessAdmin = userCanAccessAdmin(user.role, adminPermissions);
       const sessionUser = {
         ...mapAuthSessionUser(user),
         admin_permissions: canAccessAdmin ? adminPermissions : [],
+        role_slugs: canAccessAdmin ? roleSlugs : [],
         admin_access: canAccessAdmin,
       };
 
       const token = authService.signUserToken(user, {
         adminPermissions,
+        roleSlugs,
         canAccessAdmin,
       });
 
@@ -194,6 +198,7 @@ export function createAuthRouter({ authService }) {
       }
 
       const adminPermissions = await loadUserAdminPermissions(pool, user.id, { legacyRole: user.role });
+      const roleSlugs = await loadUserRoleSlugs(pool, user.id);
       const canAccessAdmin = userCanAccessAdmin(user.role, adminPermissions);
       if (!canAccessAdmin) {
         return res.status(403).json({ ok: false, message: 'Administrator privileges required.' });
@@ -201,6 +206,7 @@ export function createAuthRouter({ authService }) {
 
       const token = authService.signUserToken(user, {
         adminPermissions,
+        roleSlugs,
         canAccessAdmin,
       });
 
@@ -208,6 +214,7 @@ export function createAuthRouter({ authService }) {
         ok: true,
         data: {
           permissions: adminPermissions,
+          role_slugs: roleSlugs,
         },
         token,
       });
