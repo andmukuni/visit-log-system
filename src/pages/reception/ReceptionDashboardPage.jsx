@@ -157,8 +157,8 @@ export default function ReceptionDashboardPage() {
   ];
 
   const subtitle = data?.scope
-    ? `${data.scope.siteName || 'Site'} · Reception desk`
-    : 'Reception overview';
+    ? `${data.scope.siteName || 'Site'} · Your assigned zone only`
+    : 'Reception overview for your assigned zone';
 
   return (
     <div className="mx-auto w-full max-w-7xl">
@@ -211,7 +211,7 @@ export default function ReceptionDashboardPage() {
                 View host availability
               </Link>
             </Card>
-            <Card title="Check-in today" subtitle="Appointments across all hosts">
+            <Card title="Check-in today" subtitle="Appointments for hosts in your zone">
               <p className="text-3xl font-bold text-navy-900">{(data.checkInAppointments || []).length}</p>
               <Link to="/reception/check-in" className="mt-3 inline-flex text-sm font-medium text-cyan-700 hover:text-cyan-800">
                 Open check-in desk
@@ -241,7 +241,7 @@ export default function ReceptionDashboardPage() {
 
           <Card
             title="Today's check-in appointments"
-            subtitle="All hosts at this site — ready for reception check-in"
+            subtitle="Hosts in your assigned zone — ready for reception check-in"
             actions={<ViewAllAction to="/reception/check-in" label="Open check-in desk" />}
             className="mb-6"
           >
@@ -254,7 +254,7 @@ export default function ReceptionDashboardPage() {
               columns={checkInColumns}
               data={data.checkInAppointments || []}
               emptyTitle="No check-in appointments today"
-              emptyDescription="Scheduled visits for today across all hosts will appear here."
+              emptyDescription="Scheduled visits for today for hosts in your zone will appear here."
               onRowClick={(row) => {
                 const visitId = row.id || row.visit_id;
                 if (visitId) navigate(`/reception/visitors/${visitId}`);
@@ -264,7 +264,7 @@ export default function ReceptionDashboardPage() {
 
           <Card
             title="Recent activity"
-            subtitle="Latest visitor events at reception"
+            subtitle="Latest visitor events in your zone"
             actions={<ViewAllAction to="/reception/visitors" label="View visitor logs" />}
           >
             <DataTable
@@ -276,7 +276,7 @@ export default function ReceptionDashboardPage() {
               columns={activityColumns}
               data={data.recentActivity || []}
               emptyTitle="No activity yet"
-              emptyDescription="Check-ins, approvals, and host queue events will appear here."
+              emptyDescription="Check-ins, approvals, and host queue events in your zone will appear here."
               onRowClick={(row) => {
                 if (row.visit_id) navigate(`/reception/visitors/${row.visit_id}`);
               }}

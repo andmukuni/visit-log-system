@@ -174,8 +174,15 @@ export function createReceptionRouter() {
       const siteId = scope.site_id;
       const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
       const baseParams = [orgId, ...site.params, ...zone.params];
-      const chartSiteSql = siteId ? ' AND vis.site_id = ?' : '';
-      const chartSiteParams = siteId ? [siteId] : [];
+      const chartScopeSql = `${siteId ? ' AND vis.site_id = ?' : ''}${zone.sql}`;
+      const chartScopeParams = [
+        ...(siteId ? [siteId] : []),
+        ...zone.params,
+      ];
+      const chartJoins = `
+        LEFT JOIN hosts h ON h.id = vis.host_id
+        ${ZONE_OFFICE_JOINS}
+      `;
       const visitFrom = `
         FROM visits vis
         LEFT JOIN hosts h ON h.id = vis.host_id
@@ -223,11 +230,24 @@ export function createReceptionRouter() {
          AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()`,
       );
 
-      const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
-      const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
-      const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartSiteSql, chartSiteParams);
-      const { visitTrend, visitsToday } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
-      const eventsByType = await fetchSecurityEventsByType(pool, orgId, chartSiteSql, chartSiteParams);
+      const chartOpts = { joins: chartJoins };
+      const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
+      const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
+      const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
+      const { visitTrend, visitsToday } = await fetchVisitsTodayYesterday(
+        pool,
+        orgId,
+        chartScopeSql,
+        chartScopeParams,
+        chartOpts,
+      );
+      const eventsByType = await fetchSecurityEventsByType(
+        pool,
+        orgId,
+        chartScopeSql,
+        chartScopeParams,
+        chartOpts,
+      );
 
       const recentParams = [orgId];
       let recentSiteFilter = '';
@@ -279,6 +299,8 @@ export function createReceptionRouter() {
             organisationName: scope.organisation_name,
             siteId: scope.site_id,
             siteName: scope.site_name,
+            zoneIds: zoneReq.zoneIds,
+            receptionistId: zoneReq.receptionistId,
           },
         },
       });
