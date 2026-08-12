@@ -13,6 +13,7 @@ import {
   Footprints,
   Hash,
   IdCard,
+  CalendarClock,
   LogIn,
   LogOut,
   PenLine,
@@ -26,6 +27,7 @@ import { LoadingButton, PhoneInput, SegmentedControl, Spinner } from '../../comp
 import CameraCapture from '../../components/ui/CameraCapture';
 import SignaturePad from '../../components/ui/SignaturePad';
 import { useToast } from '../../context/ToastContext';
+import useGateArrivalToasts from '../../hooks/useGateArrivalToasts';
 import {
   DEFAULT_PHONE_COUNTRY,
   buildFullPhone,
@@ -37,6 +39,7 @@ import {
 } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 import GateCheckOutPanel from '../../pages/station/GateCheckOutPanel';
+import GateExpectedTodayPanel from '../../pages/station/GateExpectedTodayPanel';
 import { LOGO_PATH } from '../../../shared/branding.js';
 
 const DEFAULT_GATE_API = {
@@ -417,6 +420,9 @@ function StepActions({ step, totalSteps, onBack, onNext, onFinish, submitting, l
 function resolveSection(tab) {
   const value = String(tab || '').toLowerCase();
   if (value === 'checkout' || value === 'check-out') return 'checkout';
+  if (value === 'expected' || value === 'today' || value === 'visitors-today' || value === 'visitors_today') {
+    return 'expected';
+  }
   if (value === 'checkin' || value === 'check-in' || value === 'gate') return 'checkin';
   return 'checkin';
 }
@@ -435,6 +441,7 @@ export default function GateEntryCheckInForm({
   const [searchParams, setSearchParams] = useSearchParams();
   const [section, setSection] = useState(() => (showCheckout ? resolveSection(searchParams.get('tab')) : 'checkin'));
   const [mode, setMode] = useState(initialMode);
+  useGateArrivalToasts({ enabled: showCheckout && layout === 'kiosk' });
   const [step, setStep] = useState(0);
   const [refData, setRefData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -488,6 +495,10 @@ export default function GateEntryCheckInForm({
     setSection(nextSection);
     if (nextSection === 'checkout') {
       setSearchParams({ tab: 'checkout' }, { replace: true });
+      return;
+    }
+    if (nextSection === 'expected') {
+      setSearchParams({ tab: 'expected' }, { replace: true });
       return;
     }
     setSearchParams({ tab: 'checkin' }, { replace: true });
@@ -1060,6 +1071,10 @@ export default function GateEntryCheckInForm({
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 pb-5 sm:px-8 sm:pb-6">
       <GateCheckOutPanel mode={mode} />
     </div>
+  ) : section === 'expected' ? (
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 pb-5 sm:px-8 sm:pb-6">
+      <GateExpectedTodayPanel mode={mode} />
+    </div>
   ) : (
     <form
       onSubmit={(e) => e.preventDefault()}
@@ -1132,7 +1147,7 @@ export default function GateEntryCheckInForm({
             </div>
             {showCheckout ? (
               <SegmentedControl
-                className="lg:min-w-[320px]"
+                className="lg:min-w-[420px]"
                 fullWidth
                 size="lg"
                 variant="kioskSoft"
@@ -1140,6 +1155,7 @@ export default function GateEntryCheckInForm({
                 onChange={handleSectionChange}
                 options={[
                   { value: 'checkin', label: 'Checkin', icon: LogIn },
+                  { value: 'expected', label: 'Visitors today', icon: CalendarClock },
                   { value: 'checkout', label: 'Checkout', icon: LogOut },
                 ]}
               />

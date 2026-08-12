@@ -577,7 +577,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
      LEFT JOIN hosts h ON h.id = vis.host_id
      LEFT JOIN appointments a ON a.visit_id = vis.id
      LEFT JOIN sites s ON s.id = vis.site_id
-     WHERE vis.status IN ('expected', 'approved')
+     WHERE vis.status IN ('expected', 'approved', 'pre_registered')
        AND COALESCE(vis.expected_at, a.scheduled_at) IS NOT NULL
        AND COALESCE(vis.expected_at, a.scheduled_at) > NOW()
        AND COALESCE(vis.expected_at, a.scheduled_at) <= DATE_ADD(NOW(), INTERVAL ? MINUTE)
