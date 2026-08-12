@@ -9,7 +9,6 @@ import {
   Spinner,
   ActionToolbar,
   RefreshAction,
-  LoadingButton,
   IconButton,
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
@@ -70,24 +69,24 @@ export default function ReceptionApprovalsPage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1">
           <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>
-            <IconButton icon={Eye} label="View" tooltip="View visit" size="sm" variant="ghost" />
+            <IconButton icon={Eye} label="View" tooltip="View visit" size="sm" variant="ghost" iconSize={16} />
           </Link>
-          <LoadingButton
-            size="sm"
-            variant="secondary"
+          <IconButton
             icon={BellRing}
-            iconSize={14}
-            spinnerSize={14}
+            label="Remind host"
+            tooltip="Remind host"
+            size="sm"
+            variant="ghost"
+            iconSize={16}
             loading={acting === row.id}
-            loadingLabel="Sending…"
-            aria-label="Remind host"
-            onClick={() => requestApproval(row.id)}
-            className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:border-cyan-300"
-          >
-            Remind host
-          </LoadingButton>
+            className="text-cyan-700 hover:bg-cyan-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              void requestApproval(row.id);
+            }}
+          />
         </div>
       ),
     },
