@@ -19,6 +19,8 @@ import assert from 'node:assert/strict';
 import { createTestPool, seedFixture, seedHost, seedVisit, FIXTURE } from './helpers/pgMemHarness.js';
 import { runMigrations } from '../server/migrations/index.js';
 import { visitZoneMatchExpr } from '../server/receptionistService.js';
+import { calendarSelectSql } from '../server/routes/reception.js';
+import { applyVisitAccessPolicyToRows } from '../server/visitorAccessPolicy.js';
 import appPool from '../server/db.js';
 
 after(async () => { try { await appPool.end(); } catch { /* never opened */ } });
@@ -28,35 +30,42 @@ const ZONES = () => [FIXTURE.zones.ceo];
 const SITE = FIXTURE.siteId;
 const ORG = FIXTURE.orgId;
 
+function calendarSelectSqlForHarness(zoneMatchSql) {
+  // pg-mem does not implement STRING_AGG and cannot execute the production
+  // expected-vehicle scalar subquery. Replace only that unrelated projection;
+  // every authorization-driving field still comes from the real route builder.
+  const expectedPlatesSelect = `(SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
+          FROM expected_vehicles ev
+          WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates`;
+  const routeSql = calendarSelectSql(zoneMatchSql);
+  const harnessSql = routeSql.replace(expectedPlatesSelect, 'NULL AS expected_plates');
+  assert.notEqual(harnessSql, routeSql, 'test harness must replace the unsupported aggregate only');
+  return harnessSql;
+}
+
 before(async () => {
   pool = await createTestPool();
   await runMigrations(pool, { logger: { log() {} } });
   await seedFixture(pool);
   await seedHost(pool, { id: 'host-ceo', name: 'Huang Yaochi', roleSlug: 'ceo', zoneIds: [FIXTURE.zones.ceo] });
   await seedVisit(pool, { id: 'visit-ceo', hostId: 'host-ceo', zoneId: FIXTURE.zones.ceo, stationId: FIXTURE.gateId });
+  await pool.query(
+    `INSERT INTO appointments (id, organisation_id, visit_id, host_id, title, scheduled_at, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'scheduled')`,
+    ['appt-ceo', ORG, 'visit-ceo', 'host-ceo', 'CEO appointment', '2026-08-20T09:00:00Z'],
+  );
 });
 
 describe('ROUTE QUERY: /reception/calendar — the exact shape that 500d in production', () => {
   it('binds correctly WITH a start/end date filter (the failing case)', async () => {
     const zm = visitZoneMatchExpr(ZONES());
     const params = [ORG, SITE];
-    const from = '2026-08-12';
-    const to = '2026-08-13';
+    const from = '2026-08-20';
+    const to = '2026-08-21';
     params.push(from, to);
 
     const [rows] = await pool.query(
-      `SELECT a.id, COALESCE(a.title, vis.purpose) AS title,
-              COALESCE(a.scheduled_at, vis.expected_at) AS scheduled_at,
-              vis.id AS visit_id, vis.status AS visit_status, vis.organisation_id,
-              v.full_name AS visitor_name, v.company, v.phone,
-              h.name AS host_name,
-              ${zm.sql} AS zone_match
-       FROM visits vis
-       INNER JOIN visitors v ON v.id = vis.visitor_id
-       LEFT JOIN appointments a ON a.visit_id = vis.id
-       LEFT JOIN hosts h ON h.id = vis.host_id
-       LEFT JOIN offices ofc ON ofc.id = h.office_id
-       LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
+      `${calendarSelectSqlForHarness(zm.sql)}
        WHERE vis.organisation_id = ? AND vis.site_id = ?
          AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
          AND COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) >= ?
@@ -66,7 +75,54 @@ describe('ROUTE QUERY: /reception/calendar — the exact shape that 500d in prod
       // Correct order: SELECT-list params first, then WHERE params.
       [...zm.params, ...params],
     );
-    assert.ok(Array.isArray(rows), 'query must execute without a binding error');
+    assert.equal(rows.length, 1, 'the same-zone expected visit must be selected');
+    assert.equal(rows[0].organisation_id, ORG, 'the tenant field required by the access policy must be selected');
+
+    const visible = applyVisitAccessPolicyToRows(rows, {
+      userId: 'usr-rcp-ceo',
+      permissions: [],
+      isElevated: false,
+      scope: { organisation_id: ORG, site_id: SITE },
+      hostContext: null,
+      receptionContext: { receptionistId: 'rcp-ceo', zoneIds: ZONES() },
+      securityContext: null,
+    }, { zoneMatchColumn: 'zone_match' });
+
+    assert.equal(visible.length, 1, 'the tenant policy must not discard the calendar row');
+    assert.equal(visible[0]._accessLevel, 'full');
+    assert.equal(visible[0].id, 'visit-ceo', 'calendar actions must use the visit id');
+    assert.equal(visible[0].appointment_id, 'appt-ceo');
+  });
+
+  it('keeps a different-zone appointment as a restricted name-and-time row with an opaque visit id', async () => {
+    const zm = visitZoneMatchExpr([FIXTURE.zones.dceo]);
+    const [rows] = await pool.query(
+      `${calendarSelectSqlForHarness(zm.sql)}
+       WHERE vis.organisation_id = ? AND vis.site_id = ?
+         AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+         AND COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) >= ?
+         AND COALESCE(a.scheduled_at, vis.expected_at, vis.created_at) < ?`,
+      [...zm.params, ORG, SITE, '2026-08-20', '2026-08-21'],
+    );
+
+    const visible = applyVisitAccessPolicyToRows(rows, {
+      userId: 'usr-rcp-dceo',
+      permissions: [],
+      isElevated: false,
+      scope: { organisation_id: ORG, site_id: SITE },
+      hostContext: null,
+      receptionContext: { receptionistId: 'rcp-dceo', zoneIds: [FIXTURE.zones.dceo] },
+      securityContext: null,
+    }, { zoneMatchColumn: 'zone_match' });
+
+    assert.equal(visible.length, 1);
+    assert.deepEqual(visible[0], {
+      id: 'visit-ceo',
+      visitor_name: 'Jane Doe',
+      expected_at: new Date('2026-08-20T09:00:00Z'),
+      _accessLevel: 'restricted',
+      _restrictedReason: 'zone_mismatch',
+    });
   });
 
   it('the WRONG order (params before zone-match) is genuinely rejected by the engine', async () => {

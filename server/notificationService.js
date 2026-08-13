@@ -8,6 +8,18 @@ import { categoryKeyForEvent } from '../shared/notificationCategories.js';
 import { resolveReceptionAudienceByZone } from './receptionistService.js';
 import { resolveSecurityAudienceForVisit } from './securityGuardService.js';
 
+const RECEPTION_NEW_EXPECTED_EVENTS = new Set([
+  'pending_approval',
+  'expected',
+  'approved',
+  'pre_registered',
+  'host_booking',
+]);
+
+export function isReceptionNewExpectedEvent(eventType) {
+  return RECEPTION_NEW_EXPECTED_EVENTS.has(eventType);
+}
+
 /** Different-zone reception audiences only ever get {visitor_name, expected_at}. */
 function buildRestrictedReceptionVars(vars) {
   return { visitor_name: vars.visitor_name, expected_at: vars.expected_at };
@@ -508,8 +520,7 @@ export async function notifyVisitEvent(pool, {
   // host books/expects a visitor, split by zone match. This previously did
   // not exist at all: reception only ever heard about a visit once it
   // reached the gate.
-  const RECEPTION_NEW_EXPECTED_EVENTS = ['pending_approval', 'expected', 'approved', 'pre_registered'];
-  if (RECEPTION_NEW_EXPECTED_EVENTS.includes(eventType)) {
+  if (isReceptionNewExpectedEvent(eventType)) {
     const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
       organisationId: visit.organisation_id,
       siteId: visit.site_id,

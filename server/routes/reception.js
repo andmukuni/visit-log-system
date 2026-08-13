@@ -68,13 +68,15 @@ function buildReceptionViewer(scope, zoneReq, permissions) {
   };
 }
 
-function calendarSelectSql(zoneMatchSql) {
+export function calendarSelectSql(zoneMatchSql) {
   return `
-  SELECT a.id,
+  SELECT vis.id AS id,
+         a.id AS appointment_id,
          COALESCE(a.title, vis.purpose) AS title,
          COALESCE(a.scheduled_at, vis.expected_at) AS scheduled_at,
          a.status AS appointment_status,
          vis.id AS visit_id,
+         vis.organisation_id,
          vis.status AS visit_status,
          vis.purpose,
          vis.pass_code,

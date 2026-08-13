@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import {
   buildRestrictedReceptionVars,
   buildRestrictedReceptionMetadata,
+  isReceptionNewExpectedEvent,
 } from '../server/notificationService.js';
+
+describe('reception expected-visitor event routing', () => {
+  it('routes confirmed host/executive bookings to reception', () => {
+    assert.equal(isReceptionNewExpectedEvent('host_booking'), true);
+  });
+});
 
 describe('buildRestrictedReceptionVars — different-zone notification payload (scenario 2)', () => {
   it('is a fresh two-key object, never "full vars minus fields"', () => {
