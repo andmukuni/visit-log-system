@@ -1,81 +1,148 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import {
   formatTimePickerLabel,
   parseTimeInputValue,
+  TIME_PICKER_STEP_MINUTES,
   toTimeInputFromParts,
 } from './calendarUtils';
 
 const ITEM_HEIGHT = 36;
 const VISIBLE_ROWS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
-const PICKER_PAD = ITEM_HEIGHT * 2;
+const PICKER_PAD = ITEM_HEIGHT * Math.floor(VISIBLE_ROWS / 2);
+/** Commit only once the wheel has come to rest, never mid-gesture. */
+const SETTLE_MS = 110;
+const SMOOTH_SCROLL_MS = 360;
+const INSTANT_SCROLL_MS = 60;
 
 const HOURS = Array.from({ length: 12 }, (_, index) => index + 1);
-const MINUTES = [0, 30];
+const MINUTES = Array.from(
+  { length: 60 / TIME_PICKER_STEP_MINUTES },
+  (_, index) => index * TIME_PICKER_STEP_MINUTES,
+);
 const PERIODS = ['AM', 'PM'];
+
+const clampIndex = (index, length) => Math.max(0, Math.min(length - 1, index));
 
 function ScrollTimeColumn({ items, value, onChange, formatItem = (item) => item, ariaLabel }) {
   const listRef = useRef(null);
-  const scrollFrameRef = useRef(null);
-  const isProgrammaticScrollRef = useRef(false);
+  const settleTimerRef = useRef(null);
+  const programmaticTimerRef = useRef(null);
+  const isProgrammaticRef = useRef(false);
+  const targetIndexRef = useRef(-1);
+  const optionIdPrefix = useId();
 
-  const scrollToValue = useCallback((nextValue, behavior = 'auto') => {
+  const selectedIndex = items.indexOf(value);
+
+  const scrollToIndex = useCallback((index, behavior = 'auto') => {
     const el = listRef.current;
-    if (!el) return;
-    const index = items.indexOf(nextValue);
-    if (index < 0) return;
-    isProgrammaticScrollRef.current = true;
+    if (!el || index < 0) return;
+
+    isProgrammaticRef.current = true;
+    targetIndexRef.current = index;
     el.scrollTo({ top: index * ITEM_HEIGHT, behavior });
-    window.setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, behavior === 'smooth' ? 220 : 0);
-  }, [items]);
 
+    // Hold the guard for the whole animation. Releasing it early let the
+    // browser's own scroll events read half-finished positions and commit them.
+    window.clearTimeout(programmaticTimerRef.current);
+    programmaticTimerRef.current = window.setTimeout(
+      () => {
+        isProgrammaticRef.current = false;
+      },
+      behavior === 'smooth' ? SMOOTH_SCROLL_MS : INSTANT_SCROLL_MS,
+    );
+  }, []);
+
+  // Re-centre only when the wheel is actually off its selected row; recentring
+  // unconditionally landed mid-gesture and yanked the user's scroll back.
   useLayoutEffect(() => {
-    scrollToValue(value);
-  }, [scrollToValue, value]);
-
-  const handleScroll = () => {
-    if (isProgrammaticScrollRef.current) return;
-    if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
-    scrollFrameRef.current = requestAnimationFrame(() => {
-      const el = listRef.current;
-      if (!el) return;
-      const index = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM_HEIGHT)));
-      const nextValue = items[index];
-      if (nextValue !== value) onChange(nextValue);
-    });
-  };
+    const el = listRef.current;
+    if (!el || selectedIndex < 0) return;
+    if (targetIndexRef.current === selectedIndex) return;
+    if (Math.round(el.scrollTop / ITEM_HEIGHT) === selectedIndex) return;
+    scrollToIndex(selectedIndex);
+  }, [scrollToIndex, selectedIndex]);
 
   useEffect(() => () => {
-    if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    window.clearTimeout(settleTimerRef.current);
+    window.clearTimeout(programmaticTimerRef.current);
   }, []);
+
+  const handleScroll = () => {
+    if (isProgrammaticRef.current) return;
+
+    window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      const el = listRef.current;
+      if (!el) return;
+
+      const index = clampIndex(Math.round(el.scrollTop / ITEM_HEIGHT), items.length);
+      const nextValue = items[index];
+
+      if (nextValue === value) {
+        scrollToIndex(index);
+        return;
+      }
+      onChange(nextValue);
+    }, SETTLE_MS);
+  };
+
+  const selectIndex = (index) => {
+    const nextIndex = clampIndex(index, items.length);
+    scrollToIndex(nextIndex, 'smooth');
+    const nextValue = items[nextIndex];
+    if (nextValue !== value) onChange(nextValue);
+  };
+
+  const handleKeyDown = (event) => {
+    const base = selectedIndex < 0 ? 0 : selectedIndex;
+    const moves = {
+      ArrowDown: base + 1,
+      ArrowUp: base - 1,
+      PageDown: base + VISIBLE_ROWS,
+      PageUp: base - VISIBLE_ROWS,
+      Home: 0,
+      End: items.length - 1,
+    };
+    if (!(event.key in moves)) return;
+    event.preventDefault();
+    selectIndex(moves[event.key]);
+  };
 
   return (
     <div className="relative min-w-[3.25rem] flex-1">
       <div
         ref={listRef}
         role="listbox"
+        tabIndex={0}
         aria-label={ariaLabel}
-        className="scrollbar-hide snap-y snap-mandatory overflow-y-auto scroll-smooth"
+        aria-activedescendant={selectedIndex >= 0 ? `${optionIdPrefix}-${selectedIndex}` : undefined}
+        className="scrollbar-hide snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8]/40"
         style={{ height: `${PICKER_HEIGHT}px` }}
         onScroll={handleScroll}
+        onKeyDown={handleKeyDown}
       >
         <div style={{ paddingTop: PICKER_PAD, paddingBottom: PICKER_PAD }}>
-          {items.map((item) => {
+          {items.map((item, index) => {
             const selected = item === value;
             return (
-              <div
+              <button
                 key={String(item)}
+                id={`${optionIdPrefix}-${index}`}
+                type="button"
                 role="option"
+                tabIndex={-1}
                 aria-selected={selected}
-                className={`flex h-9 snap-center items-center justify-center text-sm transition-colors ${
-                  selected ? 'font-semibold text-[#1a73e8]' : 'font-medium text-gray-500'
+                onClick={() => selectIndex(index)}
+                className={`flex h-9 w-full snap-center items-center justify-center text-sm tabular-nums transition-colors ${
+                  selected
+                    ? 'font-semibold text-[#1a73e8]'
+                    : 'font-medium text-gray-500 hover:text-gray-800'
                 }`}
               >
                 {formatItem(item)}
-              </div>
+              </button>
             );
           })}
         </div>

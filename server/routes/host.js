@@ -7,7 +7,7 @@ import {
   generatePassCode,
 } from '../auditService.js';
 import { generateInviteToken } from '../platformSchema.js';
-import { notifyVisitEvent } from '../notificationService.js';
+import { notifyVisitEvent, parseAlertVisitorFlag } from '../notificationService.js';
 import {
   requireHostContext,
   loadVisitForHost,
@@ -289,7 +289,9 @@ export function createHostRouter() {
         confidentialNotes,
         expectedVehiclePlate,
         expectedVehicleDriver,
+        alertVisitor,
       } = req.body;
+      const notifyVisitor = parseAlertVisitorFlag(alertVisitor);
 
       if (!fullName?.trim()) {
         return res.status(400).json({ ok: false, message: 'Visitor name is required.' });
@@ -464,7 +466,7 @@ export function createHostRouter() {
         visitId,
         eventType: 'pre_registered',
         actorUserId: userId,
-        details: { status, source: 'host_invite', alreadyConfirmed },
+        details: { status, source: 'host_invite', alreadyConfirmed, alertVisitor: notifyVisitor },
       });
 
       if (alreadyConfirmed) {
@@ -474,9 +476,19 @@ export function createHostRouter() {
           actorUserId: userId,
           details: { status, source: 'host_invite', selfApproved: true, alreadyConfirmed: true },
         });
-        await notifyVisitEvent(pool, { visitId, eventType: 'host_booking', actorUserId: userId });
+        await notifyVisitEvent(pool, {
+          visitId,
+          eventType: 'host_booking',
+          actorUserId: userId,
+          notifyVisitor,
+        });
       } else {
-        await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+        await notifyVisitEvent(pool, {
+          visitId,
+          eventType: 'pre_registered',
+          actorUserId: userId,
+          notifyVisitor,
+        });
       }
 
       await writeAuditLog(pool, {

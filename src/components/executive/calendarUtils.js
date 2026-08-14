@@ -557,15 +557,22 @@ export function setScheduleStartTime(startAt, endAt, timeValue) {
   return { startAt: nextStart, endAt: nextEnd };
 }
 
+export const END_BEFORE_START_ERROR = 'End time must be after the start time.';
+
 export function setScheduleEndTime(startAt, endAt, timeValue) {
-  let nextEnd = applyTimeToDate(endAt, timeValue);
-  if (nextEnd <= startAt) {
-    nextEnd = applyTimeToDate(addDays(startAt, 1), timeValue);
-    if (nextEnd <= startAt) {
-      nextEnd = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
-    }
+  const nextEnd = applyTimeToDate(endAt, timeValue);
+  if (nextEnd > startAt) {
+    return { startAt, endAt: nextEnd, adjusted: false };
   }
-  return { startAt, endAt: nextEnd };
+
+  // Refuse an end at or before the start instead of rolling the appointment onto
+  // the next day. That roll was invisible in the quick-add strip (one date is
+  // shown), so a 24-hour visit read as "1:00am – 1:00am".
+  return {
+    startAt,
+    endAt: addMinutes(startAt, DEFAULT_EVENT_MINUTES),
+    adjusted: true,
+  };
 }
 
 export function toAllDaySchedule(date) {
@@ -601,21 +608,35 @@ export function formatTime12Compact(date) {
     .replace(/\s/g, '');
 }
 
-export function parseTimeInputValue(value) {
-  const [hours = 0, minutes = 0] = String(value || '09:00').split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  let hour12 = hours % 12;
-  if (hour12 === 0) hour12 = 12;
-  const snappedMinute = Math.round(minutes / 30) * 30 % 60;
-  return { hour12, minute: snappedMinute, period };
+/** Granularity of the scroll time picker, in minutes. */
+export const TIME_PICKER_STEP_MINUTES = 5;
+
+const MINUTES_PER_DAY = 24 * 60;
+
+export function parseTimeInputValue(value, stepMinutes = TIME_PICKER_STEP_MINUTES) {
+  const [rawHours, rawMinutes] = String(value || '09:00').split(':').map(Number);
+  const hours = Number.isFinite(rawHours) ? rawHours : 0;
+  const minutes = Number.isFinite(rawMinutes) ? rawMinutes : 0;
+  const step = stepMinutes > 0 ? stepMinutes : 1;
+
+  // Round on the full day-minute so the hour carries. Snapping the minute on its
+  // own turned 08:45 into 08:00 and quietly moved the appointment 45m earlier.
+  const rounded = Math.round((hours * 60 + minutes) / step) * step;
+  const clamped = Math.min(Math.max(rounded, 0), MINUTES_PER_DAY - step);
+
+  const hours24 = Math.floor(clamped / 60);
+  const minute = clamped % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+
+  return { hour12, minute, period, hours24 };
 }
 
 export function toTimeInputFromParts({ hour12, minute, period }) {
-  let hours24 = hour12 % 12;
-  if (period === 'PM') hours24 += 12;
-  if (period === 'AM' && hour12 === 12) hours24 = 0;
-  if (period === 'PM' && hour12 === 12) hours24 = 12;
-  return `${String(hours24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const base = (Number(hour12) || 12) % 12;
+  const hours24 = period === 'PM' ? base + 12 : base;
+  const safeMinute = Math.min(Math.max(Number(minute) || 0, 0), 59);
+  return `${String(hours24).padStart(2, '0')}:${String(safeMinute).padStart(2, '0')}`;
 }
 
 export function formatTimePickerLabel(value) {

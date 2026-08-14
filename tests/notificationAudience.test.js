@@ -4,6 +4,7 @@ import {
   buildRestrictedReceptionVars,
   buildRestrictedReceptionMetadata,
   isReceptionNewExpectedEvent,
+  parseAlertVisitorFlag,
 } from '../server/notificationService.js';
 
 describe('reception expected-visitor event routing', () => {
@@ -104,5 +105,26 @@ describe('notification idempotency-key uniqueness across audience buckets (scena
       (eventType) => `${eventType}:${visitId}:reception_same:${receptionistId}`,
     );
     assert.equal(new Set(keys).size, keys.length);
+  });
+});
+
+describe('parseAlertVisitorFlag', () => {
+  it('is opt-in — omitted or falsey values do not alert the visitor', () => {
+    assert.equal(parseAlertVisitorFlag(undefined), false);
+    assert.equal(parseAlertVisitorFlag(null), false);
+    assert.equal(parseAlertVisitorFlag(false), false);
+    assert.equal(parseAlertVisitorFlag(0), false);
+    assert.equal(parseAlertVisitorFlag(''), false);
+    assert.equal(parseAlertVisitorFlag('false'), false);
+    assert.equal(parseAlertVisitorFlag('no'), false);
+  });
+
+  it('accepts explicit true-like values from JSON or form payloads', () => {
+    assert.equal(parseAlertVisitorFlag(true), true);
+    assert.equal(parseAlertVisitorFlag(1), true);
+    assert.equal(parseAlertVisitorFlag('true'), true);
+    assert.equal(parseAlertVisitorFlag('TRUE'), true);
+    assert.equal(parseAlertVisitorFlag('1'), true);
+    assert.equal(parseAlertVisitorFlag('yes'), true);
   });
 });

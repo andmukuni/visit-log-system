@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { formatLongDate, toTimeInputValue } from './calendarUtils';
+import { useEffect, useRef, useState } from 'react';
+import { formatLongDate, isSameDay, toDateInputValue, toTimeInputValue } from './calendarUtils';
+import ExecutiveDatePicker from './ExecutiveDatePicker';
 import { ScrollTimePanel, TimeTriggerButton } from './ExecutiveScrollTimePicker';
 
 export default function ExecutiveQuickAddSchedule({
@@ -8,16 +9,19 @@ export default function ExecutiveQuickAddSchedule({
   allDay = false,
   activeTimePicker = null,
   onActiveTimePickerChange,
+  onStartDateChange,
   onStartTimeChange,
   onEndTimeChange,
   repeatLabel = 'Does not repeat',
 }) {
   const rootRef = useRef(null);
+  const [dateOpen, setDateOpen] = useState(false);
   const startTime = toTimeInputValue(startAt);
   const endTime = toTimeInputValue(endAt);
   const activeValue = activeTimePicker === 'end' ? endTime : startTime;
   const activeLabel = activeTimePicker === 'end' ? 'End time' : 'Start time';
   const activeOnChange = activeTimePicker === 'end' ? onEndTimeChange : onStartTimeChange;
+  const endsNextDay = !allDay && !isSameDay(startAt, endAt);
 
   useEffect(() => {
     if (!activeTimePicker) return undefined;
@@ -33,9 +37,22 @@ export default function ExecutiveQuickAddSchedule({
 
   return (
     <div ref={rootRef} className="relative overflow-hidden rounded-xl bg-[#f1f3f4] px-4 py-3.5">
-      <p className="text-[15px] font-semibold leading-snug text-gray-900">
-        {formatLongDate(startAt)}
-      </p>
+      {onStartDateChange ? (
+        <ExecutiveDatePicker
+          label={formatLongDate(startAt)}
+          value={toDateInputValue(startAt)}
+          min={toDateInputValue(new Date())}
+          isOpen={dateOpen}
+          onOpenChange={setDateOpen}
+          onChange={onStartDateChange}
+          ariaLabel={allDay ? 'Date' : 'Start date'}
+          triggerClassName="border-transparent bg-transparent px-2 text-[15px] font-semibold text-gray-900 shadow-none hover:border-gray-300 hover:bg-white"
+        />
+      ) : (
+        <p className="text-[15px] font-semibold leading-snug text-gray-900">
+          {formatLongDate(startAt)}
+        </p>
+      )}
 
       {!allDay ? (
         <>
@@ -54,6 +71,12 @@ export default function ExecutiveQuickAddSchedule({
               ariaLabel="End time"
             />
           </div>
+
+          {endsNextDay && (
+            <p className="mt-2 text-center text-xs font-medium text-amber-700">
+              Ends {formatLongDate(endAt)}
+            </p>
+          )}
 
           {activeTimePicker && (
             <div className="mt-3 animate-in fade-in slide-in-from-top-1 duration-150">

@@ -362,6 +362,16 @@ async function resolveVisitBuildingId(pool, visit) {
   return null;
 }
 
+/** True only when the caller explicitly opted in to visitor SMS/email. */
+export function parseAlertVisitorFlag(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return false;
+}
+
 /**
  * Notify hosts, visitors, and staff for a visit lifecycle event.
  */
@@ -370,6 +380,7 @@ export async function notifyVisitEvent(pool, {
   eventType,
   actorUserId = null,
   extra = {},
+  notifyVisitor = true,
 }) {
   const [[visit]] = await pool.query(
     `SELECT vis.*, v.full_name AS visitor_name, v.phone AS visitor_phone, v.email AS visitor_email,
@@ -500,9 +511,14 @@ export async function notifyVisitEvent(pool, {
     }
   }
 
-  // Visitor notifications (external — org toggles only)
+  // Visitor notifications (external — org toggles only). Host/executive
+  // bookings can skip this when the user chooses not to alert the visitor.
   const visitorTemplateKey = visitorTemplateMap[eventType];
-  if (visitorTemplateKey && (visitorRecipient.email || visitorRecipient.phone)) {
+  if (
+    notifyVisitor
+    && visitorTemplateKey
+    && (visitorRecipient.email || visitorRecipient.phone)
+  ) {
     await notifyAudience(pool, {
       organisationId: visit.organisation_id,
       recipient: visitorRecipient,

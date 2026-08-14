@@ -9,6 +9,7 @@ export { default as FormField } from './FormField';
 export { default as SearchableSelect } from './SearchableSelect';
 export { default as Modal } from './Modal';
 export { default as ConfirmDialog } from './ConfirmDialog';
+export { default as AlertVisitorPrompt } from './AlertVisitorPrompt';
 export { default as StatusBadge } from './StatusBadge';
 export { default as VisitorTypeBadge } from './VisitorTypeBadge';
 export { default as RestrictedIndicator } from './RestrictedIndicator';

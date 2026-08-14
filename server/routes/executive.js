@@ -7,7 +7,7 @@ import {
   generatePassCode,
 } from '../auditService.js';
 import { generateInviteToken } from '../platformSchema.js';
-import { notifyVisitEvent } from '../notificationService.js';
+import { notifyVisitEvent, parseAlertVisitorFlag } from '../notificationService.js';
 import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { resolveHostZoneId } from '../receptionistService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
@@ -446,7 +446,9 @@ export function createExecutiveRouter() {
         siteId,
         idType,
         idNumber,
+        alertVisitor,
       } = req.body || {};
+      const notifyVisitor = parseAlertVisitorFlag(alertVisitor);
 
       if (!visitorName?.trim()) {
         return res.status(400).json({ ok: false, message: 'Visitor name is required.' });
@@ -595,7 +597,7 @@ export function createExecutiveRouter() {
         visitId,
         eventType: 'pre_registered',
         actorUserId: userId,
-        details: { status, source: 'executive_calendar' },
+        details: { status, source: 'executive_calendar', alertVisitor: notifyVisitor },
       });
 
       await writeVisitEvent(pool, {
@@ -604,7 +606,12 @@ export function createExecutiveRouter() {
         actorUserId: userId,
         details: { status, source: 'executive_calendar', selfApproved: true, alreadyConfirmed: true },
       });
-      await notifyVisitEvent(pool, { visitId, eventType: 'host_booking', actorUserId: userId });
+      await notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'host_booking',
+        actorUserId: userId,
+        notifyVisitor,
+      });
 
       await writeAuditLog(pool, {
         organisationId: ctx.scope.organisation_id,

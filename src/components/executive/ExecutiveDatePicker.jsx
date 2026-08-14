@@ -188,6 +188,7 @@ export default function ExecutiveDatePicker({
   onOpenChange,
   label,
   ariaLabel = 'Select date',
+  triggerClassName = '',
 }) {
   const rootRef = useRef(null);
   const panelRef = useRef(null);
@@ -258,6 +259,7 @@ export default function ExecutiveDatePicker({
         isOpen={isOpen}
         onClick={() => onOpenChange?.(!isOpen)}
         ariaLabel={ariaLabel}
+        className={triggerClassName}
       />
 
       {isOpen && createPortal(
