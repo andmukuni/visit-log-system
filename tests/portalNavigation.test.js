@@ -20,6 +20,7 @@ import {
   isReceptionPortalPath,
   resolveDefaultHomeRoute,
   resolveLoginRedirect,
+  resolvePortalLockRedirect,
   resolvePrimaryPortal,
 } from '../shared/portalNavigation.js';
 
@@ -219,5 +220,21 @@ describe('portal login routing', () => {
     assert.equal(isReceptionPortalLockedUser(executiveReceptionPerms, ['executive_reception']), true);
     assert.equal(isHostPortalLockedUser(executiveReceptionPerms, ['executive_reception']), false);
     assert.equal(resolveDefaultHomeRoute(executiveReceptionPerms, ['executive_reception']), '/reception/calendar');
+  });
+
+  it('runtime-locks mixed reception+host role accounts off /host', () => {
+    const mixed = [...receptionPerms, 'host.dashboard'];
+    assert.equal(
+      resolvePortalLockRedirect('/host', mixed, ['main_reception', 'host']),
+      '/reception/calendar',
+    );
+    assert.equal(
+      resolvePortalLockRedirect('/reception/calendar', mixed, ['main_reception', 'host']),
+      null,
+    );
+    assert.equal(
+      resolvePortalLockRedirect('/reception', hostEmployee, ['host']),
+      '/host',
+    );
   });
 });
