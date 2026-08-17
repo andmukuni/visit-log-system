@@ -109,11 +109,11 @@ function formatStatusLabel(status, normalized) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export default function StatusBadge({ status, size = 'sm', iconOnly = false }) {
+export default function StatusBadge({ status, size = 'sm', iconOnly = false, label }) {
   const normalized = normalizeStatusKey(status);
   const colors = colorMap[normalized] || colorMap.default;
   const Icon = colors.icon || CircleDot;
-  const displayLabel = formatStatusLabel(status, normalized);
+  const displayLabel = label || formatStatusLabel(status, normalized);
   const iconSize = size === 'sm' ? 12 : 14;
 
   const sizeClasses = iconOnly

@@ -30,10 +30,23 @@ export const VISIT_JOURNEY_STEPS = [
 export const VISIT_STATUS_ALIASES = {
   pre_registered: 'expected',
   // Default for a pre-arrival approval request. Overridden to 'checked_in' in
-  // VisitActivityPanel when the visitor already has a check-in timestamp —
+  // resolveJourneyStatusKey when the visitor already has a check-in timestamp —
   // reception can only queue an on-site visitor to pending_approval, so that
   // case must keep showing "On site" instead of regressing to "Expected".
   pending_approval: 'expected',
   entered_premises: 'reception_check_in',
   waiting: 'in_meeting',
 };
+
+/**
+ * Resolve a raw visit status to its VISIT_JOURNEY_STEPS key, so any UI
+ * showing status can agree with the "Progress through the company" tracker
+ * instead of the raw technical status. Returns null for terminal/exception
+ * statuses (rejected, cancelled, etc.) that aren't part of the journey.
+ */
+export function resolveJourneyStatusKey(status, hasCheckedIn) {
+  const normalized = status === 'pending_approval' && hasCheckedIn
+    ? 'checked_in'
+    : VISIT_STATUS_ALIASES[status] || status;
+  return VISIT_JOURNEY_STEPS.some((step) => step.key === normalized) ? normalized : null;
+}

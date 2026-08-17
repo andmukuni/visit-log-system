@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, LogOut, Send, Users } from 'lucide-react';
 import { LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
@@ -12,12 +12,21 @@ import {
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
+import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
 
-function ReceptionHeroActions({ visit, onQueueHost }) {
+const RECEPTION_ACTION_ICONS = {
+  'check-in': LogIn,
+  send: Send,
+  queue: Users,
+};
+
+function ReceptionHeroActions({ visit, onQueueHost, onCheckOut, checkingOut }) {
   const action = getReceptionVisitAction(visit.status);
   const canQueue = ['reception_check_in', 'checked_in'].includes(visit.status);
+  const canCheckOut = isCheckoutEligible(visit.status);
+  const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
 
-  if (!action?.show && !canQueue) return null;
+  if (!action?.show && !canQueue && !canCheckOut) return null;
 
   return (
     <>
@@ -26,11 +35,7 @@ function ReceptionHeroActions({ visit, onQueueHost }) {
           to={receptionActionHref(action, visit.id)}
           className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors ${receptionActionButtonClass(action.tone)}`}
         >
-          {action.stage === 'gate' || action.stage === 'expected' ? (
-            <LogIn size={16} aria-hidden="true" />
-          ) : (
-            <UserPlus size={16} aria-hidden="true" />
-          )}
+          <ActionIcon size={16} aria-hidden="true" />
           {action.label}
         </Link>
       ) : null}
@@ -42,26 +47,25 @@ function ReceptionHeroActions({ visit, onQueueHost }) {
       {canQueue ? (
         <LoadingButton
           size="md"
-          icon={UserPlus}
+          icon={Send}
           onClick={onQueueHost}
           className="border-cyan-600 bg-cyan-600 hover:bg-cyan-500"
         >
           Queue to host
         </LoadingButton>
       ) : null}
-      <Link
-        to="/reception/check-in"
-        className="inline-flex items-center gap-1.5 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50"
-      >
-        <LogIn size={15} aria-hidden="true" />
-        Check-in desk
-      </Link>
-      <Link
-        to="/reception/host-queue"
-        className="inline-flex items-center gap-1.5 rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50"
-      >
-        Host queue
-      </Link>
+      {canCheckOut ? (
+        <LoadingButton
+          size="md"
+          variant="secondary"
+          icon={LogOut}
+          loading={checkingOut}
+          onClick={onCheckOut}
+          className="border-navy-200"
+        >
+          Check out
+        </LoadingButton>
+      ) : null}
     </>
   );
 }
@@ -77,6 +81,7 @@ export default function ReceptionVisitDetailPage() {
   const [queuing, setQueuing] = useState(false);
   const [visitForModal, setVisitForModal] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const fetchVisit = useCallback(async (visitId) => {
     const [visitData, rawRef] = await Promise.all([
@@ -107,11 +112,27 @@ export default function ReceptionVisitDetailPage() {
     }
   };
 
-  const renderHeroFooter = useMemo(
-    () => (visit) => (
-      <ReceptionHeroActions visit={visit} onQueueHost={() => setQueueOpen(true)} />
-    ),
-    [],
+  const handleCheckOut = async (visit) => {
+    if (!visit?.id) return;
+    setCheckingOut(true);
+    try {
+      await receptionApi.checkOutVisit(visit.id);
+      toast.success(`${visit.full_name || visit.visitor_name || 'Visitor'} checked out.`);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err.message || 'Could not check out visitor.');
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  const renderHeroFooter = (visit) => (
+    <ReceptionHeroActions
+      visit={visit}
+      onQueueHost={() => setQueueOpen(true)}
+      onCheckOut={() => handleCheckOut(visit)}
+      checkingOut={checkingOut}
+    />
   );
 
   return (

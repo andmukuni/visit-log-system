@@ -5,7 +5,7 @@ import { formatDateTime } from '../../utils/helpers';
 import {
   VISIT_EVENT_LABELS,
   VISIT_JOURNEY_STEPS,
-  VISIT_STATUS_ALIASES,
+  resolveJourneyStatusKey,
 } from './visitLogConstants';
 
 function DetailRow({ icon: Icon, label, value }) {
@@ -21,10 +21,8 @@ function DetailRow({ icon: Icon, label, value }) {
 }
 
 function resolveJourneyIndex(status, hasCheckedIn) {
-  const normalized = status === 'pending_approval' && hasCheckedIn
-    ? 'checked_in'
-    : VISIT_STATUS_ALIASES[status] || status;
-  const idx = VISIT_JOURNEY_STEPS.findIndex((step) => step.key === normalized);
+  const key = resolveJourneyStatusKey(status, hasCheckedIn);
+  const idx = key ? VISIT_JOURNEY_STEPS.findIndex((step) => step.key === key) : -1;
   return idx >= 0 ? idx : 0;
 }
 

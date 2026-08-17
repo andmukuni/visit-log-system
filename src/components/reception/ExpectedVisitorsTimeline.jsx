@@ -7,6 +7,7 @@ import {
   Eye,
   LogIn,
   LogOut,
+  Send,
   Users,
 } from 'lucide-react';
 import {
@@ -26,6 +27,16 @@ import {
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
 import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
+
+const RECEPTION_ACTION_ICONS = {
+  'check-in': LogIn,
+  send: Send,
+  queue: Users,
+};
+
+function receptionActionIcon(action) {
+  return RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
+}
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -193,6 +204,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
   const visitStatus = row.visit_status || row.status;
   const action = isRestricted ? { show: false } : getReceptionVisitAction(visitStatus);
   const actionHref = receptionActionHref(action, visitId);
+  const ActionIcon = receptionActionIcon(action);
   const cardTone = statusCardTone(visitStatus);
   const timeChipTone = statusTimeChipTone(visitStatus);
   const hasMeta = Boolean(row.host_name || row.department_name || row.company || row.pass_code);
@@ -280,7 +292,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
               disabled
               className={receptionActionButtonClass(action.tone)}
             >
-              <LogIn size={14} aria-hidden="true" />
+              <ActionIcon size={14} aria-hidden="true" />
               {action.label}
             </Button>
           ) : (
@@ -293,7 +305,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
                 variant="primary"
                 className={receptionActionButtonClass(action.tone)}
               >
-                <LogIn size={14} aria-hidden="true" />
+                <ActionIcon size={14} aria-hidden="true" />
                 {action.label}
               </Button>
             </Link>

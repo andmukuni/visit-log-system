@@ -13,6 +13,7 @@ export function normalizeVisitStatus(raw) {
  *   show: boolean,
  *   disabled?: boolean,
  *   tone?: 'emerald'|'cyan'|'muted',
+ *   icon?: 'check-in'|'send'|'queue',
  * }}
  */
 export function getReceptionVisitAction(rawStatus) {
@@ -28,6 +29,7 @@ export function getReceptionVisitAction(rawStatus) {
         href: '/reception/check-in',
         show: true,
         tone: 'emerald',
+        icon: 'check-in',
       };
     case 'approved':
     case 'expected':
@@ -39,6 +41,7 @@ export function getReceptionVisitAction(rawStatus) {
         href: '/reception/check-in',
         show: true,
         tone: 'emerald',
+        icon: 'check-in',
       };
     case 'pending_approval':
       return {
@@ -48,6 +51,7 @@ export function getReceptionVisitAction(rawStatus) {
         show: true,
         disabled: true,
         tone: 'muted',
+        icon: 'queue',
       };
     case 'reception_check_in':
     case 'checked_in':
@@ -58,6 +62,7 @@ export function getReceptionVisitAction(rawStatus) {
         href: '/reception/host-queue',
         show: true,
         tone: 'cyan',
+        icon: 'send',
       };
     case 'waiting':
       return {
@@ -66,6 +71,7 @@ export function getReceptionVisitAction(rawStatus) {
         href: '/reception/host-queue',
         show: true,
         tone: 'cyan',
+        icon: 'queue',
       };
     case 'in_meeting':
       return {
@@ -75,6 +81,7 @@ export function getReceptionVisitAction(rawStatus) {
         show: true,
         disabled: true,
         tone: 'muted',
+        icon: 'queue',
       };
     case 'checked_out':
     case 'left_premises':
@@ -98,6 +105,7 @@ export function getReceptionVisitAction(rawStatus) {
         href: '/reception/check-in',
         show: true,
         tone: 'emerald',
+        icon: 'check-in',
       };
   }
 }

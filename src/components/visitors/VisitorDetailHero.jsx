@@ -8,6 +8,7 @@ import {
 import { RestrictedIndicator, StatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
 import { formatVisitHostName, getVisitHostPosition, visitorInitials } from './visitorDetailUtils';
+import { VISIT_JOURNEY_STEPS, resolveJourneyStatusKey } from '../logbook/visitLogConstants';
 
 function MetaBlock({ icon: Icon, label, children }) {
   if (!children) return null;
@@ -35,6 +36,12 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
   const hasHost = Boolean(hostName);
   const hasMeta = Boolean(visit.company || hasContact || hasHost || visit.site_name);
 
+  const hasCheckedIn = Boolean(visit.checked_in_at || visit.check_in_at);
+  const journeyKey = resolveJourneyStatusKey(visit.status, hasCheckedIn);
+  const journeyLabel = journeyKey
+    ? VISIT_JOURNEY_STEPS.find((step) => step.key === journeyKey)?.label
+    : null;
+
   return (
     <section className={`overflow-hidden rounded-2xl border border-navy-100 bg-gradient-to-br from-white via-white to-cyan-50/40 shadow-sm ${compact ? '' : 'mb-6'}`}>
       <div className={compact ? 'p-4' : 'p-5 sm:p-6'}>
@@ -51,7 +58,7 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={visit.status} />
+                <StatusBadge status={journeyKey || visit.status} label={journeyLabel} />
                 {visit.classification ? (
                   <VisitorTypeBadge classification={visit.classification} size="xs" />
                 ) : null}
