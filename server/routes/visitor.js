@@ -1630,7 +1630,14 @@ export function createVisitsRouter() {
       await pool.query("UPDATE visits SET status = 'left_premises', updated_at = NOW() WHERE id = ?", [visitId]);
       await writeVisitEvent(pool, { visitId, eventType: 'left_premises', actorUserId: userId });
       await pool.query("UPDATE visits SET status = 'completed', updated_at = NOW() WHERE id = ?", [visitId]);
-      await notifyVisitEvent(pool, { visitId, eventType: 'left_premises', actorUserId: userId });
+      // Guest SMS/email already went out on the first checkout (reception or
+      // gate). Confirming they left the premises must not notify them again.
+      await notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'left_premises',
+        actorUserId: userId,
+        notifyVisitor: false,
+      });
       res.json({ ok: true, message: 'Visitor marked as left premises.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });

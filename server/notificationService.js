@@ -464,13 +464,12 @@ export async function notifyVisitEvent(pool, {
     left_premises: 'visit.checked_out',
   };
 
-  // Visitors are only ever notified on check-in and check-out — every other
-  // lifecycle event is silent for visitors too.
+  // Visitors are only ever notified on check-in and the first checkout.
+  // Gate "left premises" after a reception checkout must not SMS/email again.
   const visitorTemplateMap = {
     checked_in: 'visit.visitor_checked_in',
     reception_check_in: 'visit.visitor_checked_in',
     checked_out: 'visit.visitor_checked_out',
-    left_premises: 'visit.visitor_checked_out',
   };
 
   const hostChannelsByEvent = {
@@ -533,7 +532,9 @@ export async function notifyVisitEvent(pool, {
       categoryKey,
       channels: ['email', 'sms'],
       vars,
-      idempotencyKey: `${eventType}:${visitId}:visitor`,
+      idempotencyKey: eventType === 'checked_out'
+        ? `checkout:${visitId}:visitor`
+        : `${eventType}:${visitId}:visitor`,
       metadata: { ...metadata, audience: 'visitor' },
       orgSettings,
     });
