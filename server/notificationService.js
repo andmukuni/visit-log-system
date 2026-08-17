@@ -437,27 +437,16 @@ export async function notifyVisitEvent(pool, {
   if (hostUserId) hostTargets.add(hostUserId);
   if (eventType === 'pending_approval' && visit.created_by) hostTargets.add(visit.created_by);
 
+  // Hosts are only ever notified when a visitor is queued for their approval
+  // and on checkout — every other lifecycle event is silent for hosts too.
   const hostTemplateMap = {
     pending_approval: 'visit.pending_approval',
-    approved: 'visit.host_approved',
-    rejected: 'visit.host_rejected',
-    checked_in: 'visit.checked_in',
-    reception_check_in: 'visit.checked_in',
-    waiting: 'visit.waiting_at_reception',
-    in_meeting: 'visit.in_meeting',
     checked_out: 'visit.checked_out',
     left_premises: 'visit.checked_out',
-    pre_registered: 'visit.invite_sent',
-    arrived_at_gate: 'visit.arrived_at_gate',
-    entered_premises: 'visit.entered_premises',
-    cancelled: 'visit.cancelled',
-    rescheduled: 'visit.rescheduled',
-    host_booking: null,
   };
 
   // Visitors are only ever notified on check-in and check-out — every other
-  // lifecycle event (invite sent, booked, approved, rejected, cancelled,
-  // rescheduled) is staff-facing only via hostTemplateMap above.
+  // lifecycle event is silent for visitors too.
   const visitorTemplateMap = {
     checked_in: 'visit.visitor_checked_in',
     reception_check_in: 'visit.visitor_checked_in',
@@ -467,31 +456,17 @@ export async function notifyVisitEvent(pool, {
 
   const hostChannelsByEvent = {
     pending_approval: ['in_app', 'email', 'sms'],
-    approved: ['in_app'],
-    rejected: ['in_app'],
-    cancelled: ['in_app', 'email'],
-    rescheduled: ['in_app', 'email'],
-    arrived_at_gate: ['in_app', 'email', 'sms'],
-    entered_premises: ['in_app'],
-    checked_in: ['in_app', 'email', 'sms'],
-    reception_check_in: ['in_app', 'email', 'sms'],
-    waiting: ['in_app', 'email', 'sms'],
-    in_meeting: ['in_app', 'email', 'sms'],
     checked_out: ['in_app'],
     left_premises: ['in_app'],
-    pre_registered: ['in_app'],
   };
 
   // Host notifications
-  let hostTemplateKey = hostTemplateMap[eventType];
-  if (vip && (eventType === 'arrived_at_gate' || eventType === 'reception_check_in' || eventType === 'checked_in')) {
-    hostTemplateKey = 'visit.vip_arrival';
-  }
+  const hostTemplateKey = hostTemplateMap[eventType];
 
   if (hostTemplateKey) {
     const channels = hostChannelsByEvent[eventType] || ['in_app'];
     for (const userId of hostTargets) {
-      if (userId === actorUserId && !['checked_in', 'reception_check_in', 'arrived_at_gate', 'waiting', 'in_meeting'].includes(eventType)) {
+      if (userId === actorUserId) {
         continue;
       }
       await notifyAudience(pool, {
