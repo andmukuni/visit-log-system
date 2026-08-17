@@ -189,6 +189,30 @@ describe('buildSecurityExpectedVisitorDTO — gate operational view', () => {
     assert.equal(dto.id_number, undefined);
     assert.equal(dto._accessLevel, 'gate');
   });
+
+  it('includes masked identity and check-in signature for gate checkout', () => {
+    const dto = buildSecurityExpectedVisitorDTO({
+      ...visit(),
+      id_type: 'nrc',
+      id_number: '123456/78/9',
+      id_number_masked: '12****/78/9',
+      check_in_signature: 'data:image/png;base64,abc',
+    });
+    assert.equal(dto.id_type, 'nrc');
+    assert.equal(dto.id_number_masked, '12****/78/9');
+    assert.equal(dto.check_in_signature, 'data:image/png;base64,abc');
+    assert.equal(dto.id_number, undefined);
+  });
+
+  it('derives masked NRC when only contact-detail id_number is present', () => {
+    const dto = buildSecurityExpectedVisitorDTO({
+      ...visit(),
+      id_type: 'nrc',
+      id_number: '123456/78/9',
+    });
+    assert.equal(dto.id_number_masked, '12****/78/9');
+    assert.equal(dto.id_number, undefined);
+  });
 });
 
 describe('applyVisitAccessPolicy — precedence rule (VIP masking runs only inside full/gate)', () => {

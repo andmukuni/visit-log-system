@@ -11,6 +11,8 @@
  * *presence*, not by renaming.
  */
 
+import { resolveVisitorIdNumberMasked } from './visitorIdentity.js';
+
 const NAME_KEYS = ['full_name', 'visitor_name'];
 const TIME_KEYS = ['expected_at', 'scheduled_at', 'appointment_scheduled_at'];
 
@@ -87,6 +89,9 @@ export function buildSecurityExpectedVisitorDTO(row) {
     checked_in_at: row.checked_in_at ?? null,
     plate_numbers: row.plate_numbers ?? row.expected_plates ?? null,
     identity_verification_status: row.checked_in_at ? 'verified' : 'pending',
+    id_type: row.id_type ?? null,
+    id_number_masked: resolveVisitorIdNumberMasked(row),
+    check_in_signature: row.check_in_signature ?? null,
     _accessLevel: 'gate',
   };
 }

@@ -1,6 +1,7 @@
 import pool from './db.js';
 import { generateId } from './visitorSchema.js';
 import { writeAuditLog } from './auditService.js';
+import { maskNrc } from './visitorIdentity.js';
 
 export const VEHICLE_STATUS_TRANSITIONS = {
   expected: ['arrived_at_gate', 'cancelled'],
@@ -271,6 +272,21 @@ export async function upsertVisitorContactDetails(poolConn, visitorId, {
        updated_at = NOW()`,
     [visitorId, idType || null, idNumber || null, confidentialNotes || null],
   );
+
+  const resolvedIdType = idType || null;
+  const resolvedMasked = String(resolvedIdType || '').toLowerCase() === 'nrc' && idNumber
+    ? maskNrc(idNumber)
+    : null;
+  if (resolvedIdType || resolvedMasked) {
+    await poolConn.query(
+      `UPDATE visitors
+       SET id_type = COALESCE(?, id_type),
+           id_number_masked = COALESCE(?, id_number_masked),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [resolvedIdType, resolvedMasked, visitorId],
+    );
+  }
 
   // Never put idNumber/confidentialNotes *values* in the audit trail — only
   // which fields changed (Logic.md: "Visitor ID numbers... not included in logs").

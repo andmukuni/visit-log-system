@@ -3,7 +3,7 @@ import { Car, Footprints, LogOut, Search, User } from 'lucide-react';
 import { LoadingButton, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { getGateCheckoutActionLabel, isGateExitEligible } from '../../../shared/visitCheckout.js';
-import { formatNrcInput, visitorDisplayName } from '../../utils/helpers';
+import { formatNrcInput, isCompleteNrc, visitorDisplayName } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 const INPUT_MD =
@@ -45,7 +45,8 @@ function formatVisitNrc(row) {
   const raw = row.id_number || row.id_number_masked;
   if (!raw) return '—';
   if (String(row.id_type || '').toLowerCase() === 'nrc') {
-    return formatNrcInput(raw) || raw;
+    if (isCompleteNrc(raw)) return formatNrcInput(raw);
+    return raw;
   }
   return raw;
 }

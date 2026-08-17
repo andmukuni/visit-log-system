@@ -61,9 +61,9 @@ describe('visitor.details_updated audit — never logs raw ID/notes values (Logi
       organisationId: 'org1',
     });
 
-    // Second call is the audit write (first is the INSERT ... ON DUPLICATE KEY UPDATE).
-    assert.equal(pool.query.mock.callCount(), 2);
-    const [sql, params] = pool.query.mock.calls[1].arguments;
+    // Third call is the audit write (contact upsert, visitors masked ID update, then audit).
+    assert.equal(pool.query.mock.callCount(), 3);
+    const [sql, params] = pool.query.mock.calls[2].arguments;
     assert.match(sql, /INSERT INTO audit_logs/);
     assert.ok(params.includes('visitor.details_updated'));
 
