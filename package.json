@@ -11,6 +11,8 @@
     "server:start": "node server/index.js",
     "start": "NODE_ENV=production node server/index.js",
     "test": "node --test tests/",
+    "validate:dashboard": "node server/scripts/validateDashboardData.js",
+    "validate:dashboard:remote": "node server/scripts/validateDashboardData.js --target=remote",
     "seed:demo": "node server/scripts/seedDemo.js",
     "seed:demo:force": "node server/scripts/seedDemo.js --force",
     "seed:demo:remote": "node server/scripts/seedDemo.js --target=remote",

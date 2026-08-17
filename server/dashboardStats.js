@@ -205,8 +205,7 @@ export async function fetchSecurityEventsByType(
      WHERE vis.organisation_id = ?${siteSql}
        AND ve.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
      GROUP BY ve.event_type
-     ORDER BY total DESC
-     LIMIT 8`,
+     ORDER BY total DESC`,
     params,
   );
   return rows.map((row) => ({

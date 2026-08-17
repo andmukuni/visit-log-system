@@ -3,14 +3,6 @@ import pool from '../db.js';
 import { loadUserAdminPermissions } from '../rbacService.js';
 import { writeAuditLog } from '../auditService.js';
 
-const DEMO_STATS = {
-  users: 128,
-  orders: 342,
-  revenue: 84500,
-  activeSessions: 24,
-  growthPct: 12.4,
-};
-
 const DEMO_ITEMS = [
   { id: 'item-001', name: 'Starter Widget', status: 'published', category: 'Hardware', updatedAt: '2026-07-10' },
   { id: 'item-002', name: 'Pro Subscription', status: 'draft', category: 'Software', updatedAt: '2026-07-11' },
@@ -50,13 +42,19 @@ export function createAdminRouter() {
 
   router.get('/dashboard/stats', async (_req, res) => {
     try {
-      const [[row]] = await pool.query('SELECT COUNT(*) AS count FROM users');
-      const liveUsers = Number(row?.count || 0);
+      const [[userRow]] = await pool.query('SELECT COUNT(*) AS count FROM users');
+      const [[orgRow]] = await pool.query('SELECT COUNT(*) AS count FROM organisations');
+      const [[visitRow]] = await pool.query('SELECT COUNT(*) AS count FROM visits');
+      const [[todayRow]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM visits WHERE created_at >= CURDATE()',
+      );
       res.json({
         ok: true,
         data: {
-          ...DEMO_STATS,
-          users: liveUsers || DEMO_STATS.users,
+          users: Number(userRow?.count || 0),
+          organisations: Number(orgRow?.count || 0),
+          visits: Number(visitRow?.count || 0),
+          visitsToday: Number(todayRow?.count || 0),
         },
       });
     } catch (error) {

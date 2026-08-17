@@ -30,6 +30,17 @@ const targetArg = args.find((arg) => arg.startsWith('--target='));
 const urlArg = args.find((arg) => arg.startsWith('--url='));
 const target = targetArg?.split('=')[1] || 'local';
 
+// The NODE_ENV guard above only sees the LOCAL environment — running
+// `seed:demo:remote` from a dev machine against the production database
+// would slip past it. Remote targets always require explicit intent.
+if (target === 'remote' && process.env.ALLOW_DEMO_SEED !== '1') {
+  console.error(
+    '[seed:demo] Refusing to seed demo data into a remote database.\n'
+    + '           Set ALLOW_DEMO_SEED=1 only if you intend to write demo records to that database.',
+  );
+  process.exit(1);
+}
+
 function createPgPool(connectionString) {
   const pool = new pg.Pool({ connectionString, ssl: false });
   return {
