@@ -4,7 +4,6 @@ import {
   CalendarClock,
   Car,
   Shield,
-  ShieldCheck,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -14,7 +13,6 @@ const FEATURE_CARDS = [
   { key: 'appointments', label: 'Appointments', icon: CalendarClock },
   { key: 'visitors', label: 'Visitors', icon: Users },
   { key: 'vehicles', label: 'Vehicles', icon: Car },
-  { key: 'access', label: 'Access Control', icon: ShieldCheck },
 ];
 
 const BENEFITS = [
@@ -77,7 +75,7 @@ export default function LoginHeroPanel() {
           />
 
           <h1 className="max-w-xl text-[clamp(1.35rem,2.4vw,2.35rem)] font-black uppercase leading-[1.05] tracking-tight text-white">
-            Visitor &amp; Access
+            Visitor
             <span className="mt-1 block text-amber-400">Management System</span>
           </h1>
 
@@ -88,10 +86,10 @@ export default function LoginHeroPanel() {
           </div>
 
           <p className="max-w-lg text-sm font-medium text-white/85 xl:text-base">
-            Appointments • Visitors • Vehicles • Access Control
+            Appointments • Visitors • Vehicles
           </p>
 
-          <div className="mt-8 grid w-full max-w-2xl grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-4">
+          <div className="mt-8 grid w-full max-w-2xl grid-cols-3 gap-3 xl:gap-4">
             {FEATURE_CARDS.map((item) => (
               <FeatureCard key={item.key} label={item.label} icon={item.icon} />
             ))}
