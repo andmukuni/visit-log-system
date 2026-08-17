@@ -4,6 +4,7 @@ import { PageHeader, RefreshAction, ActionToolbar } from '../../components/ui';
 import ExpectedVisitorsTimeline from '../../components/reception/ExpectedVisitorsTimeline';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
 import { periodQueryRange, normalizePeriodStart, startOfDay } from '../../components/executive/calendarUtils';
+import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
 
 function mapCalendarRow(row) {
@@ -32,12 +33,14 @@ function mapCalendarRow(row) {
 }
 
 export default function ReceptionCalendarPage() {
+  const toast = useToast();
   const [selectedDate, setSelectedDate] = useState(() => normalizePeriodStart(new Date(), 'day'));
   const [appointments, setAppointments] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [checkingOutId, setCheckingOutId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +94,20 @@ export default function ReceptionCalendarPage() {
     setSelectedDate(normalizePeriodStart(nextDate, 'day'));
   }, []);
 
+  const handleCheckOut = useCallback(async (row) => {
+    const visitId = row.visit_id || row.id;
+    setCheckingOutId(visitId);
+    try {
+      await receptionApi.checkOutVisit(visitId);
+      toast.success(`${row.visitor_name || 'Visitor'} checked out.`);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not check out visitor.');
+    } finally {
+      setCheckingOutId(null);
+    }
+  }, [load, toast]);
+
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden overscroll-none">
       <PageHeader
@@ -124,6 +141,8 @@ export default function ReceptionCalendarPage() {
         loading={loading}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        onCheckOut={handleCheckOut}
+        checkingOutId={checkingOutId}
       />
     </div>
   );

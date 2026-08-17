@@ -21,8 +21,7 @@ import {
   filterVisitsByReceptionZones,
   scopeReceptionReferenceData,
 } from '../../utils/receptionZoneScope';
-
-const CHECKOUT_ELIGIBLE_STATUSES = ['checked_in', 'reception_check_in', 'waiting', 'in_meeting'];
+import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All', dot: 'bg-navy-400' },
@@ -112,7 +111,7 @@ export default function ReceptionVisitorLogsPage() {
       align: 'right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-1">
-          {CHECKOUT_ELIGIBLE_STATUSES.includes(row.status) && (
+          {isCheckoutEligible(row.status) && (
             <IconButton
               icon={LogOut}
               label="Check out"

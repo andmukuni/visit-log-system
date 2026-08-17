@@ -6,6 +6,7 @@ import {
   Clock3,
   Eye,
   LogIn,
+  LogOut,
   Users,
 } from 'lucide-react';
 import {
@@ -24,6 +25,7 @@ import {
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
+import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -181,7 +183,7 @@ function KpiTile({ label, value, accent = 'navy' }) {
   );
 }
 
-function ArrivalCard({ row }) {
+function ArrivalCard({ row, onCheckOut, checkingOut }) {
   const navigate = useNavigate();
   const visitId = visitIdOf(row);
   const isRestricted = row._accessLevel === 'restricted';
@@ -195,6 +197,7 @@ function ArrivalCard({ row }) {
   const timeChipTone = statusTimeChipTone(visitStatus);
   const hasMeta = Boolean(row.host_name || row.department_name || row.company || row.pass_code);
   const hasPurpose = Boolean(row.purpose || row.title);
+  const canCheckOut = !isRestricted && Boolean(onCheckOut) && isCheckoutEligible(visitStatus);
 
   return (
     <article
@@ -258,6 +261,17 @@ function ArrivalCard({ row }) {
         <Link to={detailPath} aria-label={`View ${row.visitor_name || 'visitor'}`}>
           <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
         </Link>
+        {canCheckOut ? (
+          <IconButton
+            icon={LogOut}
+            label="Check out"
+            tooltip="Check out"
+            size="sm"
+            variant="ghost"
+            loading={checkingOut}
+            onClick={() => onCheckOut(row)}
+          />
+        ) : null}
         {action.show && actionHref ? (
           action.disabled ? (
             <Button
@@ -298,6 +312,8 @@ export default function ExpectedVisitorsTimeline({
   loading = false,
   statusFilter = 'all',
   onStatusFilterChange,
+  onCheckOut,
+  checkingOutId = null,
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const selected = useMemo(() => startOfDay(selectedDate || new Date()), [selectedDate]);
@@ -439,7 +455,11 @@ export default function ExpectedVisitorsTimeline({
                 <ul className="space-y-2">
                   {group.items.map((row) => (
                     <li key={visitIdOf(row)}>
-                      <ArrivalCard row={row} />
+                      <ArrivalCard
+                        row={row}
+                        onCheckOut={onCheckOut}
+                        checkingOut={checkingOutId === visitIdOf(row)}
+                      />
                     </li>
                   ))}
                 </ul>
