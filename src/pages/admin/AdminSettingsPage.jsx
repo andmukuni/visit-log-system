@@ -186,6 +186,28 @@ function ToggleRow({ label, description, checked, onChange }) {
   );
 }
 
+function MiniToggle({ checked, onChange, label, title }) {
+  return (
+    <label className="relative inline-flex cursor-pointer items-center" title={title}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span className="sr-only">{label}</span>
+      <span
+        className="block h-5 w-9 rounded-full bg-gray-200 transition-colors peer-checked:bg-cyan-600 peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500 peer-focus-visible:ring-offset-2"
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4"
+        aria-hidden="true"
+      />
+    </label>
+  );
+}
+
 export default function AdminSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, updateSession, hasPermission } = useAuth();
@@ -348,6 +370,19 @@ export default function AdminSettingsPage() {
     } finally {
       setSavingNotifications(false);
     }
+  };
+
+  const allEmailEnabled = NOTIFICATION_CATEGORIES.every((cat) => notificationForm[`email_${cat.key}`]);
+  const allSmsEnabled = NOTIFICATION_CATEGORIES.every((cat) => notificationForm[`sms_${cat.key}`]);
+
+  const setChannelForAll = (channel, value) => {
+    setNotificationForm((prev) => {
+      const next = { ...prev };
+      NOTIFICATION_CATEGORIES.forEach((cat) => {
+        next[`${channel}_${cat.key}`] = value;
+      });
+      return next;
+    });
   };
 
   const saveSecurity = async (event) => {
@@ -719,12 +754,12 @@ export default function AdminSettingsPage() {
         )}
 
         {tab === 'notifications' && (
-          <div className="max-w-2xl">
+          <div className="max-w-3xl">
             <TabPanelHeader
               title="Notification categories"
               subtitle="Organisation defaults enforced at send time. Hosts and executives can mute channels further on their Notifications page."
             />
-            <form onSubmit={saveNotifications} className="space-y-3">
+            <form onSubmit={saveNotifications} className="space-y-4">
               <ToggleRow
                 label="In-app notifications"
                 description="Master switch for in-app alerts for signed-in users across all categories below."
@@ -732,30 +767,75 @@ export default function AdminSettingsPage() {
                 onChange={(value) => setNotificationForm({ ...notificationForm, in_app_notifications: value })}
               />
 
-              <p className="text-xs text-navy-500 pt-1">
-                Email and SMS toggles apply per event. Turning a channel off here blocks it for everyone, including visitors.
+              <p className="text-xs text-navy-500">
+                Toggle a single event below, or use the header switches to flip a whole channel at once. Turning a channel off here blocks it for everyone, including visitors.
               </p>
 
-              {NOTIFICATION_CATEGORIES.map((cat) => (
-                <div key={cat.key} className="rounded-2xl border border-gray-100 p-4 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{cat.label}</p>
-                    {cat.description && <p className="text-xs text-gray-500">{cat.description}</p>}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <ToggleRow
-                      label="Email"
-                      checked={Boolean(notificationForm[`email_${cat.key}`])}
-                      onChange={(value) => setNotificationForm({ ...notificationForm, [`email_${cat.key}`]: value })}
-                    />
-                    <ToggleRow
-                      label="SMS"
-                      checked={Boolean(notificationForm[`sms_${cat.key}`])}
-                      onChange={(value) => setNotificationForm({ ...notificationForm, [`sms_${cat.key}`]: value })}
-                    />
-                  </div>
+              <div className="overflow-hidden rounded-2xl border border-gray-200">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="border-b border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Event
+                        </th>
+                        <th className="w-28 px-3 py-3 text-center">
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              <Mail size={13} aria-hidden="true" />
+                              Email
+                            </span>
+                            <MiniToggle
+                              checked={allEmailEnabled}
+                              onChange={(value) => setChannelForAll('email', value)}
+                              label="Toggle email for all events"
+                              title={allEmailEnabled ? 'Turn off email for all events' : 'Turn on email for all events'}
+                            />
+                          </div>
+                        </th>
+                        <th className="w-28 px-3 py-3 text-center">
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              <MessageSquare size={13} aria-hidden="true" />
+                              SMS
+                            </span>
+                            <MiniToggle
+                              checked={allSmsEnabled}
+                              onChange={(value) => setChannelForAll('sms', value)}
+                              label="Toggle SMS for all events"
+                              title={allSmsEnabled ? 'Turn off SMS for all events' : 'Turn on SMS for all events'}
+                            />
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {NOTIFICATION_CATEGORIES.map((cat) => (
+                        <tr key={cat.key} className="transition-colors hover:bg-gray-50/70">
+                          <td className="px-4 py-3.5 align-middle">
+                            <p className="text-sm font-medium text-gray-900">{cat.label}</p>
+                            {cat.description && <p className="mt-0.5 text-xs text-gray-500">{cat.description}</p>}
+                          </td>
+                          <td className="px-3 py-3.5 text-center align-middle">
+                            <MiniToggle
+                              checked={Boolean(notificationForm[`email_${cat.key}`])}
+                              onChange={(value) => setNotificationForm({ ...notificationForm, [`email_${cat.key}`]: value })}
+                              label={`Email for ${cat.label}`}
+                            />
+                          </td>
+                          <td className="px-3 py-3.5 text-center align-middle">
+                            <MiniToggle
+                              checked={Boolean(notificationForm[`sms_${cat.key}`])}
+                              onChange={(value) => setNotificationForm({ ...notificationForm, [`sms_${cat.key}`]: value })}
+                              label={`SMS for ${cat.label}`}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              </div>
 
               <LoadingButton type="submit" loading={savingNotifications} className="mt-4">
                 Save notification preferences
