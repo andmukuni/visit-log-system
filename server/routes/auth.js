@@ -34,7 +34,7 @@ export function createAuthRouter({ authService }) {
     getKey: (req) => req.ip || 'unknown',
   });
 
-  router.post('/login', rateLimitAuth, async (req, res) => {
+  router.post('/login', async (req, res) => {
     try {
       const { email, password } = req.body || {};
       if (!email || !password) {
