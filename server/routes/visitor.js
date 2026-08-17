@@ -5130,6 +5130,55 @@ export function createOrgAdminRouter() {
     }
   });
 
+  router.delete('/visitors/:id', async (req, res) => {
+    try {
+      if (req.adminClaims?.role !== 'admin') {
+        return res.status(403).json({ ok: false, message: 'Only administrators can delete visitor profiles.' });
+      }
+
+      const userId = req.adminClaims?.sub;
+      const scope = await getUserScope(pool, userId);
+      const filter = await resolveAdminOrganisationFilter(pool, req, scope);
+      if (!filter.ok) {
+        return res.status(filter.status).json({ ok: false, message: filter.message });
+      }
+      const orgId = filter.organisationId;
+      const visitorId = req.params.id;
+
+      const [[existing]] = await pool.query('SELECT * FROM visitors WHERE id = ? LIMIT 1', [visitorId]);
+      if (!existing) return res.status(404).json({ ok: false, message: 'Visitor not found.' });
+      if (orgId && existing.organisation_id !== orgId) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this visitor.' });
+      }
+
+      const [[visitCount]] = await pool.query(
+        'SELECT COUNT(*) AS count FROM visits WHERE visitor_id = ?',
+        [visitorId],
+      );
+      if (Number(visitCount?.count || 0) > 0) {
+        return res.status(400).json({
+          ok: false,
+          message: 'This visitor has visit history and cannot be deleted. Visit records are preserved for compliance.',
+        });
+      }
+
+      await pool.query('DELETE FROM visitors WHERE id = ?', [visitorId]);
+
+      await writeAuditLog(pool, {
+        organisationId: existing.organisation_id,
+        actorUserId: userId,
+        action: 'visitor.deleted',
+        targetType: 'visitor',
+        targetId: visitorId,
+        details: { full_name: existing.full_name, phone: existing.phone, email: existing.email },
+      });
+
+      res.json({ ok: true, message: 'Visitor deleted.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/vehicles', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;

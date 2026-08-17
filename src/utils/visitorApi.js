@@ -100,6 +100,7 @@ export const visitorApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/visitors${qs ? `?${qs}` : ''}`);
   },
+  deleteVisitor: (id) => apiFetch(`/admin/org/visitors/${id}`, { method: 'DELETE' }),
   getOrgVehicles: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/org/vehicles${qs ? `?${qs}` : ''}`);

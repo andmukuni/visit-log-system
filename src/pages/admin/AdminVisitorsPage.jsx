@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CalendarClock, Crown, Eye, Search, Users } from 'lucide-react';
+import { CalendarClock, Crown, Eye, Search, Trash2, Users } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
   IconButton,
+  ConfirmDialog,
   VisitorTypeBadge,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { useAdminOrganisation } from '../../context/AdminOrganisationContext';
 import { formatDateTime } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
@@ -26,6 +28,8 @@ function classificationOf(row) {
 export default function AdminVisitorsPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { queryParams, organisationId } = useAdminOrganisation();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -37,6 +41,8 @@ export default function AdminVisitorsPage() {
   const [searchInput, setSearchInput] = useState(search);
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -122,6 +128,21 @@ export default function AdminVisitorsPage() {
     navigate(`/admin/log-book/${row.last_visit_id}`);
   }, [navigate, toast]);
 
+  const handleDelete = async () => {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    try {
+      await visitorApi.deleteVisitor(deleteTarget.id);
+      toast.success('Visitor deleted.');
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not delete visitor.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const columns = useMemo(() => [
     {
       key: 'full_name',
@@ -179,19 +200,40 @@ export default function AdminVisitorsPage() {
       key: 'actions',
       label: '',
       render: (_, row) => (
-        <IconButton
-          icon={Eye}
-          label="View last visit"
-          iconSize={16}
-          disabled={!row.last_visit_id}
-          onClick={(e) => {
-            e.stopPropagation();
-            openShow(row);
-          }}
-        />
+        <div className="flex items-center justify-end gap-1">
+          <IconButton
+            icon={Eye}
+            label="View last visit"
+            iconSize={16}
+            disabled={!row.last_visit_id}
+            onClick={(e) => {
+              e.stopPropagation();
+              openShow(row);
+            }}
+          />
+          {isAdmin && (
+            <IconButton
+              icon={Trash2}
+              label="Delete visitor"
+              iconSize={16}
+              variant="ghost"
+              className="text-rose-600 hover:bg-rose-50"
+              disabled={Number(row.visit_count || 0) > 0}
+              title={
+                Number(row.visit_count || 0) > 0
+                  ? 'Visitors with visit history cannot be deleted.'
+                  : 'Delete visitor'
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(row);
+              }}
+            />
+          )}
+        </div>
       ),
     },
-  ], [openShow, showOrganisation]);
+  ], [isAdmin, openShow, showOrganisation]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">
@@ -292,6 +334,21 @@ export default function AdminVisitorsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Delete visitor?"
+        message={
+          deleteTarget
+            ? `Permanently remove ${deleteTarget.full_name || 'this visitor'}'s profile. This can't be undone.`
+            : 'Are you sure you want to proceed?'
+        }
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
