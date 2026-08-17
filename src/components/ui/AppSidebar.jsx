@@ -6,7 +6,7 @@ import { getKpiAccentBgClass } from './PortalKpiCard';
 import { PORTALS } from '../../../shared/portalNavigation.js';
 import { APP_NAME, LOGO_PATH } from '../../../shared/branding.js';
 import { useSidebarNav } from '../../context/SidebarContext';
-import { notificationsApi, visitorApi } from '../../utils/visitorApi';
+import { notificationsApi, receptionApi, visitorApi } from '../../utils/visitorApi';
 
 const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentIndex = 0, executiveTheme = false }) {
   return (
@@ -287,29 +287,59 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
   useEffect(() => {
     let cancelled = false;
 
-    if (executiveTheme) {
-      notificationsApi.list(true)
-        .then((rows) => {
-          if (!cancelled) {
-            setBadgeCounts({ notifications: Array.isArray(rows) ? rows.length : 0 });
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setBadgeCounts({ notifications: 0 });
-        });
+    const loadAdminBadges = async () => {
+      try {
+        const data = await visitorApi.getOrgNavCounts();
+        if (!cancelled) setBadgeCounts(data && typeof data === 'object' ? data : {});
+      } catch {
+        if (!cancelled) setBadgeCounts({});
+      }
+    };
+
+    const loadReceptionBadges = async () => {
+      try {
+        const [notifications, navCounts] = await Promise.all([
+          notificationsApi.list(true).catch(() => []),
+          receptionApi.getNavCounts().catch(() => ({})),
+        ]);
+        if (!cancelled) {
+          setBadgeCounts({
+            notifications: Array.isArray(notifications) ? notifications.length : 0,
+            visitor_logs: Number(navCounts?.visitor_logs ?? 0),
+          });
+        }
+      } catch {
+        if (!cancelled) setBadgeCounts({ notifications: 0, visitor_logs: 0 });
+      }
+    };
+
+    const loadNotificationBadges = async () => {
+      try {
+        const rows = await notificationsApi.list(true);
+        if (!cancelled) {
+          setBadgeCounts({ notifications: Array.isArray(rows) ? rows.length : 0 });
+        }
+      } catch {
+        if (!cancelled) setBadgeCounts({ notifications: 0 });
+      }
+    };
+
+    if (portalId === 'admin') {
+      void loadAdminBadges();
       return () => {
         cancelled = true;
       };
     }
 
-    if (portalId === 'admin') {
-      visitorApi.getOrgNavCounts()
-        .then((data) => {
-          if (!cancelled) setBadgeCounts(data && typeof data === 'object' ? data : {});
-        })
-        .catch(() => {
-          if (!cancelled) setBadgeCounts({});
-        });
+    if (portalId === 'reception') {
+      void loadReceptionBadges();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (executiveTheme) {
+      void loadNotificationBadges();
       return () => {
         cancelled = true;
       };

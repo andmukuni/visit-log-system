@@ -191,6 +191,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/station/gate-entry')) return 'station.visitors.register';
 
   if (path.includes('/reception/dashboard')) return 'reception.dashboard';
+  if (path.includes('/reception/nav-counts')) return 'reception.visitors.view';
   if (path.includes('/reception/reference-data')) return 'reception.dashboard';
   if (path.includes('/reception/check-in/walk-in') || path.includes('/reception/check-in/vehicle')) return 'reception.visitors.checkin';
   if (path.includes('/reception/check-in/nrc-lookup')) return 'reception.visitors.register';

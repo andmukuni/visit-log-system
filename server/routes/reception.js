@@ -347,6 +347,36 @@ export function createReceptionRouter() {
     }
   });
 
+  router.get('/nav-counts', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: { visitor_logs: 0 } });
+      }
+
+      const site = siteFilterClause(scope);
+      const inZone = visitInZoneClause(zoneReq.zoneIds);
+      const [[row]] = await pool.query(
+        `SELECT COUNT(DISTINCT vis.id) AS count
+         FROM visits vis
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         ${ZONE_OFFICE_JOINS}
+         WHERE vis.organisation_id = ?${site.sql}${inZone.sql}`,
+        [scope.organisation_id, ...site.params, ...inZone.params],
+      );
+
+      res.json({ ok: true, data: { visitor_logs: Number(row?.count || 0) } });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.post('/check-in/walk-in', async (req, res) => {
     try {
       const result = await registerWalkInAtReceptionDesk(pool, req, req.body || {});

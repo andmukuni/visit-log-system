@@ -556,6 +556,7 @@ export const executiveApi = {
 
 export const receptionApi = {
   getDashboard: () => apiFetch('/admin/reception/dashboard'),
+  getNavCounts: () => apiFetch('/admin/reception/nav-counts'),
   getVisits: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')),
