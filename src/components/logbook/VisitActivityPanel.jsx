@@ -20,15 +20,17 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
-function resolveJourneyIndex(status) {
-  const normalized = VISIT_STATUS_ALIASES[status] || status;
+function resolveJourneyIndex(status, hasCheckedIn) {
+  const normalized = status === 'pending_approval' && hasCheckedIn
+    ? 'checked_in'
+    : VISIT_STATUS_ALIASES[status] || status;
   const idx = VISIT_JOURNEY_STEPS.findIndex((step) => step.key === normalized);
   return idx >= 0 ? idx : 0;
 }
 
-function VisitJourney({ status }) {
+function VisitJourney({ status, hasCheckedIn }) {
   const terminal = ['rejected', 'cancelled', 'denied', 'expired'].includes(status);
-  const currentIndex = resolveJourneyIndex(status);
+  const currentIndex = resolveJourneyIndex(status, hasCheckedIn);
 
   if (terminal) {
     return (
@@ -186,7 +188,10 @@ export default function VisitActivityPanel({
         </Card>
 
         <Card title="Progress through the company">
-          <VisitJourney status={visit.status || summary?.status} />
+          <VisitJourney
+            status={visit.status || summary?.status}
+            hasCheckedIn={Boolean(visit.checked_in_at || visit.check_in_at || summary?.check_in_at)}
+          />
         </Card>
 
         <Card title="Activity timeline" subtitle="All recorded events for this visit">

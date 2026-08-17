@@ -29,7 +29,11 @@ export const VISIT_JOURNEY_STEPS = [
 
 export const VISIT_STATUS_ALIASES = {
   pre_registered: 'expected',
+  // Default for a pre-arrival approval request. Overridden to 'checked_in' in
+  // VisitActivityPanel when the visitor already has a check-in timestamp —
+  // reception can only queue an on-site visitor to pending_approval, so that
+  // case must keep showing "On site" instead of regressing to "Expected".
   pending_approval: 'expected',
   entered_premises: 'reception_check_in',
-  waiting: 'checked_in',
+  waiting: 'in_meeting',
 };

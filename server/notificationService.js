@@ -455,13 +455,10 @@ export async function notifyVisitEvent(pool, {
     host_booking: null,
   };
 
+  // Visitors are only ever notified on check-in and check-out — every other
+  // lifecycle event (invite sent, booked, approved, rejected, cancelled,
+  // rescheduled) is staff-facing only via hostTemplateMap above.
   const visitorTemplateMap = {
-    pre_registered: 'visit.invite_sent',
-    host_booking: 'visit.host_booking',
-    approved: 'visit.approved',
-    rejected: 'visit.rejected',
-    cancelled: 'visit.visitor_cancelled',
-    rescheduled: 'visit.visitor_rescheduled',
     checked_in: 'visit.visitor_checked_in',
     reception_check_in: 'visit.visitor_checked_in',
     checked_out: 'visit.visitor_checked_out',
