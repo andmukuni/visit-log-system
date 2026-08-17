@@ -6,7 +6,6 @@ import {
   Spinner,
   LoadingButton,
   IconButton,
-  Spinner,
   VisitStatusBadge,
   UnderlineTabs,
   TablePagination,
