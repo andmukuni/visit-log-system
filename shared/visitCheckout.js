@@ -35,3 +35,14 @@ export function isGateCheckoutEligible(status) {
 export function isGateExitEligible(status) {
   return GATE_EXIT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
 }
+
+/** Visits that are no longer on the live reception desk workload for today. */
+export const VISIT_CLOSED_STATUSES = Object.freeze([
+  'cancelled',
+  'rejected',
+  'denied',
+  'checked_out',
+  'left_premises',
+  'completed',
+  'expired',
+]);

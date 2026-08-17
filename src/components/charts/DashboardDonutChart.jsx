@@ -103,6 +103,7 @@ export default function DashboardDonutChart({
   centerTitle = 'Visit share',
   centerIcon: CenterIcon,
   centerValue,
+  centerMetric = 'maxPercent',
   emptyLabel = 'No data yet.',
   maxLegendItems = 4,
   totalLabel = 'visits',
@@ -112,8 +113,15 @@ export default function DashboardDonutChart({
   const hasData = chartData.length > 0;
   const segments = hasData ? buildSegments(chartData) : [];
   const legendItems = segments.slice(0, maxLegendItems);
+  const total = chartData.reduce((sum, row) => sum + row.value, 0);
   const topPct = hasData ? segments.reduce((max, row) => Math.max(max, row.pct), 0) : 0;
-  const animatedTopPct = useCountUp(topPct, { duration: 1000, delay: 200, decimals: 2, enabled: hasData });
+  const centerIsTotal = centerMetric === 'total';
+  const animatedCenter = useCountUp(centerIsTotal ? total : topPct, {
+    duration: 1000,
+    delay: 200,
+    decimals: centerIsTotal ? 0 : 2,
+    enabled: hasData,
+  });
   const [arcProgress, setArcProgress] = useState(0);
 
   useEffect(() => {
@@ -152,8 +160,9 @@ export default function DashboardDonutChart({
     );
   }
 
-  const total = chartData.reduce((sum, row) => sum + row.value, 0);
-  const resolvedCenterValue = centerValue ?? formatPercent(animatedTopPct);
+  const resolvedCenterValue = centerValue ?? (
+    centerIsTotal ? String(Math.round(animatedCenter)) : formatPercent(animatedCenter)
+  );
 
   const size = 220;
   const cx = size / 2;
@@ -210,9 +219,9 @@ export default function DashboardDonutChart({
               </span>
               <span className="shrink-0 text-sm font-bold tabular-nums text-gray-900">
                 <AnimatedNumber
-                  value={row.pct}
+                  value={row.value}
                   delay={320 + index * 60}
-                  format={(n) => `${Math.round(n)}%`}
+                  format={(n) => `${Math.round(n)} · ${Math.round(row.pct)}%`}
                 />
               </span>
             </li>

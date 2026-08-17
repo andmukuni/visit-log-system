@@ -184,3 +184,14 @@ describe('visitInZoneClause', () => {
     assert.deepEqual(clause.params, [...zones, ...zones]);
   });
 });
+
+describe('visit closed statuses — expected-today KPI', () => {
+  it('treats checkout and left-premises as closed so they drop off Expected today', async () => {
+    const { VISIT_CLOSED_STATUSES } = await import('../shared/visitCheckout.js');
+    assert.equal(VISIT_CLOSED_STATUSES.includes('checked_out'), true);
+    assert.equal(VISIT_CLOSED_STATUSES.includes('left_premises'), true);
+    assert.equal(VISIT_CLOSED_STATUSES.includes('completed'), true);
+    assert.equal(VISIT_CLOSED_STATUSES.includes('expected'), false);
+    assert.equal(VISIT_CLOSED_STATUSES.includes('waiting'), false);
+  });
+});

@@ -31,11 +31,16 @@ const EVENT_LABELS = {
   registered: 'Registered',
   approved: 'Approved',
   rejected: 'Rejected',
+  pending_approval: 'Pending approval',
   checked_in: 'Check-in',
-  checked_out: 'Check-out',
-  arrived_at_gate: 'Arrived at gate',
   reception_check_in: 'Reception check-in',
+  checked_out: 'Check-out',
+  left_premises: 'Left premises',
+  arrived_at_gate: 'Arrived at gate',
+  entered_premises: 'Entered premises',
+  waiting: 'Waiting for host',
   waiting_at_reception: 'Waiting at reception',
+  in_meeting: 'In meeting',
 };
 
 const EVENT_ICONS = {
@@ -190,12 +195,14 @@ export default function ReceptionDashboardPage() {
             }}
             donutChart={{
               title: 'Recent month',
-              subtitle: 'Events',
+              subtitle: 'Events in your zone',
               centerTitle: 'Event mix',
               centerIcon: Shield,
               data: donutData,
               nameKey: 'event_label',
               valueKey: 'total',
+              centerMetric: 'total',
+              maxLegendItems: 8,
               emptyLabel: 'No event data yet.',
               totalLabel: 'events',
             }}

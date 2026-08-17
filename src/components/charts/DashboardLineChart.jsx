@@ -289,15 +289,12 @@ export default function DashboardLineChart({
             <p className="text-sm text-gray-400">{title}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900">0</p>
           </div>
-          <PeriodDropdown
-            active={activePeriod}
-            open={menuOpen}
-            options={periodOptions}
-            onToggle={() => setMenuOpen((open) => !open)}
-            onSelect={(value) => {
-              setMenuOpen(false);
-              onPeriodChange?.(value);
-            }}
+          <PeriodControl
+            onPeriodChange={onPeriodChange}
+            activePeriod={activePeriod}
+            menuOpen={menuOpen}
+            setMenuOpen={setMenuOpen}
+            periodOptions={periodOptions}
           />
         </div>
         <div className="mt-6 flex h-56 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
@@ -334,15 +331,12 @@ export default function DashboardLineChart({
             />
           </div>
         </div>
-        <PeriodDropdown
-          active={activePeriod}
-          open={menuOpen}
-          options={periodOptions}
-          onToggle={() => setMenuOpen((open) => !open)}
-          onSelect={(value) => {
-            setMenuOpen(false);
-            onPeriodChange?.(value);
-          }}
+        <PeriodControl
+          onPeriodChange={onPeriodChange}
+          activePeriod={activePeriod}
+          menuOpen={menuOpen}
+          setMenuOpen={setMenuOpen}
+          periodOptions={periodOptions}
         />
       </div>
 
@@ -526,6 +520,29 @@ export default function DashboardLineChart({
         </div>
       </div>
     </div>
+  );
+}
+
+function PeriodControl({ onPeriodChange, activePeriod, menuOpen, setMenuOpen, periodOptions }) {
+  if (typeof onPeriodChange !== 'function') {
+    return (
+      <p className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500">
+        {activePeriod.label}
+      </p>
+    );
+  }
+
+  return (
+    <PeriodDropdown
+      active={activePeriod}
+      open={menuOpen}
+      options={periodOptions}
+      onToggle={() => setMenuOpen((open) => !open)}
+      onSelect={(value) => {
+        setMenuOpen(false);
+        onPeriodChange(value);
+      }}
+    />
   );
 }
 

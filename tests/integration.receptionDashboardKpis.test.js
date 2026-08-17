@@ -16,6 +16,7 @@ import {
   visitZoneFilterClause,
 } from '../server/receptionistService.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../shared/visitCheckIn.js';
+import { VISIT_CLOSED_STATUSES } from '../shared/visitCheckout.js';
 import appPool from '../server/db.js';
 
 after(async () => { try { await appPool.end(); } catch { /* never opened */ } });
@@ -133,12 +134,39 @@ describe('reception dashboard KPIs — live host_zones, not snapshot zone_id', (
   });
 
   it('the DATE(scheduled_at) = CURDATE() predicate used on the dashboard binds', async () => {
+    const closedPlaceholders = VISIT_CLOSED_STATUSES.map(() => '?').join(', ');
     const count = await countDashboard(
-      `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+      `AND vis.status NOT IN (${closedPlaceholders})
        AND DATE(${SCHEDULED_AT}) = CURDATE()`,
+      [...VISIT_CLOSED_STATUSES],
     );
     assert.equal(typeof count, 'number');
     assert.ok(count >= 0);
+  });
+
+  it('does not count checked-out visits as expected today', async () => {
+    await seedVisit(pool, {
+      id: 'visit-live-checked-out',
+      hostId: 'host-live',
+      zoneId: null,
+      status: 'checked_out',
+      expectedAt: new Date().toISOString(),
+    });
+    const closedPlaceholders = VISIT_CLOSED_STATUSES.map(() => '?').join(', ');
+    const openToday = await countDashboard(
+      `AND vis.status NOT IN (${closedPlaceholders})
+       AND DATE(${SCHEDULED_AT}) = CURDATE()`,
+      [...VISIT_CLOSED_STATUSES],
+    );
+    const includingClosed = await countDashboard(
+      `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+       AND DATE(${SCHEDULED_AT}) = CURDATE()`,
+    );
+    assert.ok(includingClosed >= openToday);
+    assert.equal(
+      await countDashboard(`AND vis.id = 'visit-live-checked-out' AND vis.status NOT IN (${closedPlaceholders})`, [...VISIT_CLOSED_STATUSES]),
+      0,
+    );
   });
 });
 

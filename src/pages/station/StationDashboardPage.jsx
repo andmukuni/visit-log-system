@@ -177,6 +177,8 @@ export default function StationDashboardPage() {
               data: donutData,
               nameKey: 'event_label',
               valueKey: 'total',
+              centerMetric: 'total',
+              maxLegendItems: 8,
               emptyLabel: 'No event data yet.',
               totalLabel: 'events',
             }}

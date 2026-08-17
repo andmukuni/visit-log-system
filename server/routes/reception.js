@@ -4,7 +4,7 @@ import { getUserScope, requireUserScope, canTransition } from '../scopeService.j
 import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { requestHostApproval } from '../hostApprovalService.js';
-import { isCheckoutEligible } from '../../shared/visitCheckout.js';
+import { isCheckoutEligible, VISIT_CLOSED_STATUSES } from '../../shared/visitCheckout.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
@@ -233,10 +233,13 @@ export function createReceptionRouter() {
       };
 
       const expectedToday = await countVisits(
-        `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+        `AND vis.status NOT IN (${VISIT_CLOSED_STATUSES.map(() => '?').join(', ')})
          AND DATE(${VISIT_SCHEDULED_AT_SQL}) = CURDATE()`,
+        [...VISIT_CLOSED_STATUSES],
       );
-      const pendingApprovals = await countVisits(`AND vis.status = 'pending_approval'`);
+      const pendingApprovals = await countVisits(
+        `AND vis.status IN ('pending_approval', 'pre_registered')`,
+      );
       const checkedInAtDesk = await countVisits(
         `AND vis.status IN (${DESK_ON_SITE_STATUSES.map(() => '?').join(', ')})`,
         DESK_ON_SITE_STATUSES,
@@ -283,32 +286,36 @@ export function createReceptionRouter() {
         recentParams.push(siteId);
       }
 
-      const { sql: recentZoneMatchSql, params: recentZoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
       const [recentActivityRaw] = await pool.query(
         `SELECT ve.id, ve.visit_id, ve.event_type, ve.created_at,
-                v.full_name AS visitor_name, vis.status AS visit_status,
-                ${recentZoneMatchSql} AS zone_match
+                v.full_name AS visitor_name, vis.status AS visit_status
          FROM visit_events ve
          INNER JOIN visits vis ON vis.id = ve.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN offices ofc ON ofc.id = h.office_id
          LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
-         WHERE vis.organisation_id = ?${recentSiteFilter}
+         WHERE vis.organisation_id = ?${recentSiteFilter}${inZone.sql}
          ORDER BY ve.created_at DESC
          LIMIT 10`,
-        [...recentZoneMatchParams, ...recentParams],
+        [...recentParams, ...inZone.params],
       );
-      // Activity feed rows aren't full visit records — shape them by hand
-      // rather than forcing them through the visit DTO builders.
-      const recentActivity = recentActivityRaw.map((row) => (row.zone_match
-        ? { id: row.id, visit_id: row.visit_id, event_type: row.event_type, created_at: row.created_at, visitor_name: row.visitor_name, visit_status: row.visit_status, _accessLevel: 'full' }
-        : { id: row.id, visit_id: row.visit_id, created_at: row.created_at, visitor_name: row.visitor_name, _accessLevel: 'restricted' }));
+      const recentActivity = recentActivityRaw.map((row) => ({
+        id: row.id,
+        visit_id: row.visit_id,
+        event_type: row.event_type,
+        created_at: row.created_at,
+        visitor_name: row.visitor_name,
+        visit_status: row.visit_status,
+        _accessLevel: 'full',
+      }));
 
       const perms = permissionsFromRequest(req);
       const viewer = buildReceptionViewer(scope, zoneReq, perms);
-      const checkInAppointments = applyVisitAccessPolicyToRows(checkInRows, viewer, { zoneMatchColumn: 'zone_match' });
-      const checkInToday = checkInAppointments.filter((row) => row._accessLevel === 'full').length;
+      const checkInAppointments = applyVisitAccessPolicyToRows(checkInRows, viewer, {
+        zoneMatchColumn: 'zone_match',
+      }).filter((row) => row._accessLevel === 'full');
+      const checkInToday = checkInAppointments.length;
       res.json({
         ok: true,
         data: {
