@@ -37,7 +37,11 @@ const emptyForm = () => ({
   stationId: '',
   departmentId: '',
   status: 'active',
+});
+
+const emptyPasswordForm = () => ({
   password: '',
+  confirmPassword: '',
 });
 
 function guardInitials(name) {
@@ -90,9 +94,12 @@ export default function AdminSecurityGuardDetailPage() {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const [passwordForm, setPasswordForm] = useState(emptyPasswordForm());
   const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
@@ -175,9 +182,18 @@ export default function AdminSecurityGuardDetailPage() {
       stationId: guard.station_id || '',
       departmentId: guard.department_id || '',
       status: guard.status || 'active',
-      password: '',
     });
     setModalOpen(true);
+  };
+
+  const openPasswordModal = () => {
+    if (!guard) return;
+    if (!guard.email?.trim()) {
+      toast.error('Add an email address before setting a password.');
+      return;
+    }
+    setPasswordForm(emptyPasswordForm());
+    setPasswordModalOpen(true);
   };
 
   const handleSave = async () => {
@@ -204,15 +220,49 @@ export default function AdminSecurityGuardDetailPage() {
         stationId: form.stationId || null,
         departmentId: form.departmentId || null,
         status: form.status,
-        password: form.password || undefined,
       });
-      toast.success(form.password ? 'Security guard updated and password changed.' : 'Security guard updated.');
+      toast.success('Security guard updated.');
       setModalOpen(false);
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not save security guard.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    if (!guard?.id) return;
+    const password = passwordForm.password.trim();
+    const confirmPassword = passwordForm.confirmPassword.trim();
+    if (!password) {
+      toast.error('Enter a new password.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await visitorApi.updateSecurityGuard(guard.id, {
+        name: guard.name,
+        email: guard.email,
+        phone: guard.phone,
+        siteId: guard.site_id,
+        stationId: guard.station_id || null,
+        departmentId: guard.department_id || null,
+        status: guard.status,
+        password,
+      });
+      toast.success('Password updated. The guard can sign in with the new password.');
+      setPasswordModalOpen(false);
+      setPasswordForm(emptyPasswordForm());
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not update password.');
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -286,6 +336,15 @@ export default function AdminSecurityGuardDetailPage() {
             >
               <ArrowLeft size={14} />
               Back
+            </button>
+            <button
+              type="button"
+              onClick={openPasswordModal}
+              disabled={!guard.email}
+              className="inline-flex items-center gap-1.5 rounded-md border border-navy-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-navy-800 shadow-sm hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+            >
+              <KeyRound size={14} />
+              Set password
             </button>
             <button
               type="button"
@@ -444,6 +503,22 @@ export default function AdminSecurityGuardDetailPage() {
           </div>
 
           <div className="rounded-2xl border border-navy-100 bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-navy-900">Portal login</h3>
+            <p className="mt-1 text-sm text-navy-600">{guard.email || 'No email — add one via Edit before setting a password.'}</p>
+            <LoadingButton
+              size="md"
+              variant="secondary"
+              icon={KeyRound}
+              loading={savingPassword}
+              disabled={!guard.email}
+              onClick={openPasswordModal}
+              className="mt-3 w-full border-navy-200"
+            >
+              Set password
+            </LoadingButton>
+          </div>
+
+          <div className="rounded-2xl border border-navy-100 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-semibold text-navy-900">Quick actions</h3>
             <div className="mt-3 flex flex-col gap-2">
               <button
@@ -453,14 +528,6 @@ export default function AdminSecurityGuardDetailPage() {
               >
                 <Edit3 size={15} aria-hidden="true" />
                 Edit details or gate
-              </button>
-              <button
-                type="button"
-                onClick={openEdit}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-navy-200 bg-white px-3 py-2.5 text-sm font-semibold text-navy-800 hover:bg-navy-50"
-              >
-                <KeyRound size={15} aria-hidden="true" />
-                Reset password
               </button>
             </div>
           </div>
@@ -563,14 +630,52 @@ export default function AdminSecurityGuardDetailPage() {
               { value: 'inactive', label: 'Inactive' },
             ]}
           />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={passwordModalOpen}
+        onClose={() => !savingPassword && setPasswordModalOpen(false)}
+        title="Set password"
+        subtitle={`Station portal login for ${guard.email}`}
+        size="sm"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={savingPassword}
+              onClick={() => setPasswordModalOpen(false)}
+              className="rounded-lg border border-navy-200 px-3 py-2 text-sm font-medium text-navy-700"
+            >
+              Cancel
+            </button>
+            <LoadingButton loading={savingPassword} onClick={handlePasswordSave}>
+              Save password
+            </LoadingButton>
+          </div>
+        )}
+      >
+        <div className="space-y-3">
           <FormField
-            label="Reset password"
+            label="New password"
             name="password"
             type="password"
-            value={form.password}
-            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder="Leave blank to keep current"
-            helpText="Leave blank to keep the current password."
+            required
+            autoComplete="new-password"
+            value={passwordForm.password}
+            onChange={(e) => setPasswordForm((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder="Enter new password"
+            helpText="Minimum length follows your organisation security settings (usually 8 characters)."
+          />
+          <FormField
+            label="Confirm password"
+            name="confirmPassword"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={passwordForm.confirmPassword}
+            onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+            placeholder="Re-enter new password"
           />
         </div>
       </Modal>

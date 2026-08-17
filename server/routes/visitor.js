@@ -4719,6 +4719,17 @@ export function createOrgAdminRouter() {
         return res.status(400).json({ ok: false, message: 'A security guard with this email already exists.' });
       }
 
+      if (password) {
+        const security = await getSecuritySettings();
+        const minLength = Number(security.min_password_length || 8);
+        if (password.length < minLength) {
+          return res.status(400).json({
+            ok: false,
+            message: `Password must be at least ${minLength} characters.`,
+          });
+        }
+      }
+
       const linkedUserId = await syncSecurityGuardPortalUser(pool, {
         name,
         email,
@@ -4799,6 +4810,17 @@ export function createOrgAdminRouter() {
       if (!name) return res.status(400).json({ ok: false, message: 'Security guard name is required.' });
       if (!siteId) return res.status(400).json({ ok: false, message: 'Site / branch is required.' });
       if (!email) return res.status(400).json({ ok: false, message: 'Email is required for security guard login.' });
+
+      if (password) {
+        const security = await getSecuritySettings();
+        const minLength = Number(security.min_password_length || 8);
+        if (password.length < minLength) {
+          return res.status(400).json({
+            ok: false,
+            message: `Password must be at least ${minLength} characters.`,
+          });
+        }
+      }
 
       const placement = await assertStationPlacement(pool, {
         organisationId: existing.organisation_id,
