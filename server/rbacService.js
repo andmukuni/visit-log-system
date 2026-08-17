@@ -210,6 +210,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/reception/visits')) {
     if (path.includes('/queue-host') || path.includes('/in-meeting')) return 'reception.host.queue';
     if (path.includes('/request-approval')) return 'reception.approvals.track';
+    if (path.includes('/check-out')) return 'reception.visitors.checkout';
     return 'reception.visitors.view';
   }
 

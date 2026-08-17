@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye } from 'lucide-react';
+import { Eye, LogOut } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -14,12 +14,15 @@ import {
   RefreshAction,
   AddAction,
 } from '../../components/ui';
+import { useToast } from '../../context/ToastContext';
 import { formatDateTime } from '../../utils/helpers';
 import { receptionApi } from '../../utils/visitorApi';
 import {
   filterVisitsByReceptionZones,
   scopeReceptionReferenceData,
 } from '../../utils/receptionZoneScope';
+
+const CHECKOUT_ELIGIBLE_STATUSES = ['checked_in', 'reception_check_in', 'waiting', 'in_meeting'];
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All', dot: 'bg-navy-400' },
@@ -35,12 +38,14 @@ const STATUS_OPTIONS = [
 
 export default function ReceptionVisitorLogsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [zoneIds, setZoneIds] = useState([]);
   const [zoneHostIds, setZoneHostIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [checkingOutId, setCheckingOutId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +79,19 @@ export default function ReceptionVisitorLogsPage() {
     [visits, zoneIds, zoneHostIds],
   );
 
+  const handleCheckOut = useCallback(async (row) => {
+    setCheckingOutId(row.id);
+    try {
+      await receptionApi.checkOutVisit(row.id);
+      toast.success(`${row.full_name || 'Visitor'} checked out.`);
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not check out visitor.');
+    } finally {
+      setCheckingOutId(null);
+    }
+  }, [load, toast]);
+
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
     { key: 'host_name', label: 'Host' },
@@ -93,9 +111,26 @@ export default function ReceptionVisitorLogsPage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name}`}>
-          <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
-        </Link>
+        <div className="flex items-center justify-end gap-1">
+          {CHECKOUT_ELIGIBLE_STATUSES.includes(row.status) && (
+            <IconButton
+              icon={LogOut}
+              label="Check out"
+              tooltip="Check out"
+              size="sm"
+              variant="ghost"
+              loading={checkingOutId === row.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleCheckOut(row);
+              }}
+            />
+          )}
+          <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name}`}>
+            <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
+          </Link>
+        </div>
       ),
     },
   ];

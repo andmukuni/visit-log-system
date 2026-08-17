@@ -10,6 +10,7 @@ const RECEPTION_PERMISSIONS = [
   { key: 'reception.visitors.register', name: 'Register walk-in visitors', group: 'Reception' },
   { key: 'reception.visitors.view', name: 'View visitor records', group: 'Reception' },
   { key: 'reception.visitors.checkin', name: 'Check visitors in at reception', group: 'Reception' },
+  { key: 'reception.visitors.checkout', name: 'Check visitors out at reception', group: 'Reception' },
   { key: 'reception.approvals.track', name: 'Track pending approval requests', group: 'Reception' },
   { key: 'reception.host.queue', name: 'Queue visitors to host', group: 'Reception' },
   { key: 'reception.hosts.availability', name: 'View host availability', group: 'Reception' },

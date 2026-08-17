@@ -617,5 +617,6 @@ export const receptionApi = {
     body: JSON.stringify(body),
   }),
   markInMeeting: (id) => apiFetch(`/admin/reception/visits/${id}/in-meeting`, { method: 'POST' }),
+  checkOutVisit: (id) => apiFetch(`/admin/reception/visits/${id}/check-out`, { method: 'POST' }),
   requestApproval: (id) => apiFetch(`/admin/reception/visits/${id}/request-approval`, { method: 'POST' }),
 };

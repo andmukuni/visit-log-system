@@ -1,8 +1,9 @@
 import express from 'express';
 import pool from '../db.js';
 import { getUserScope, requireUserScope, canTransition } from '../scopeService.js';
-import { generatePassCode, writeVisitEvent } from '../auditService.js';
+import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
+import { isCheckoutEligible } from '../../shared/visitCheckout.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
@@ -20,7 +21,7 @@ import {
   fetchWeeklyWalkingVisits,
   fetchWeeklyDriveInVisits,
 } from '../dashboardStats.js';
-import { markHostUnavailableForVisit } from '../hostAvailability.js';
+import { markHostUnavailableForVisit, refreshHostAvailabilityAfterVisit } from '../hostAvailability.js';
 import { generateId } from '../visitorSchema.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import {
@@ -1112,6 +1113,67 @@ export function createReceptionRouter() {
     toStatus: 'in_meeting',
     eventType: 'in_meeting',
   }));
+
+  router.post('/visits/:id/check-out', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const visitId = req.params.id;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const visit = loaded.visit;
+      if (!isCheckoutEligible(visit.status)) {
+        return res.status(400).json({ ok: false, message: 'Visitor is not checked in.' });
+      }
+
+      await pool.query(
+        `UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW() WHERE id = ?`,
+        [visitId],
+      );
+
+      if (visit.badge_number) {
+        await pool.query(
+          `UPDATE badges SET status = 'available', visit_id = NULL, returned_at = NOW()
+           WHERE organisation_id = ? AND badge_number = ?`,
+          [visit.organisation_id, visit.badge_number],
+        );
+      }
+
+      await writeVisitEvent(pool, {
+        visitId,
+        eventType: 'checked_out',
+        actorUserId: userId,
+        stationId: scopeResult.scope?.station_id,
+      });
+
+      await writeAuditLog(pool, {
+        organisationId: visit.organisation_id,
+        actorUserId: userId,
+        action: 'visit.checkout',
+        targetType: 'visit',
+        targetId: visitId,
+      });
+
+      await notifyVisitEvent(pool, { visitId, eventType: 'checked_out', actorUserId: userId });
+      await refreshHostAvailabilityAfterVisit(pool, visit);
+
+      res.json({ ok: true, message: 'Visitor checked out.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
 
   router.post('/visits/:id/request-approval', async (req, res) => {
     try {
