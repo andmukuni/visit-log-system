@@ -237,6 +237,7 @@ export function isPortalLockExemptPath(pathname = '') {
     || path.startsWith('/admin/login')
     || path.startsWith('/reset-password')
     || path.startsWith('/visit/invite')
+    || path.startsWith('/visit/host-approval')
     || path === '/kiosk'
     || path.startsWith('/kiosk/');
 }

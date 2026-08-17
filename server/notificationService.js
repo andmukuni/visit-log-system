@@ -3,8 +3,9 @@ import { writeVisitEvent } from './auditService.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { sendSms } from './adapters/smsAdapter.js';
 import { getAppBaseUrl, getDeliveryConfig } from './adapters/deliveryConfig.js';
-import { getNotificationSettings, resolveAppName } from './services/adminSettingsService.js';
+import { getNotificationSettings, resolveAppName, DEFAULT_NOTIFICATIONS } from './services/adminSettingsService.js';
 import { categoryKeyForEvent } from '../shared/notificationCategories.js';
+import { APP_NAME } from '../shared/branding.js';
 import { resolveReceptionAudienceByZone } from './receptionistService.js';
 import { resolveSecurityAudienceForVisit } from './securityGuardService.js';
 
@@ -386,11 +387,13 @@ export async function notifyVisitEvent(pool, {
   extra = {},
   notifyVisitor = true,
   notifyHost = true,
+  orgSettings: orgSettingsOverride = null,
 }) {
   const [[visit]] = await pool.query(
     `SELECT vis.*, v.full_name AS visitor_name, v.phone AS visitor_phone, v.email AS visitor_email,
             v.company AS visitor_company,
             h.name AS host_name, h.user_id AS host_user_id,
+            h.email AS host_email, h.phone AS host_phone,
             s.name AS site_name,
             COALESCE(vc.classification, 'standard') AS classification
      FROM visits vis
@@ -406,8 +409,9 @@ export async function notifyVisitEvent(pool, {
   const categoryKey = categoryKeyForEvent(eventType);
   if (!categoryKey) return;
 
-  const orgSettings = await getNotificationSettings();
-  const appName = await resolveAppName();
+  const orgSettings = orgSettingsOverride
+    || await getNotificationSettings().catch(() => ({ ...DEFAULT_NOTIFICATIONS }));
+  const appName = extra.app_name || await resolveAppName().catch(() => APP_NAME);
   const inviteUrl = visit.invite_token
     ? `${getAppBaseUrl()}/visit/invite/${visit.invite_token}`
     : '';
@@ -418,6 +422,8 @@ export async function notifyVisitEvent(pool, {
     host_name: visit.host_name || 'Host',
     pass_code: visit.pass_code,
     invite_url: inviteUrl,
+    approval_url: extra.approval_url || '',
+    approval_context: extra.approval_context || 'requires your approval',
     status: visit.status,
     expected_at: formatExpectedAt(extra.expected_at || visit.expected_at),
     site_name: visit.site_name || '',
@@ -439,10 +445,11 @@ export async function notifyVisitEvent(pool, {
     email: visit.visitor_email || null,
     phone: visit.visitor_phone || null,
   };
-
-  const hostTargets = new Set();
-  if (hostUserId) hostTargets.add(hostUserId);
-  if (eventType === 'pending_approval' && visit.created_by) hostTargets.add(visit.created_by);
+  const hostRecipient = {
+    email: visit.host_email || null,
+    phone: visit.host_phone || null,
+  };
+  const requestingReceptionistId = visit.approval_requested_by || visit.created_by || null;
 
   // Hosts are notified when a visitor is queued for their approval, checked
   // in at reception, and on checkout. checked_in/reception_check_in fire from
@@ -474,23 +481,37 @@ export async function notifyVisitEvent(pool, {
     left_premises: ['in_app'],
   };
 
-  // Host notifications
+  // Host notifications — never include the receptionist who requested approval.
   const hostTemplateKey = hostTemplateMap[eventType];
 
   if (hostTemplateKey && notifyHost) {
     const channels = hostChannelsByEvent[eventType] || ['in_app'];
-    for (const userId of hostTargets) {
-      if (userId === actorUserId) {
-        continue;
-      }
+    if (hostUserId && hostUserId !== actorUserId) {
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
-        userId,
+        userId: hostUserId,
+        recipient: hostRecipient,
         templateKey: hostTemplateKey,
         categoryKey,
         channels,
         vars,
-        idempotencyKey: `${eventType}:${visitId}:host:${userId}`,
+        idempotencyKey: `${eventType}:${visitId}:host:${hostUserId}`,
+        metadata: { ...metadata, audience: 'host' },
+        orgSettings,
+      });
+    } else if (
+      eventType === 'pending_approval'
+      && !hostUserId
+      && (hostRecipient.email || hostRecipient.phone)
+    ) {
+      await notifyAudience(pool, {
+        organisationId: visit.organisation_id,
+        recipient: hostRecipient,
+        templateKey: hostTemplateKey,
+        categoryKey,
+        channels: ['email', 'sms'],
+        vars,
+        idempotencyKey: `${eventType}:${visitId}:host:contact`,
         metadata: { ...metadata, audience: 'host' },
         orgSettings,
       });
@@ -518,6 +539,29 @@ export async function notifyVisitEvent(pool, {
     });
   }
 
+  // Host approve/reject of a reception booking — notify the receptionist who
+  // created or queued the visit. Never the visitor.
+  if (
+    ['approved', 'waiting', 'rejected'].includes(eventType)
+    && requestingReceptionistId
+    && requestingReceptionistId !== actorUserId
+  ) {
+    const decisionTemplate = eventType === 'rejected'
+      ? 'visit.reception_host_rejected'
+      : 'visit.reception_host_approved';
+    await notifyAudience(pool, {
+      organisationId: visit.organisation_id,
+      userId: requestingReceptionistId,
+      templateKey: decisionTemplate,
+      categoryKey,
+      channels: ['in_app', 'email', 'sms'],
+      vars,
+      idempotencyKey: `${eventType}:${visitId}:reception_requester:${requestingReceptionistId}`,
+      metadata: { visitId, eventType, audience: 'reception_requester' },
+      orgSettings,
+    });
+  }
+
   // Appointment Creation Flow (Logic.md steps 3-6) — notify reception when a
   // host books/expects a visitor, split by zone match. This previously did
   // not exist at all: reception only ever heard about a visit once it
@@ -530,6 +574,11 @@ export async function notifyVisitEvent(pool, {
     });
     for (const r of sameZone) {
       if (r.userId === actorUserId) continue;
+      if (
+        eventType === 'approved'
+        && requestingReceptionistId
+        && r.userId === requestingReceptionistId
+      ) continue;
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
         userId: r.userId,
@@ -545,6 +594,11 @@ export async function notifyVisitEvent(pool, {
     }
     for (const r of differentZone) {
       if (r.userId === actorUserId) continue;
+      if (
+        eventType === 'approved'
+        && requestingReceptionistId
+        && r.userId === requestingReceptionistId
+      ) continue;
       await notifyAudience(pool, {
         organisationId: visit.organisation_id,
         userId: r.userId,

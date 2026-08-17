@@ -12,7 +12,6 @@ import {
   requireHostContext,
   loadVisitForHost,
   hostVisitFilter,
-  canTransition,
 } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
@@ -20,6 +19,7 @@ import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
 import { applyVisitListMasking } from '../visitResponseService.js';
 import { normalizeHostAvailability } from '../hostAvailability.js';
 import { resolveHostZoneId } from '../receptionistService.js';
+import { applyHostApproval, applyHostRejection } from '../hostApprovalService.js';
 
 function normalizeNrc(value) {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
@@ -534,117 +534,17 @@ export function createHostRouter() {
       });
       if (!loaded.ok) return res.status(loaded.status).json({ ok: false, message: loaded.message });
 
-      const visit = loaded.visit;
-      // Reception-queued visitors are already on site — host acceptance moves them to waiting
-      // and attaches them to the host timeline. Pre-arrival approvals stay approved/expected.
-      const isReceptionQueue = Boolean(visit.checked_in_at)
-        || ['reception_check_in', 'checked_in'].includes(String(visit.status || ''));
-      const nextStatus = isReceptionQueue
-        ? 'waiting'
-        : (visit.expected_at ? 'expected' : 'approved');
-
-      if (!canTransition(visit.status, nextStatus) && !canTransition(visit.status, 'approved')) {
-        return res.status(400).json({ ok: false, message: 'Visit is not pending approval.' });
-      }
-
-      const [[visitorRow]] = await pool.query(
-        'SELECT full_name FROM visitors WHERE id = ? LIMIT 1',
-        [visit.visitor_id],
-      );
-
-      // Fail-safe: missing zone never blocks approval — proceed with zone_id
-      // NULL (restricted-for-everyone downstream) and log a config warning.
-      const approveZoneId = await resolveHostZoneId(pool, ctx.host.id);
-      if (!approveZoneId) {
-        await writeAuditLog(pool, {
-          organisationId: ctx.scope.organisation_id,
-          actorUserId: userId,
-          action: 'host.zone_missing',
-          targetType: 'host',
-          targetId: ctx.host.id,
-          result: 'warning',
-          details: { visitId, hostId: ctx.host.id },
-        });
-      }
-      await pool.query(
-        `UPDATE visits
-         SET status = ?,
-             host_id = COALESCE(?, host_id),
-             zone_id = ?,
-             approved_at = NOW(),
-             updated_at = NOW()
-         WHERE id = ?`,
-        [nextStatus, ctx.host.id, approveZoneId, visitId],
-      );
-
-      await pool.query(
-        `INSERT INTO visit_approvals (id, visit_id, approver_user_id, decision, reason) VALUES (?, ?, ?, 'approved', ?)`,
-        [generateId('appr'), visitId, userId, reason || null],
-      );
-
-      // Ensure the visit appears on the host calendar/timeline.
-      const [[existingAppt]] = await pool.query(
-        'SELECT id, scheduled_at FROM appointments WHERE visit_id = ? LIMIT 1',
-        [visitId],
-      );
-      const scheduledAt = visit.expected_at || new Date();
-      const visitorName = visitorRow?.full_name || 'visitor';
-      const meetingTitle = visit.purpose || `Meeting with ${visitorName}`;
-      if (!existingAppt) {
-        await createAppointmentForVisit(pool, {
-          organisationId: visit.organisation_id,
-          visitId,
-          hostId: ctx.host.id,
-          scheduledAt,
-          title: meetingTitle,
-          createdBy: userId,
-        });
-      } else {
-        await pool.query(
-          `UPDATE appointments
-           SET host_id = COALESCE(host_id, ?),
-               scheduled_at = COALESCE(scheduled_at, ?),
-               title = COALESCE(NULLIF(title, ''), ?),
-               status = 'scheduled'
-           WHERE id = ?`,
-          [ctx.host.id, scheduledAt, meetingTitle, existingAppt.id],
-        );
-      }
-
-      await writeVisitEvent(pool, {
-        visitId,
-        eventType: isReceptionQueue ? 'waiting' : 'approved',
+      const result = await applyHostApproval(pool, {
+        visit: loaded.visit,
+        host: ctx.host,
         actorUserId: userId,
         reason: reason || null,
-        details: {
-          approverRole: 'host',
-          source: isReceptionQueue ? 'reception_queue' : 'host_approval',
-          nextStatus,
-        },
+        source: 'host_approval',
       });
 
-      await writeAuditLog(pool, {
-        organisationId: visit.organisation_id,
-        actorUserId: userId,
-        action: 'host.approve',
-        targetType: 'visit',
-        targetId: visitId,
-      });
-
-      await notifyVisitEvent(pool, {
-        visitId,
-        eventType: isReceptionQueue ? 'waiting' : 'approved',
-        actorUserId: userId,
-      });
-
-      res.json({
-        ok: true,
-        message: isReceptionQueue
-          ? 'Visitor accepted and added to your timeline.'
-          : 'Visit approved.',
-      });
+      res.json({ ok: true, message: result.message });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 
@@ -655,10 +555,6 @@ export function createHostRouter() {
 
       const userId = req.adminClaims.sub;
       const { reason } = req.body;
-      if (!reason?.trim()) {
-        return res.status(400).json({ ok: false, message: 'Rejection reason is required.' });
-      }
-
       const visitId = req.params.id;
       const loaded = await loadVisitForHost(pool, visitId, {
         host: ctx.host,
@@ -668,37 +564,17 @@ export function createHostRouter() {
       });
       if (!loaded.ok) return res.status(loaded.status).json({ ok: false, message: loaded.message });
 
-      const visit = loaded.visit;
-      if (!canTransition(visit.status, 'rejected')) {
-        return res.status(400).json({ ok: false, message: 'Visit cannot be rejected in its current status.' });
-      }
-
-      await pool.query(`UPDATE visits SET status = 'rejected', updated_at = NOW() WHERE id = ?`, [visitId]);
-      await pool.query(
-        `INSERT INTO visit_approvals (id, visit_id, approver_user_id, decision, reason) VALUES (?, ?, ?, 'rejected', ?)`,
-        [generateId('appr'), visitId, userId, reason.trim()],
-      );
-      await writeVisitEvent(pool, {
-        visitId,
-        eventType: 'rejected',
+      const result = await applyHostRejection(pool, {
+        visit: loaded.visit,
+        host: ctx.host,
         actorUserId: userId,
-        reason: reason.trim(),
-        details: { approverRole: 'host' },
+        reason,
+        source: 'host_approval',
       });
 
-      await writeAuditLog(pool, {
-        organisationId: visit.organisation_id,
-        actorUserId: userId,
-        action: 'host.reject',
-        targetType: 'visit',
-        targetId: visitId,
-      });
-
-      await notifyVisitEvent(pool, { visitId, eventType: 'rejected', actorUserId: userId });
-
-      res.json({ ok: true, message: 'Visit rejected.' });
+      res.json({ ok: true, message: result.message });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 

@@ -64,11 +64,22 @@ const DDL = [
      station_id VARCHAR(90), visitor_id VARCHAR(90), host_id VARCHAR(90), department_id VARCHAR(90),
      category_id VARCHAR(90), office_id VARCHAR(90), zone_id VARCHAR(90), purpose TEXT, status VARCHAR(40),
      expected_at TIMESTAMP, approved_at TIMESTAMP, checked_in_at TIMESTAMP, checked_out_at TIMESTAMP,
-     badge_number VARCHAR(40), pass_code VARCHAR(40), created_by VARCHAR(90), invite_token VARCHAR(90),
-     check_in_signature TEXT, confidential_notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+     badge_number VARCHAR(40), pass_code VARCHAR(40), created_by VARCHAR(90), approval_requested_by VARCHAR(90),
+     appointment_id VARCHAR(90), invite_token VARCHAR(90), check_in_signature TEXT, confidential_notes TEXT,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE appointments (id VARCHAR(90) PRIMARY KEY, organisation_id VARCHAR(90), visit_id VARCHAR(90),
-     host_id VARCHAR(90), title VARCHAR(255), scheduled_at TIMESTAMP, status VARCHAR(30))`,
+     host_id VARCHAR(90), title VARCHAR(255), scheduled_at TIMESTAMP, status VARCHAR(30),
+     calendar_synced INT, created_by VARCHAR(90))`,
+  `CREATE TABLE visit_events (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90), event_type VARCHAR(60),
+     actor_user_id VARCHAR(90), station_id VARCHAR(90), details TEXT, reason TEXT,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE visit_approvals (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90), approver_user_id VARCHAR(90),
+     decision VARCHAR(20), reason TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE visit_host_approval_tokens (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90),
+     token_hash VARCHAR(128), expires_at TIMESTAMP, used_at TIMESTAMP,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE host_zones (host_id VARCHAR(90), zone_id VARCHAR(90), organisation_id VARCHAR(90), status VARCHAR(30))`,
+  `CREATE TABLE receptionist_zones (receptionist_id VARCHAR(90), zone_id VARCHAR(90), organisation_id VARCHAR(90), status VARCHAR(30))`,
   `CREATE TABLE vehicles (id VARCHAR(90) PRIMARY KEY, organisation_id VARCHAR(90), visit_id VARCHAR(90),
      plate_number VARCHAR(40), status VARCHAR(30))`,
   `CREATE TABLE expected_vehicles (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90), plate_number VARCHAR(40),
@@ -156,19 +167,20 @@ export async function seedFixture(pool) {
 }
 
 /** Insert a host with an optional office and explicit zone rows. */
-export async function seedHost(pool, { id, name, roleSlug, zoneIds = [], officeId = null, userId = null, siteId = FIXTURE.siteId, orgId = FIXTURE.orgId }) {
+export async function seedHost(pool, { id, name, roleSlug, zoneIds = [], officeId = null, userId = null, siteId = FIXTURE.siteId, orgId = FIXTURE.orgId, email = null, phone = '+260977000001' }) {
   const uid = userId || `usr-${id}`;
+  const hostEmail = email || `${id}@example.com`;
   await pool.query(
-    `INSERT INTO users (id, name, email, role, email_verified) VALUES (?, ?, ?, 'user', 1)`,
-    [uid, name, `${id}@example.com`],
+    `INSERT INTO users (id, name, email, phone, role, email_verified) VALUES (?, ?, ?, ?, 'user', 1)`,
+    [uid, name, hostEmail, phone],
   );
   if (roleSlug) {
     await pool.query(`INSERT INTO user_admin_roles (user_id, role_id) VALUES (?, ?)`, [uid, `role-${roleSlug}`]);
   }
   await pool.query(
-    `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, zone_id, user_id, name, email, status, availability)
-     VALUES (?, ?, 'dept-exec', ?, ?, ?, ?, ?, ?, 'active', 'available')`,
-    [id, orgId, siteId, officeId, zoneIds[0] || null, uid, name, `${id}@example.com`],
+    `INSERT INTO hosts (id, organisation_id, department_id, site_id, office_id, zone_id, user_id, name, email, phone, status, availability)
+     VALUES (?, ?, 'dept-exec', ?, ?, ?, ?, ?, ?, ?, 'active', 'available')`,
+    [id, orgId, siteId, officeId, zoneIds[0] || null, uid, name, hostEmail, phone],
   );
   for (const zoneId of zoneIds) {
     await pool.query(
@@ -226,7 +238,11 @@ export async function seedGuard(pool, { id, name, stationIds = [], buildingIds =
   return { guardId: id, userId: uid };
 }
 
-export async function seedVisit(pool, { id, hostId, zoneId = null, officeId = null, stationId = null, siteId = FIXTURE.siteId, orgId = FIXTURE.orgId, visitor = {}, status = 'expected' }) {
+export async function seedVisit(pool, {
+  id, hostId, zoneId = null, officeId = null, stationId = null, siteId = FIXTURE.siteId, orgId = FIXTURE.orgId,
+  visitor = {}, status = 'expected', createdBy = null, approvalRequestedBy = null,
+  checkedInAt = null, expectedAt = '2026-08-20T09:00:00Z',
+}) {
   const visitorId = `vis-${id}`;
   await pool.query(
     `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company, id_number_masked)
@@ -247,12 +263,14 @@ export async function seedVisit(pool, { id, hostId, zoneId = null, officeId = nu
   );
   await pool.query(
     `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, office_id, zone_id,
-       purpose, status, expected_at, pass_code, invite_token, check_in_signature, confidential_notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       purpose, status, expected_at, pass_code, invite_token, check_in_signature, confidential_notes,
+       created_by, approval_requested_by, checked_in_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, orgId, siteId, stationId, visitorId, hostId, officeId, zoneId,
-      'Quarterly acquisition review', status, '2026-08-20T09:00:00Z',
+      'Quarterly acquisition review', status, expectedAt,
       'PASS42', 'secret-invite-token', 'base64-signature', 'HOST PRIVATE NOTE',
+      createdBy, approvalRequestedBy, checkedInAt,
     ],
   );
   return { visitId: id, visitorId };

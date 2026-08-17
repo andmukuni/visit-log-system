@@ -14,6 +14,7 @@ import {
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import {
   filterVisitsByReceptionZones,
   scopeReceptionReferenceData,
@@ -60,8 +61,8 @@ export default function ReceptionApprovalsPage() {
   const requestApproval = async (id) => {
     setActing(id);
     try {
-      await receptionApi.requestApproval(id);
-      toast.success('Approval reminder sent to host.');
+      const result = await receptionApi.requestApproval(id);
+      toastHostApprovalRequested(toast, result, 'Approval reminder sent to host.');
     } catch (err) {
       toast.error(err.message);
     } finally {

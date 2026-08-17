@@ -5,6 +5,7 @@ import { ensureRbacTables, seedRbac } from './rbacService.js';
 import { ensureVisitorSchema, seedVisitorData, seedOfficeHierarchy } from './visitorSchema.js';
 import { runMigrations } from './migrations/index.js';
 import { ensurePasswordResetSchema } from './hostPortalService.js';
+import { ensureHostApprovalSchema } from './hostApprovalService.js';
 import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
@@ -65,6 +66,7 @@ export async function bootstrapDatabase() {
   // deploy can be verified rather than assumed.
   await runMigrations(pool);
   await ensurePasswordResetSchema(pool);
+  await ensureHostApprovalSchema(pool);
   await ensureSecuritySchema();
   await ensureComplianceSchema();
   await ensurePlatformSchema();

@@ -3,6 +3,7 @@ import pool from '../db.js';
 import { getUserScope, requireUserScope, canTransition } from '../scopeService.js';
 import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
+import { requestHostApproval } from '../hostApprovalService.js';
 import { isCheckoutEligible } from '../../shared/visitCheckout.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
@@ -1092,7 +1093,10 @@ export function createReceptionRouter() {
         },
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'pending_approval', actorUserId: userId });
+      const approval = await requestHostApproval(pool, {
+        visitId,
+        requestedByUserId: userId,
+      });
 
       res.json({
         ok: true,
@@ -1101,6 +1105,7 @@ export function createReceptionRouter() {
           hostId: nextHostId,
           departmentId: nextDepartmentId,
           officeId: nextOfficeId,
+          hostContactDeliverable: approval.hostContactDeliverable,
         },
       });
     } catch (error) {
@@ -1198,8 +1203,15 @@ export function createReceptionRouter() {
         return res.status(400).json({ ok: false, message: 'Visit is not awaiting approval.' });
       }
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'pending_approval', actorUserId: userId });
-      res.json({ ok: true, message: 'Approval request sent to host.' });
+      const approval = await requestHostApproval(pool, {
+        visitId,
+        requestedByUserId: userId,
+      });
+      res.json({
+        ok: true,
+        message: 'Approval request sent to host.',
+        data: { hostContactDeliverable: approval.hostContactDeliverable },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }
@@ -1368,11 +1380,26 @@ export function createReceptionRouter() {
         actorUserId: userId,
         stationId: scope.station_id,
       });
-      await notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId });
+      let hostContactDeliverable = null;
+      if (initialStatus === 'pending_approval') {
+        const approval = await requestHostApproval(pool, {
+          visitId,
+          requestedByUserId: userId,
+        });
+        hostContactDeliverable = approval.hostContactDeliverable;
+      } else {
+        await notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId });
+      }
 
       res.status(201).json({
         ok: true,
-        data: { id: visitId, pass_code: passCode, status: initialStatus, zone_id: visitZoneId },
+        data: {
+          id: visitId,
+          pass_code: passCode,
+          status: initialStatus,
+          zone_id: visitZoneId,
+          hostContactDeliverable,
+        },
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });

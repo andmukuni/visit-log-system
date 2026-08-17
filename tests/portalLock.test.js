@@ -49,7 +49,7 @@ describe('HOST LOCK — a host may not leave the host portal', () => {
   });
 
   it('does not trap a host on public/auth paths', () => {
-    for (const route of ['/', '/login', '/admin/login', '/reset-password', '/kiosk', '/visit/invite/abc']) {
+    for (const route of ['/', '/login', '/admin/login', '/reset-password', '/kiosk', '/visit/invite/abc', '/visit/host-approval/abc']) {
       assert.equal(resolvePortalLockRedirect(route, hostPerms, hostRoles), null,
         `${route} must stay reachable (login/kiosk/invite would otherwise be unusable)`);
     }

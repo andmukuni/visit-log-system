@@ -15,6 +15,7 @@ import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 
 function waitDuration(row) {
@@ -95,8 +96,8 @@ export default function ReceptionHostQueuePage() {
     if (!queueVisit?.id) return;
     setQueuing(true);
     try {
-      await receptionApi.queueToHost(queueVisit.id, payload);
-      toast.success('Visitor sent to host for approval.');
+      const result = await receptionApi.queueToHost(queueVisit.id, payload);
+      toastHostApprovalRequested(toast, result, 'Visitor sent to host for approval.');
       setQueueVisit(null);
       await load();
     } catch (err) {

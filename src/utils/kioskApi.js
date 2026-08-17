@@ -13,7 +13,10 @@ async function kioskFetch(path, options = {}) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || 'Request failed');
+    const err = new Error(json?.message || 'Request failed');
+    err.status = res.status;
+    err.data = json?.data;
+    throw err;
   }
   return json.data;
 }
@@ -25,4 +28,13 @@ export const kioskApi = {
   lookup: (query, org) => kioskFetch('/kiosk/lookup', { method: 'POST', body: JSON.stringify({ query, org }) }),
   checkIn: (body) => kioskFetch('/kiosk/check-in', { method: 'POST', body: JSON.stringify(body) }),
   checkOut: (body) => kioskFetch('/kiosk/check-out', { method: 'POST', body: JSON.stringify(body) }),
+  getHostApproval: (token) => kioskFetch(`/visit/host-approval/${encodeURIComponent(token)}`),
+  approveHostApproval: (token) => kioskFetch(`/visit/host-approval/${encodeURIComponent(token)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+  rejectHostApproval: (token, reason) => kioskFetch(`/visit/host-approval/${encodeURIComponent(token)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
 };

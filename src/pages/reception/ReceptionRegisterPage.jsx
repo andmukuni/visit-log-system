@@ -9,6 +9,7 @@ import {
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 
 export default function ReceptionRegisterPage() {
@@ -48,7 +49,11 @@ export default function ReceptionRegisterPage() {
     setSubmitting(true);
     try {
       const visit = await receptionApi.registerVisit(form);
-      toast.success(`Walk-in registered. Pass code: ${visit.pass_code}. Host approval requested.`);
+      toastHostApprovalRequested(
+        toast,
+        visit,
+        `Walk-in registered. Pass code: ${visit.pass_code}. Host approval requested.`,
+      );
       setForm({ fullName: '', phone: '', email: '', company: '', hostId: '', categoryId: '', purpose: '' });
     } catch (err) {
       toast.error(err.message);

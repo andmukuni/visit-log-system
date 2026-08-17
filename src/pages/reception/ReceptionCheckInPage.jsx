@@ -15,6 +15,7 @@ import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import { formatDate, formatTime } from '../../utils/helpers';
 
@@ -146,8 +147,8 @@ export default function ReceptionCheckInPage() {
     if (!queueVisit?.id) return;
     setQueuing(true);
     try {
-      await receptionApi.queueToHost(queueVisit.id, payload);
-      toast.success('Visitor sent to host for approval.');
+      const result = await receptionApi.queueToHost(queueVisit.id, payload);
+      toastHostApprovalRequested(toast, result, 'Visitor sent to host for approval.');
       setLastCheckedInId(null);
       setQueueVisit(null);
       setReadyToQueue((prev) => prev.filter((row) => row.id !== queueVisit.id));

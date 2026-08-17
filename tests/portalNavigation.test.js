@@ -155,6 +155,8 @@ describe('portal login routing', () => {
     assert.equal(resolveLoginRedirect('/host', executiveReceptionPerms), '/reception/calendar');
     assert.equal(resolveLoginRedirect('/admin/receptionists', executiveReceptionPerms), '/reception/calendar');
     assert.equal(isPortalLockExemptPath('/login'), true);
+    assert.equal(isPortalLockExemptPath('/visit/invite/abc'), true);
+    assert.equal(isPortalLockExemptPath('/visit/host-approval/abc'), true);
     assert.equal(isPortalLockExemptPath('/host'), false);
     assert.equal(isPortalLockExemptPath('/reception/calendar'), false);
   });
