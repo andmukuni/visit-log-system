@@ -6,7 +6,8 @@ import {
   Spinner,
   LoadingButton,
   IconButton,
-  StatusBadge,
+  Spinner,
+  VisitStatusBadge,
   UnderlineTabs,
   TablePagination,
 } from '../../components/ui';
@@ -18,6 +19,7 @@ import { receptionApi, visitorApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import { formatDate, formatTime } from '../../utils/helpers';
+import { canQueueVisitToHost } from '../../../shared/visitReceptionActions.js';
 
 const TABS = {
   ready: 'ready',
@@ -92,7 +94,7 @@ export default function ReceptionCheckInPage() {
     try {
       const rows = await receptionApi.getHostQueue({ includeReady: '1' });
       setReadyToQueue(
-        (rows || []).filter((row) => ['reception_check_in', 'checked_in'].includes(row.status)),
+        (rows || []).filter((row) => canQueueVisitToHost(row)),
       );
     } catch {
       setReadyToQueue([]);
@@ -357,7 +359,7 @@ export default function ReceptionCheckInPage() {
                                 </p>
                               </div>
                               <div>
-                                <StatusBadge status={row.visit_status || row.status || 'expected'} />
+                                <VisitStatusBadge visit={row} status={row.visit_status || row.status || 'expected'} />
                               </div>
                               <div
                                 className="flex items-center justify-end"
@@ -467,7 +469,7 @@ export default function ReceptionCheckInPage() {
                                 {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
                               </p>
                               <div className="mt-2 sm:hidden">
-                                <StatusBadge status={row.status} />
+                                <VisitStatusBadge visit={row} />
                               </div>
                             </div>
                             <div className="min-w-0">
@@ -481,7 +483,7 @@ export default function ReceptionCheckInPage() {
                               </p>
                             </div>
                             <div className="hidden sm:block">
-                              <StatusBadge status={row.status} />
+                              <VisitStatusBadge visit={row} />
                             </div>
                             <div
                               className="flex items-center justify-end gap-1.5"

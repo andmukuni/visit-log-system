@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Car, Footprints, LogOut, Search, User } from 'lucide-react';
-import { LoadingButton, StatusBadge } from '../../components/ui';
+import { LoadingButton, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
-import { isGateExitEligible } from '../../../shared/visitCheckout.js';
+import { getGateCheckoutActionLabel, isGateExitEligible } from '../../../shared/visitCheckout.js';
 import { formatNrcInput, visitorDisplayName } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
@@ -62,7 +62,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     setLoading(true);
     try {
       const rows = await visitorApi.getOnSiteVisits(mode);
-      setVisits(Array.isArray(rows) ? rows.filter((v) => isGateExitEligible(v.status)) : []);
+      setVisits(Array.isArray(rows) ? rows.filter((v) => isGateExitEligible(v)) : []);
     } catch (err) {
       toast.error(err.message || 'Failed to load on-site visits.');
       setVisits([]);
@@ -163,7 +163,9 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
               <span className="text-right">Action</span>
             </div>
             <ul className="divide-y divide-navy-100">
-              {filteredVisits.map((row) => (
+              {filteredVisits.map((row) => {
+                const checkoutAction = getGateCheckoutActionLabel(row);
+                return (
                 <li
                   key={row.id}
                   className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_7.5rem_5.75rem_7rem_3rem] sm:items-center sm:gap-3"
@@ -181,14 +183,14 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                   </div>
                   <div className="flex flex-col gap-1 sm:justify-start">
                     <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Status</span>
-                    <StatusBadge status={row.status} />
+                    <VisitStatusBadge visit={row} />
                   </div>
                   <div className="flex sm:justify-end">
                     <LoadingButton
                       loading={checkingOut === row.id}
-                      loadingLabel={row.status === 'checked_out' ? 'Confirming exit…' : 'Checking out…'}
-                      aria-label={row.status === 'checked_out' ? 'Confirm left premises' : 'Checkout'}
-                      title={row.status === 'checked_out' ? 'Confirm visitor has left premises' : 'Check visitor out'}
+                      loadingLabel={checkoutAction.loadingLabel}
+                      aria-label={checkoutAction.label}
+                      title={checkoutAction.label}
                       icon={LogOut}
                       iconOnly
                       size="lg"
@@ -197,7 +199,8 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                     />
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             </div>
           </div>

@@ -12,6 +12,7 @@ import {
   requireReceptionZoneContext,
   resolveHostZoneId,
 } from './receptionistService.js';
+import { markHostUnavailableForVisit } from './hostAvailability.js';
 
 function validateSignature(checkInSignature) {
   const signature = String(checkInSignature || '').trim();
@@ -258,6 +259,9 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     // Non-blocking
   }
 
+  const [[checkedInVisit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
+  await markHostUnavailableForVisit(pool, checkedInVisit);
+
   const [[visit]] = await pool.query(
     `SELECT ${VISIT_SELECT_FIELDS} FROM visits vis ${VISIT_JOINS} WHERE vis.id = ?`,
     [visitId],
@@ -392,6 +396,8 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
       stationId,
       reason: purpose?.trim() || null,
     });
+    const [[newDeskVisit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
+    await markHostUnavailableForVisit(pool, newDeskVisit);
   }
 
   const occupants = Math.max(0, Math.min(20, Number(occupantCount) || 0));
@@ -472,6 +478,8 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
       } catch (error) {
         console.warn('[reception_entry.vehicle] notify failed:', error.message);
       }
+      const [[deskVisit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
+      await markHostUnavailableForVisit(pool, deskVisit);
     } else {
       await pool.query(
         `UPDATE visits SET check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,

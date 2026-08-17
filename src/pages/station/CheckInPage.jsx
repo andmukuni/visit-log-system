@@ -7,10 +7,11 @@ import {
   FormField,
   LoadingButton,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
+import { getReceptionCheckInActionLabel } from '../../../shared/visitReceptionActions.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function CheckInPage() {
@@ -69,23 +70,27 @@ export default function CheckInPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (_, row) => (
+      render: (_, row) => {
+        const checkInAction = getReceptionCheckInActionLabel(row.status);
+        return (
         <LoadingButton
           loading={checkingIn === row.id}
           icon={LogIn}
           iconOnly
-          aria-label="Check in"
+          aria-label={checkInAction.label}
+          title={checkInAction.label}
           variant="primary"
           size="sm"
           onClick={() => handleCheckIn(row.id)}
         />
-      ),
+        );
+      },
     },
   ];
 

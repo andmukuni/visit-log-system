@@ -5,6 +5,8 @@ import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditServic
 import { notifyVisitEvent } from '../notificationService.js';
 import { requestHostApproval } from '../hostApprovalService.js';
 import { isCheckoutEligible, VISIT_CLOSED_STATUSES } from '../../shared/visitCheckout.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
+import { exitVisitVehicles } from '../visitExit.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
@@ -39,8 +41,6 @@ import {
 import { applyVisitAccessPolicy, applyVisitAccessPolicyToRows, auditFullRecordViewed } from '../visitorAccessPolicy.js';
 import { resolveHostZoneIds } from '../hostPortalService.js';
 
-const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
-const DESK_ON_SITE_STATUSES = ['reception_check_in', 'checked_in', 'waiting', 'in_meeting'];
 const VISIT_SCHEDULED_AT_SQL = 'COALESCE(a.scheduled_at, vis.expected_at, vis.created_at)';
 
 function siteFilterClause(scope, alias = 'vis') {
@@ -241,8 +241,7 @@ export function createReceptionRouter() {
         `AND vis.status IN ('pending_approval', 'pre_registered')`,
       );
       const checkedInAtDesk = await countVisits(
-        `AND vis.status IN (${DESK_ON_SITE_STATUSES.map(() => '?').join(', ')})`,
-        DESK_ON_SITE_STATUSES,
+        `AND ${visitOnSitePredicate('vis', { includeGate: false })}`,
       );
       const waitingForHost = await countVisits(`AND vis.status = 'waiting'`);
 
@@ -251,8 +250,8 @@ export function createReceptionRouter() {
          ${visitFrom}
          WHERE vis.organisation_id = ?${site.sql}${inZone.sql}
            AND vis.host_id IS NOT NULL
-           AND vis.status IN (${HOST_OCCUPIED_STATUSES.map(() => '?').join(', ')})`,
-        [...baseParams, ...HOST_OCCUPIED_STATUSES],
+           AND ${visitOnSitePredicate('vis', { hostOccupied: true })}`,
+        [...baseParams],
       );
 
       const checkInRows = await fetchCheckInAppointments(scope, 'all', zoneReq.zoneIds);
@@ -506,7 +505,7 @@ export function createReceptionRouter() {
       hostFilter += zoneSql;
       params.push(...zoneParams);
 
-      const occupiedPlaceholders = HOST_OCCUPIED_STATUSES.map(() => '?').join(', ');
+      const occupiedPredicate = visitOnSitePredicate('vis', { hostOccupied: true });
 
       const [rows] = await pool.query(
         `SELECT h.id, h.name, h.email, h.department_id, h.office_id, h.site_id,
@@ -522,7 +521,7 @@ export function createReceptionRouter() {
                   INNER JOIN visitors v ON v.id = vis.visitor_id
                   WHERE vis.host_id = h.id
                     AND vis.organisation_id = h.organisation_id
-                    AND vis.status IN (${occupiedPlaceholders})
+                    AND ${occupiedPredicate}
                   ORDER BY COALESCE(vis.checked_in_at, vis.updated_at) DESC
                   LIMIT 1
                 ) AS current_visitor_name,
@@ -531,7 +530,7 @@ export function createReceptionRouter() {
                   FROM visits vis
                   WHERE vis.host_id = h.id
                     AND vis.organisation_id = h.organisation_id
-                    AND vis.status IN (${occupiedPlaceholders})
+                    AND ${occupiedPredicate}
                   ORDER BY COALESCE(vis.checked_in_at, vis.updated_at) DESC
                   LIMIT 1
                 ) AS current_visit_status,
@@ -540,7 +539,7 @@ export function createReceptionRouter() {
                   FROM visits vis
                   WHERE vis.host_id = h.id
                     AND vis.organisation_id = h.organisation_id
-                    AND vis.status IN (${occupiedPlaceholders})
+                    AND ${occupiedPredicate}
                   ORDER BY COALESCE(vis.checked_in_at, vis.updated_at) DESC
                   LIMIT 1
                 ) AS occupied_since
@@ -549,7 +548,7 @@ export function createReceptionRouter() {
          LEFT JOIN offices o ON o.id = h.office_id
          WHERE h.organisation_id = ?${hostFilter}
          ORDER BY h.name ASC`,
-        [...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...HOST_OCCUPIED_STATUSES, ...params],
+        [...params],
       );
 
       res.json({ ok: true, data: rows });
@@ -572,13 +571,12 @@ export function createReceptionRouter() {
       }
 
       const includeReady = String(req.query.includeReady || '1') === '1';
-      const statuses = includeReady
-        ? ['waiting', 'pending_approval', 'reception_check_in', 'checked_in']
-        : ['waiting', 'pending_approval'];
+      const statusClause = includeReady
+        ? visitOnSitePredicate('vis', { includeGate: false })
+        : `(vis.status = 'waiting' OR (vis.status = 'pending_approval' AND vis.checked_in_at IS NOT NULL))`;
 
       const { site } = receptionVisitFilters(scope, zoneReq.zoneIds);
       const { sql: zoneMatchSql, params: zoneMatchParams } = visitZoneMatchExpr(zoneReq.zoneIds);
-      const placeholders = statuses.map(() => '?').join(', ');
 
       const [rows] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS},
@@ -596,10 +594,10 @@ export function createReceptionRouter() {
          LEFT JOIN appointments a ON a.visit_id = vis.id
          LEFT JOIN visit_events ve ON ve.visit_id = vis.id AND ve.event_type = 'waiting'
          WHERE vis.organisation_id = ?${site.sql}
-           AND vis.status IN (${placeholders})
+           AND ${statusClause}
          ORDER BY COALESCE(ve.created_at, vis.checked_in_at, vis.updated_at) ASC
          LIMIT 200`,
-        [...zoneMatchParams, scope.organisation_id, ...site.params, ...statuses],
+        [...zoneMatchParams, scope.organisation_id, ...site.params],
       );
 
       const perms = permissionsFromRequest(req);
@@ -642,7 +640,7 @@ export function createReceptionRouter() {
          ${ZONE_OFFICE_JOINS}
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
          WHERE vis.organisation_id = ?${site.sql}
-           AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')
+           AND ${visitOnSitePredicate('vis', { includeGate: false })}
          ORDER BY vis.checked_in_at DESC`,
         [...zoneMatchParams, ...params],
       );
@@ -976,7 +974,8 @@ export function createReceptionRouter() {
       }
 
       const visit = loaded.visit;
-      if (!canTransition(visit.status, 'pending_approval')) {
+      const alreadyQueued = visit.status === 'pending_approval';
+      if (!alreadyQueued && !canTransition(visit.status, 'pending_approval')) {
         return res.status(400).json({
           ok: false,
           message: `Cannot queue from ${visit.status}. Check the visitor in at the desk first.`,
@@ -1097,22 +1096,27 @@ export function createReceptionRouter() {
           departmentId: nextDepartmentId,
           officeId: nextOfficeId,
           queuedBy: 'reception',
+          resend: alreadyQueued,
         },
       });
 
       const approval = await requestHostApproval(pool, {
         visitId,
         requestedByUserId: userId,
+        resend: alreadyQueued,
       });
 
       res.json({
         ok: true,
-        message: 'Visitor sent to host for approval.',
+        message: alreadyQueued
+          ? 'Approval request resent to host.'
+          : 'Visitor sent to host for approval.',
         data: {
           hostId: nextHostId,
           departmentId: nextDepartmentId,
           officeId: nextOfficeId,
           hostContactDeliverable: approval.hostContactDeliverable,
+          approvalUrl: approval.approvalUrl,
         },
       });
     } catch (error) {
@@ -1145,7 +1149,7 @@ export function createReceptionRouter() {
       }
 
       const visit = loaded.visit;
-      if (!isCheckoutEligible(visit.status)) {
+      if (!isCheckoutEligible(visit)) {
         return res.status(400).json({ ok: false, message: 'Visitor is not checked in.' });
       }
 
@@ -1153,6 +1157,8 @@ export function createReceptionRouter() {
         `UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW() WHERE id = ?`,
         [visitId],
       );
+
+      await exitVisitVehicles(pool, { visitId, stationId: scopeResult.scope?.station_id });
 
       if (visit.badge_number) {
         await pool.query(
@@ -1213,11 +1219,15 @@ export function createReceptionRouter() {
       const approval = await requestHostApproval(pool, {
         visitId,
         requestedByUserId: userId,
+        resend: visit.status === 'pending_approval',
       });
       res.json({
         ok: true,
         message: 'Approval request sent to host.',
-        data: { hostContactDeliverable: approval.hostContactDeliverable },
+        data: {
+          hostContactDeliverable: approval.hostContactDeliverable,
+          approvalUrl: approval.approvalUrl,
+        },
       });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -1388,12 +1398,14 @@ export function createReceptionRouter() {
         stationId: scope.station_id,
       });
       let hostContactDeliverable = null;
+      let approvalUrl = null;
       if (initialStatus === 'pending_approval') {
         const approval = await requestHostApproval(pool, {
           visitId,
           requestedByUserId: userId,
         });
         hostContactDeliverable = approval.hostContactDeliverable;
+        approvalUrl = approval.approvalUrl;
       } else {
         await notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId });
       }
@@ -1406,6 +1418,7 @@ export function createReceptionRouter() {
           status: initialStatus,
           zone_id: visitZoneId,
           hostContactDeliverable,
+          approvalUrl,
         },
       });
     } catch (error) {

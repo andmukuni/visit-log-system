@@ -12,6 +12,7 @@ import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { resolveHostZoneId } from '../receptionistService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertHostContact, upsertVisitorContactDetails } from '../accessSchema.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 
 function normalizeNrc(value) {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
@@ -169,7 +170,7 @@ export function createExecutiveRouter() {
             weekAppointments: await countAppointments(
               'AND a.scheduled_at >= CURDATE() AND a.scheduled_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)',
             ),
-            onSiteNow: await countVisits(`AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`),
+            onSiteNow: await countVisits(`AND ${visitOnSitePredicate('vis', { includeGate: false })}`),
             pendingApprovals: await countVisits(`AND vis.status IN ('pending_approval', 'pre_registered')`),
             vipToday: todaySchedule.filter((row) => ['vip', 'vvip'].includes(String(row.classification || '').toLowerCase())).length,
             completedThisWeek: await countVisits(
@@ -369,7 +370,7 @@ export function createExecutiveRouter() {
         ),
         awaiting: await countByTab(`AND vis.status IN ('pending_approval', 'pre_registered')`),
         all: await countByTab(''),
-        onSiteNow: await countVisits(`AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`),
+        onSiteNow: await countVisits(`AND ${visitOnSitePredicate('vis', { includeGate: false })}`),
         completedThisMonth: await countVisits(
           `AND vis.status IN ('completed', 'checked_out')
            AND vis.updated_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
@@ -781,7 +782,7 @@ export function createExecutiveRouter() {
       } else if (tab === 'week') {
         filters += ` AND vis.expected_at >= CURDATE() AND vis.expected_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)`;
       } else if (tab === 'on_site') {
-        filters += ` AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`;
+        filters += ` AND ${visitOnSitePredicate('vis', { includeGate: false })}`;
       } else if (tab === 'completed') {
         filters += ` AND vis.status IN ('completed', 'checked_out')`;
       } else if (tab === 'cancelled') {
@@ -858,7 +859,7 @@ export function createExecutiveRouter() {
           'AND vis.expected_at >= CURDATE() AND vis.expected_at < DATE_ADD(CURDATE(), INTERVAL 7 DAY)',
         ),
         awaiting: await countVisits(`AND vis.status IN ('pending_approval', 'pre_registered')`),
-        onSite: await countVisits(`AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')`),
+        onSite: await countVisits(`AND ${visitOnSitePredicate('vis', { includeGate: false })}`),
         all: await countVisits(''),
         completedThisMonth: await countVisits(
           `AND vis.status IN ('completed', 'checked_out')

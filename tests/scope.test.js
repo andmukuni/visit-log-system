@@ -35,6 +35,25 @@ describe('visit state transitions', () => {
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('rejected'));
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('waiting'));
     assert.ok(VISIT_TRANSITIONS.reception_check_in.includes('pending_approval'));
+    assert.ok(VISIT_TRANSITIONS.rejected.includes('pending_approval'));
+    assert.ok(VISIT_TRANSITIONS.rejected.includes('checked_out'));
+    assert.ok(VISIT_TRANSITIONS.pending_approval.includes('checked_out'));
+    assert.ok(VISIT_TRANSITIONS.arrived_at_gate.includes('checked_in'));
+  });
+
+  it('allows kiosk/staff check-in after gate arrival', () => {
+    assert.equal(canTransition('arrived_at_gate', 'checked_in'), true);
+    assert.equal(canTransition('entered_premises', 'checked_in'), true);
+  });
+
+  it('allows checkout of an on-site queued guest', () => {
+    assert.equal(canTransition('pending_approval', 'checked_out'), true);
+  });
+
+  it('allows overdue from active desk statuses', () => {
+    assert.equal(canTransition('waiting', 'overdue'), true);
+    assert.equal(canTransition('in_meeting', 'overdue'), true);
+    assert.equal(canTransition('overdue', 'checked_out'), true);
   });
 });
 

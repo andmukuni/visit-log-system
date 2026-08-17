@@ -1,11 +1,11 @@
 /** Persist and sync host available / unavailable presence for reception boards. */
 
+import { visitOnSitePredicate } from '../shared/visitOnSite.js';
+
 export const HOST_AVAILABILITY = {
   available: 'available',
   unavailable: 'unavailable',
 };
-
-const BUSY_VISIT_STATUSES = ['in_meeting'];
 
 export function normalizeHostAvailability(raw) {
   const value = String(raw || '').toLowerCase().trim();
@@ -31,21 +31,20 @@ export async function markHostUnavailableForVisit(pool, visit) {
 }
 
 /**
- * Mark host available again when they have no remaining busy visits
- * (in_meeting). Manual unavailable is cleared only when no busy visits remain.
+ * Mark host available again when they have no remaining on-site guests
+ * at the desk (including queued-on-site pending_approval).
  */
 export async function refreshHostAvailabilityAfterVisit(pool, visit) {
   const hostId = visit?.host_id;
   if (!hostId) return;
 
-  const placeholders = BUSY_VISIT_STATUSES.map(() => '?').join(', ');
   const [[row]] = await pool.query(
-    `SELECT COUNT(*) AS count FROM visits
-     WHERE host_id = ?
-       AND organisation_id = ?
-       AND status IN (${placeholders})
-       AND id <> ?`,
-    [hostId, visit.organisation_id, ...BUSY_VISIT_STATUSES, visit.id],
+    `SELECT COUNT(*) AS count FROM visits vis
+     WHERE vis.host_id = ?
+       AND vis.organisation_id = ?
+       AND ${visitOnSitePredicate('vis', { hostOccupied: true })}
+       AND vis.id <> ?`,
+    [hostId, visit.organisation_id, visit.id],
   );
 
   if (Number(row?.count || 0) === 0) {

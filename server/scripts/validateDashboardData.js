@@ -19,7 +19,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { isPostgresDriver, resolveDbDriver, runPostgresQuery } from '../sqlDialect.js';
-import { ON_SITE_VISIT_STATUSES } from '../dashboardStats.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -95,7 +95,9 @@ async function reportOrganisationKpis(pool, org) {
   console.log(`\n── ${org.name} (${org.slug || org.id}) ──`);
 
   const orgParams = [org.id];
-  const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
+  const onSiteSql = visitOnSitePredicate('vis');
+  const deskOnSiteSql = visitOnSitePredicate('vis', { includeGate: false });
+  const hostOccupiedSql = visitOnSitePredicate('vis', { hostOccupied: true });
 
   const kpis = {
     'Visits created today': await countRows(
@@ -130,14 +132,14 @@ async function reportOrganisationKpis(pool, org) {
     ),
     'On-site now (all on-site statuses)': await countRows(
       pool,
-      `SELECT COUNT(*) AS count FROM visits
-       WHERE organisation_id = ? AND status IN (${onSitePlaceholders})`,
-      [org.id, ...ON_SITE_VISIT_STATUSES],
+      `SELECT COUNT(*) AS count FROM visits vis
+       WHERE vis.organisation_id = ? AND ${onSiteSql}`,
+      orgParams,
     ),
     'At desk (reception_check_in/checked_in/waiting/in_meeting)': await countRows(
       pool,
-      `SELECT COUNT(*) AS count FROM visits
-       WHERE organisation_id = ? AND status IN ('reception_check_in', 'checked_in', 'waiting', 'in_meeting')`,
+      `SELECT COUNT(*) AS count FROM visits vis
+       WHERE vis.organisation_id = ? AND ${deskOnSiteSql}`,
       orgParams,
     ),
     'Waiting for host': await countRows(
@@ -147,9 +149,9 @@ async function reportOrganisationKpis(pool, org) {
     ),
     'Hosts occupied': await countRows(
       pool,
-      `SELECT COUNT(DISTINCT host_id) AS count FROM visits
-       WHERE organisation_id = ? AND host_id IS NOT NULL
-         AND status IN ('waiting', 'in_meeting', 'reception_check_in', 'checked_in')`,
+      `SELECT COUNT(DISTINCT vis.host_id) AS count FROM visits vis
+       WHERE vis.organisation_id = ? AND vis.host_id IS NOT NULL
+         AND ${hostOccupiedSql}`,
       orgParams,
     ),
     'Visits last 7 days': await countRows(

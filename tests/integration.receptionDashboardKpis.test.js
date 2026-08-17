@@ -17,6 +17,7 @@ import {
 } from '../server/receptionistService.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../shared/visitCheckIn.js';
 import { VISIT_CLOSED_STATUSES } from '../shared/visitCheckout.js';
+import { visitOnSitePredicate } from '../shared/visitOnSite.js';
 import appPool from '../server/db.js';
 
 after(async () => { try { await appPool.end(); } catch { /* never opened */ } });
@@ -166,6 +167,28 @@ describe('reception dashboard KPIs — live host_zones, not snapshot zone_id', (
     assert.equal(
       await countDashboard(`AND vis.id = 'visit-live-checked-out' AND vis.status NOT IN (${closedPlaceholders})`, [...VISIT_CLOSED_STATUSES]),
       0,
+    );
+  });
+
+  it('does not count pre-arrival pending_approval as desk occupancy', async () => {
+    assert.equal(
+      await countDashboard(`AND ${visitOnSitePredicate('vis', { includeGate: false })}`),
+      1,
+      'only the waiting guest is at the desk',
+    );
+
+    await seedVisit(pool, {
+      id: 'visit-live-queued-onsite',
+      hostId: 'host-live',
+      zoneId: null,
+      status: 'pending_approval',
+      checkedInAt: '2026-08-17T10:00:00Z',
+    });
+
+    assert.equal(
+      await countDashboard(`AND ${visitOnSitePredicate('vis', { includeGate: false })}`),
+      2,
+      'queued-on-site pending_approval with checked_in_at counts as occupancy',
     );
   });
 });

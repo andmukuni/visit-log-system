@@ -7,10 +7,11 @@ import {
   FormField,
   LoadingButton,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
 } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { formatDateTime } from '../../utils/helpers';
+import { getGateCheckoutActionLabel } from '../../../shared/visitCheckout.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 export default function CheckOutPage() {
@@ -26,9 +27,9 @@ export default function CheckOutPage() {
     if (!query.trim()) return;
     setSearching(true);
     try {
-      const rows = await visitorApi.lookupVisit(query.trim());
-      setResults(rows.filter((v) => v.status === 'checked_in'));
-      if (rows.filter((v) => v.status === 'checked_in').length === 0) {
+      const rows = await visitorApi.lookupVisit(query.trim(), undefined, 'checkout');
+      setResults(Array.isArray(rows) ? rows : []);
+      if (!rows?.length) {
         toast.info('No checked-in visitors found.');
       }
     } catch (err) {
@@ -38,11 +39,18 @@ export default function CheckOutPage() {
     }
   };
 
-  const handleCheckOut = async (visitId) => {
+  const handleCheckOut = async (row) => {
+    const visitId = row.id;
+    const alreadyCheckedOut = row.status === 'checked_out';
     setCheckingOut(visitId);
     try {
-      await visitorApi.checkOutVisit(visitId);
-      toast.success('Visitor checked out. Badge returned.');
+      if (alreadyCheckedOut) {
+        await visitorApi.markLeftPremises(visitId);
+        toast.success('Visitor marked as left premises.');
+      } else {
+        await visitorApi.checkOutVisit(visitId);
+        toast.success('Visitor checked out. Badge returned.');
+      }
       setResults((prev) => prev.filter((v) => v.id !== visitId));
     } catch (err) {
       toast.error(err.message);
@@ -62,23 +70,27 @@ export default function CheckOutPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (_, row) => (
-        <LoadingButton
-          loading={checkingOut === row.id}
-          icon={LogOut}
-          iconOnly
-          aria-label="Check out"
-          variant="primary"
-          size="sm"
-          onClick={() => handleCheckOut(row.id)}
-        />
-      ),
+      render: (_, row) => {
+        const checkoutAction = getGateCheckoutActionLabel(row);
+        return (
+          <LoadingButton
+            loading={checkingOut === row.id}
+            icon={LogOut}
+            iconOnly
+            aria-label={checkoutAction.label}
+            title={checkoutAction.label}
+            variant="primary"
+            size="sm"
+            onClick={() => handleCheckOut(row)}
+          />
+        );
+      },
     },
   ];
 

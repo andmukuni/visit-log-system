@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, UserPlus } from 'lucide-react';
+import { Eye, UserCheck, UserPlus } from 'lucide-react';
 import {
   PageHeader,
   Card,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
   Spinner,
   ActionToolbar,
   RefreshAction,
@@ -17,6 +17,7 @@ import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
+import { canQueueVisitToHost, canMarkInMeeting } from '../../../shared/visitReceptionActions.js';
 
 function waitDuration(row) {
   const start = row.queued_at || row.checked_in_at || row.check_in_at || row.updated_at;
@@ -49,10 +50,6 @@ function HostAvailabilityBadge({ availability }) {
   );
 }
 
-function canQueueVisit(row) {
-  return ['reception_check_in', 'checked_in'].includes(row?.status);
-}
-
 export default function ReceptionHostQueuePage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -63,6 +60,7 @@ export default function ReceptionHostQueuePage() {
   const [loading, setLoading] = useState(true);
   const [queueVisit, setQueueVisit] = useState(null);
   const [queuing, setQueuing] = useState(false);
+  const [meetingVisitId, setMeetingVisitId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,6 +105,19 @@ export default function ReceptionHostQueuePage() {
     }
   };
 
+  const handleMarkInMeeting = async (visitId) => {
+    setMeetingVisitId(visitId);
+    try {
+      await receptionApi.markInMeeting(visitId);
+      toast.success('Visitor marked as with host.');
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setMeetingVisitId(null);
+    }
+  };
+
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
     {
@@ -122,7 +133,7 @@ export default function ReceptionHostQueuePage() {
     {
       key: 'status',
       label: 'Visit status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'wait',
@@ -140,7 +151,7 @@ export default function ReceptionHostQueuePage() {
       align: 'right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-          {canQueueVisit(row) ? (
+          {canQueueVisitToHost(row) ? (
             <IconButton
               icon={UserPlus}
               label="Queue to host"
@@ -148,6 +159,17 @@ export default function ReceptionHostQueuePage() {
               size="sm"
               variant="ghost"
               onClick={() => setQueueVisit(row)}
+            />
+          ) : null}
+          {canMarkInMeeting(row) ? (
+            <IconButton
+              icon={UserCheck}
+              label="With host"
+              tooltip="Mark visitor as with host"
+              size="sm"
+              variant="ghost"
+              disabled={meetingVisitId === row.id}
+              onClick={() => void handleMarkInMeeting(row.id)}
             />
           ) : null}
           <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name || 'visitor'}`}>

@@ -102,9 +102,7 @@ function normalizeStatusKey(status) {
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
   // Collapse visit statuses that mean the same thing in different places
-  // (e.g. 'waiting' and 'in_meeting') onto one canonical key, so every page
-  // that renders a visit status agrees on wording and color. These keys are
-  // exclusive to visits — no other entity in the app uses them.
+  // (e.g. entered_premises → reception_check_in) onto one canonical key.
   return VISIT_STATUS_ALIASES[raw] || raw;
 }
 

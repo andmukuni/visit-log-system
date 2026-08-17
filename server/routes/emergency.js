@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../db.js';
 import { requireUserScope } from '../scopeService.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 import {
   listRollCalls,
   getActiveRollCall,
@@ -33,7 +34,7 @@ export function createEmergencyRouter() {
       params.push(...siteParams);
 
       const [[currentlyInside]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits vis WHERE vis.organisation_id = ?${sql} AND vis.status = 'checked_in'`,
+        `SELECT COUNT(*) AS count FROM visits vis WHERE vis.organisation_id = ?${sql} AND ${visitOnSitePredicate('vis')}`,
         params,
       );
 
@@ -76,7 +77,7 @@ export function createEmergencyRouter() {
          INNER JOIN visitors v ON v.id = vis.visitor_id
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN sites s ON s.id = vis.site_id
-         WHERE vis.organisation_id = ?${sql} AND vis.status = 'checked_in'
+         WHERE vis.organisation_id = ?${sql} AND ${visitOnSitePredicate('vis')}
          ORDER BY vis.checked_in_at DESC`,
         params,
       );

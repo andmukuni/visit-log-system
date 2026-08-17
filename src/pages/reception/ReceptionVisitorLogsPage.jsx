@@ -6,7 +6,7 @@ import {
   Card,
   FormField,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
   Spinner,
   FilterPills,
   IconButton,
@@ -98,7 +98,7 @@ export default function ReceptionVisitorLogsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'created_at',
@@ -111,7 +111,7 @@ export default function ReceptionVisitorLogsPage() {
       align: 'right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-1">
-          {isCheckoutEligible(row.status) && (
+          {isCheckoutEligible(row) && (
             <IconButton
               icon={LogOut}
               label="Check out"

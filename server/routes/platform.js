@@ -9,6 +9,7 @@ import { getEmailProviderStatus } from '../adapters/emailAdapter.js';
 import { getSmsProviderStatus } from '../adapters/smsAdapter.js';
 import { getDeliveryStats } from '../notificationService.js';
 import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend } from '../dashboardStats.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 
 function organisationSlug(value) {
   return String(value || '')
@@ -79,7 +80,9 @@ export function createPlatformRouter() {
       const [[orgCount]] = await pool.query(`SELECT COUNT(*) AS count FROM organisations`);
       const [[userCount]] = await pool.query(`SELECT COUNT(*) AS count FROM users`);
       const [[activeOrgs]] = await pool.query(`SELECT COUNT(*) AS count FROM organisations WHERE status = 'active'`);
-      const [[checkedInNow]] = await pool.query(`SELECT COUNT(*) AS count FROM visits WHERE status = 'checked_in'`);
+      const [[checkedInNow]] = await pool.query(
+        `SELECT COUNT(*) AS count FROM visits vis WHERE ${visitOnSitePredicate('vis')}`,
+      );
       const [[pendingApprovals]] = await pool.query(
         `SELECT COUNT(*) AS count FROM visits WHERE status IN ('pending_approval', 'pre_registered')`,
       );

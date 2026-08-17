@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { LogIn, LogOut, Send, Users } from 'lucide-react';
+import { LogIn, LogOut, Send, UserCheck, Users } from 'lucide-react';
 import { LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
@@ -10,6 +10,8 @@ import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import {
   getReceptionVisitAction,
+  canQueueVisitToHost,
+  canMarkInMeeting,
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
@@ -21,17 +23,18 @@ const RECEPTION_ACTION_ICONS = {
   queue: Users,
 };
 
-function ReceptionHeroActions({ visit, onQueueHost, onCheckOut, checkingOut }) {
-  const action = getReceptionVisitAction(visit.status);
-  const canQueue = ['reception_check_in', 'checked_in'].includes(visit.status);
-  const canCheckOut = isCheckoutEligible(visit.status);
+function ReceptionHeroActions({ visit, onQueueHost, onMarkInMeeting, onCheckOut, checkingOut, markingInMeeting }) {
+  const action = getReceptionVisitAction(visit);
+  const canQueue = canQueueVisitToHost(visit);
+  const canMeeting = canMarkInMeeting(visit);
+  const canCheckOut = isCheckoutEligible(visit);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
 
-  if (!action?.show && !canQueue && !canCheckOut) return null;
+  if (!action?.show && !canQueue && !canMeeting && !canCheckOut) return null;
 
   return (
     <>
-      {action?.show && action.href && !action.disabled ? (
+      {action?.show && action.href && !action.disabled && !canQueue ? (
         <Link
           to={receptionActionHref(action, visit.id)}
           className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors ${receptionActionButtonClass(action.tone)}`}
@@ -53,6 +56,17 @@ function ReceptionHeroActions({ visit, onQueueHost, onCheckOut, checkingOut }) {
           className="border-cyan-600 bg-cyan-600 hover:bg-cyan-500"
         >
           Queue to host
+        </LoadingButton>
+      ) : null}
+      {canMeeting ? (
+        <LoadingButton
+          size="md"
+          icon={UserCheck}
+          loading={markingInMeeting}
+          onClick={onMarkInMeeting}
+          className="border-violet-600 bg-violet-600 hover:bg-violet-500"
+        >
+          With host
         </LoadingButton>
       ) : null}
       {canCheckOut ? (
@@ -83,6 +97,7 @@ export default function ReceptionVisitDetailPage() {
   const [visitForModal, setVisitForModal] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [markingInMeeting, setMarkingInMeeting] = useState(false);
 
   const fetchVisit = useCallback(async (visitId) => {
     const [visitData, rawRef] = await Promise.all([
@@ -127,12 +142,28 @@ export default function ReceptionVisitDetailPage() {
     }
   };
 
+  const handleMarkInMeeting = async (visit) => {
+    if (!visit?.id) return;
+    setMarkingInMeeting(true);
+    try {
+      await receptionApi.markInMeeting(visit.id);
+      toast.success(`${visit.full_name || visit.visitor_name || 'Visitor'} is with the host.`);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err.message || 'Could not update visit.');
+    } finally {
+      setMarkingInMeeting(false);
+    }
+  };
+
   const renderHeroFooter = (visit) => (
     <ReceptionHeroActions
       visit={visit}
       onQueueHost={() => setQueueOpen(true)}
+      onMarkInMeeting={() => handleMarkInMeeting(visit)}
       onCheckOut={() => handleCheckOut(visit)}
       checkingOut={checkingOut}
+      markingInMeeting={markingInMeeting}
     />
   );
 

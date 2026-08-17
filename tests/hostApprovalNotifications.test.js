@@ -5,6 +5,7 @@ import {
   seedFixture,
   seedHost,
   seedVisit,
+  seedReceptionist,
   FIXTURE,
 } from './helpers/pgMemHarness.js';
 import { notifyVisitEvent } from '../server/notificationService.js';
@@ -74,6 +75,12 @@ describe('host approval notification audiences', () => {
       inApp: 'The visit for {{visitor_name}} was rejected.',
       email: 'Hello {{visitor_name}}, rejected.',
       sms: 'Visit rejected.',
+    });
+    await seedTemplate(pool, FIXTURE.orgId, 'visit.reception_new_expected', {
+      subject: 'New expected visitor',
+      inApp: '{{visitor_name}} is expected for {{host_name}} at {{expected_at}}.',
+      email: '{{visitor_name}} expected for {{host_name}}.',
+      sms: '{{visitor_name}} expected.',
     });
   });
 
@@ -188,5 +195,71 @@ describe('host approval notification audiences', () => {
       || r.recipient === '+260971111111'
     ));
     assert.equal(visitorFacing.length, 0);
+  });
+
+  it('sends a reminder with a new approval URL instead of dropping it as a duplicate', async () => {
+    const { visitId } = await seedVisit(pool, {
+      id: 'visit-notify-resend',
+      hostId: host.hostId,
+      zoneId: FIXTURE.zones.ceo,
+      status: 'pending_approval',
+      createdBy: 'usr-rcp-desk',
+      approvalRequestedBy: 'usr-rcp-desk',
+    });
+
+    await notifyVisitEvent(pool, {
+      visitId,
+      eventType: 'pending_approval',
+      actorUserId: 'usr-rcp-desk',
+      extra: { approval_url: 'https://app.example/visit/host-approval/first-token' },
+      notifyVisitor: false,
+      orgSettings: DEFAULT_NOTIFICATIONS,
+    });
+    await notifyVisitEvent(pool, {
+      visitId,
+      eventType: 'pending_approval',
+      actorUserId: 'usr-rcp-desk',
+      extra: { approval_url: 'https://app.example/visit/host-approval/second-token' },
+      notifyVisitor: false,
+      skipReceptionExpected: true,
+      notificationKeySuffix: 'nudge:abc123',
+      orgSettings: DEFAULT_NOTIFICATIONS,
+    });
+
+    const rows = await listDeliveries(visitId);
+    const hostEmail = rows.filter((r) => r.channel === 'email' && r.notification_type === 'visit.pending_approval');
+    assert.equal(hostEmail.length, 2);
+    assert.equal(hostEmail.some((r) => /first-token/.test(r.body)), true);
+    assert.equal(hostEmail.some((r) => /second-token/.test(r.body)), true);
+  });
+
+  it('does not ping other receptionists when an on-site guest is queued for approval', async () => {
+    await seedReceptionist(pool, {
+      id: 'rcp-ceo-desk',
+      name: 'CEO Desk',
+      zoneIds: [FIXTURE.zones.ceo],
+    });
+    const { visitId } = await seedVisit(pool, {
+      id: 'visit-notify-onsite-queue',
+      hostId: host.hostId,
+      zoneId: FIXTURE.zones.ceo,
+      status: 'pending_approval',
+      createdBy: 'usr-rcp-desk',
+      approvalRequestedBy: 'usr-rcp-desk',
+      checkedInAt: '2026-08-17T10:00:00Z',
+    });
+
+    await notifyVisitEvent(pool, {
+      visitId,
+      eventType: 'pending_approval',
+      actorUserId: 'usr-rcp-desk',
+      extra: { approval_url: 'https://app.example/visit/host-approval/onsite-token' },
+      notifyVisitor: false,
+      orgSettings: DEFAULT_NOTIFICATIONS,
+    });
+
+    const rows = await listDeliveries(visitId);
+    assert.equal(rows.some((r) => r.notification_type === 'visit.reception_new_expected'), false);
+    assert.equal(rows.some((r) => r.notification_type === 'visit.pending_approval'), true);
   });
 });

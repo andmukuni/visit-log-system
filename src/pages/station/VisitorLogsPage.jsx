@@ -6,7 +6,7 @@ import {
   Card,
   FormField,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
   Spinner,
   FilterPills,
   IconButton,
@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'pending_approval', label: 'Pending approval' },
   { value: 'approved', label: 'Approved' },
-  { value: 'checked_in', label: 'Checked in' },
+  { value: 'checked_in', label: 'On site' },
   { value: 'completed', label: 'Completed' },
   { value: 'rejected', label: 'Rejected' },
 ];
@@ -88,7 +88,7 @@ export default function VisitorLogsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'created_at',

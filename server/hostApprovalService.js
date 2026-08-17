@@ -5,6 +5,7 @@ import { canTransition } from './scopeService.js';
 import { createAppointmentForVisit } from './accessSchema.js';
 import { resolveHostZoneId } from './receptionistService.js';
 import { notifyVisitEvent } from './notificationService.js';
+import { markHostUnavailableForVisit, refreshHostAvailabilityAfterVisit } from './hostAvailability.js';
 import { getAppBaseUrl } from './adapters/deliveryConfig.js';
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -124,9 +125,21 @@ export async function invalidateHostApprovalTokens(pool, visitId) {
   );
 }
 
-export async function issueHostApprovalToken(pool, visitId) {
+export async function invalidateOtherHostApprovalTokens(pool, visitId, keepTokenId) {
+  if (!visitId || !keepTokenId) return;
+  await pool.query(
+    `UPDATE visit_host_approval_tokens
+     SET used_at = NOW()
+     WHERE visit_id = ? AND used_at IS NULL AND id != ?`,
+    [visitId, keepTokenId],
+  );
+}
+
+export async function issueHostApprovalToken(pool, visitId, { invalidateExisting = true } = {}) {
   await ensureHostApprovalSchema(pool);
-  await invalidateHostApprovalTokens(pool, visitId);
+  if (invalidateExisting) {
+    await invalidateHostApprovalTokens(pool, visitId);
+  }
 
   const rawToken = generateHostApprovalToken();
   const tokenHash = hashHostApprovalToken(rawToken);
@@ -177,10 +190,20 @@ export async function setApprovalRequestedBy(pool, visitId, userId) {
 
 /**
  * Stamp the requesting receptionist, issue a hashed token, and notify the host.
+ * Reminders (`resend: true`) keep the previous link live until the new message
+ * is actually queued, then rotate — and use a unique idempotency key so the
+ * new URL is not silently dropped.
  */
-export async function requestHostApproval(pool, { visitId, requestedByUserId = null }) {
+export async function requestHostApproval(pool, {
+  visitId,
+  requestedByUserId = null,
+  resend = false,
+  notify = true,
+}) {
   await setApprovalRequestedBy(pool, visitId, requestedByUserId);
-  const issued = await issueHostApprovalToken(pool, visitId);
+  const issued = await issueHostApprovalToken(pool, visitId, {
+    invalidateExisting: !resend,
+  });
 
   const [[visit]] = await pool.query(
     `SELECT vis.host_id, vis.status, vis.checked_in_at
@@ -196,21 +219,41 @@ export async function requestHostApproval(pool, { visitId, requestedByUserId = n
   }
   const hostContactDeliverable = await hostHasDeliveryContact(pool, visit?.host_id);
 
-  await notifyVisitEvent(pool, {
-    visitId,
-    eventType: 'pending_approval',
-    actorUserId: requestedByUserId,
-    extra: {
-      approval_url: issued.approvalUrl,
-      approval_context: approvalContextForVisit(visit),
-      request_kind: visitApprovalKind(visit),
-    },
-    notifyVisitor: false,
-  });
+  let notified = false;
+  try {
+    if (notify) {
+      await notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'pending_approval',
+        actorUserId: requestedByUserId,
+        extra: {
+          approval_url: issued.approvalUrl,
+          approval_context: approvalContextForVisit(visit),
+          request_kind: visitApprovalKind(visit),
+        },
+        notifyVisitor: false,
+        skipReceptionExpected: resend || isReceptionQueueVisit(visit),
+        notificationKeySuffix: resend ? `nudge:${crypto.randomBytes(4).toString('hex')}` : null,
+      });
+    }
+    notified = true;
+    if (resend) {
+      await invalidateOtherHostApprovalTokens(pool, visitId, issued.id);
+    }
+  } catch (error) {
+    console.warn('[host.approval.request] notify failed:', error.message);
+    if (resend) {
+      await pool.query(
+        `UPDATE visit_host_approval_tokens SET used_at = NOW() WHERE id = ? AND used_at IS NULL`,
+        [issued.id],
+      );
+    }
+  }
 
   return {
     approvalUrl: issued.approvalUrl,
     hostContactDeliverable,
+    notified: notify ? notified : false,
   };
 }
 
@@ -384,6 +427,10 @@ export async function applyHostApproval(pool, {
 
   await invalidateHostApprovalTokens(pool, visit.id);
 
+  if (isReceptionQueue || nextStatus === 'waiting') {
+    await markHostUnavailableForVisit(pool, { ...visit, host_id: hostRow.id });
+  }
+
   if (notify) {
     try {
       await notifyVisitEvent(pool, {
@@ -460,6 +507,7 @@ export async function applyHostRejection(pool, {
   });
 
   await invalidateHostApprovalTokens(pool, visit.id);
+  await refreshHostAvailabilityAfterVisit(pool, visit);
 
   if (notify) {
     try {

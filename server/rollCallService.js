@@ -1,4 +1,4 @@
-import pool from './db.js';
+import { visitOnSitePredicate } from '../shared/visitOnSite.js';
 import { generateId } from './visitorSchema.js';
 import { writeAuditLog } from './auditService.js';
 
@@ -113,7 +113,7 @@ export async function startRollCall(pool, {
   const [checkedIn] = await pool.query(
     `SELECT vis.id AS visit_id, vis.visitor_id
      FROM visits vis
-     WHERE vis.organisation_id = ? AND vis.status = 'checked_in'${siteSql}`,
+     WHERE vis.organisation_id = ? AND ${visitOnSitePredicate('vis')}${siteSql}`,
     visitParams,
   );
 

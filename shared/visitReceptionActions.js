@@ -1,7 +1,24 @@
+import { visitHasCheckedIn } from './visitCheckout.js';
+
 /** Reception portal — primary action label/href per visit status stage. */
 
 export function normalizeVisitStatus(raw) {
   return String(raw || '').toLowerCase().trim();
+}
+
+/** Desk can queue a visitor who is checked in, or re-queue an on-site reject. */
+export function canQueueVisitToHost(visit) {
+  const status = normalizeVisitStatus(visit?.status ?? visit);
+  if (['reception_check_in', 'checked_in'].includes(status)) return true;
+  if (status === 'rejected' && visitHasCheckedIn(typeof visit === 'object' ? visit : null)) {
+    return true;
+  }
+  return false;
+}
+
+/** Reception can send a waiting guest to the host (in meeting). */
+export function canMarkInMeeting(visit) {
+  return normalizeVisitStatus(visit?.status ?? visit) === 'waiting';
 }
 
 /**
@@ -16,8 +33,34 @@ export function normalizeVisitStatus(raw) {
  *   icon?: 'check-in'|'send'|'queue',
  * }}
  */
-export function getReceptionVisitAction(rawStatus) {
-  const status = normalizeVisitStatus(rawStatus);
+export function getReceptionVisitAction(rawStatus, visit = null) {
+  const status = normalizeVisitStatus(
+    typeof rawStatus === 'object' ? rawStatus?.status : rawStatus,
+  );
+  const visitRow = typeof rawStatus === 'object' ? rawStatus : visit;
+
+  if (status === 'pending_approval' && visitHasCheckedIn(visitRow)) {
+    return {
+      stage: 'queue',
+      label: 'View host queue',
+      href: '/reception/host-queue',
+      show: true,
+      tone: 'cyan',
+      icon: 'queue',
+    };
+  }
+
+  if (status === 'rejected' && visitHasCheckedIn(visitRow)) {
+    return {
+      stage: 'reception',
+      label: 'Re-queue to host',
+      loadingLabel: 'Opening queue…',
+      href: '/reception/host-queue',
+      show: true,
+      tone: 'cyan',
+      icon: 'send',
+    };
+  }
 
   switch (status) {
     case 'arrived_at_gate':
@@ -77,11 +120,15 @@ export function getReceptionVisitAction(rawStatus) {
       return {
         stage: 'host',
         label: 'With host',
-        href: '/reception/host-queue',
-        show: true,
-        disabled: true,
-        tone: 'muted',
-        icon: 'queue',
+        href: null,
+        show: false,
+      };
+    case 'overdue':
+      return {
+        stage: 'host',
+        label: 'Overdue',
+        href: null,
+        show: false,
       };
     case 'checked_out':
     case 'left_premises':
@@ -90,7 +137,6 @@ export function getReceptionVisitAction(rawStatus) {
     case 'cancelled':
     case 'denied':
     case 'expired':
-    case 'overdue':
       return {
         stage: 'done',
         label: '',

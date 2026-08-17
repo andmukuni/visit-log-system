@@ -20,7 +20,7 @@ import {
   RefreshAction,
   ActionToolbar,
   Spinner,
-  StatusBadge,
+  VisitStatusBadge,
   ViewAllAction,
 } from '../../components/ui';
 import { DashboardOverviewLayout } from '../../components/dashboard';
@@ -138,7 +138,7 @@ export default function ReceptionDashboardPage() {
     {
       key: 'visit_status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.visit_status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} status={row.visit_status} />,
     },
   ];
 
@@ -154,7 +154,7 @@ export default function ReceptionDashboardPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status || row.visit_status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} status={row.status || row.visit_status} />,
     },
   ];
 

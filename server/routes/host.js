@@ -19,6 +19,7 @@ import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
 import { applyVisitListMasking } from '../visitResponseService.js';
 import { normalizeHostAvailability } from '../hostAvailability.js';
 import { resolveHostZoneId } from '../receptionistService.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 import { applyHostApproval, applyHostRejection } from '../hostApprovalService.js';
 
 function normalizeNrc(value) {
@@ -111,9 +112,7 @@ export function createHostRouter() {
         data: {
           pendingApprovals: await countFor(`AND vis.status IN ('pending_approval', 'pre_registered')`),
           approvedToday: await countFor(`AND vis.status = 'approved'`),
-          onSite: await countFor(
-            `AND vis.status IN ('waiting', 'in_meeting', 'reception_check_in', 'checked_in')`,
-          ),
+          onSite: await countFor(`AND ${visitOnSitePredicate('vis', { includeGate: false, includeQueuedOnSite: true })}`),
           completed: await countFor(`AND vis.status IN ('completed', 'checked_out')`),
           host: ctx.host
             ? {
@@ -213,7 +212,7 @@ export function createHostRouter() {
       const permissions = permissionsFromRequest(req);
       const [rows] = await pool.query(
         visitSelectSql(
-          `AND vis.status IN ('waiting', 'in_meeting', 'reception_check_in', 'checked_in')`,
+          `AND ${visitOnSitePredicate('vis', { includeGate: false, includeQueuedOnSite: true })}`,
           'COALESCE(vis.checked_in_at, vis.updated_at) DESC',
         ),
         [ctx.scope.organisation_id, ctx.host.id, req.adminClaims.sub],

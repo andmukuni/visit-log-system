@@ -24,8 +24,7 @@ import {
   visitZoneFilterClause,
   visitZoneMatchExpr,
 } from '../server/receptionistService.js';
-
-const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
+import { HOST_OCCUPIED_STATUSES } from '../shared/visitOnSite.js';
 
 describe('reception RBAC', () => {
   it('defines reception permission keys', () => {
@@ -117,6 +116,8 @@ describe('host occupied lifecycle', () => {
     assert.equal(canTransition('checked_in', 'pending_approval'), true);
     assert.equal(canTransition('pending_approval', 'waiting'), true);
     assert.equal(canTransition('expected', 'waiting'), false);
+    assert.equal(canTransition('rejected', 'pending_approval'), true);
+    assert.equal(canTransition('rejected', 'checked_out'), true);
   });
 });
 
@@ -132,8 +133,17 @@ describe('reception visit action labels', () => {
     assert.equal(getReceptionVisitAction('expected').label, 'Check in');
     assert.equal(getReceptionVisitAction('reception_check_in').label, 'Queue to host');
     assert.equal(getReceptionVisitAction('waiting').label, 'View host queue');
-    assert.equal(getReceptionVisitAction('in_meeting').label, 'With host');
+    assert.equal(getReceptionVisitAction('in_meeting').show, false);
+    assert.equal(getReceptionVisitAction('overdue').show, false);
     assert.equal(getReceptionVisitAction('completed').show, false);
+    assert.equal(
+      getReceptionVisitAction({ status: 'pending_approval', checked_in_at: '2026-08-17T10:00:00Z' }).label,
+      'View host queue',
+    );
+    assert.equal(
+      getReceptionVisitAction({ status: 'rejected', checked_in_at: '2026-08-17T10:00:00Z' }).label,
+      'Re-queue to host',
+    );
 
     assert.equal(getReceptionCheckInActionLabel('entered_premises').label, 'Receive at desk');
     assert.equal(getReceptionCheckInActionLabel('expected').label, 'Check in');
@@ -142,6 +152,26 @@ describe('reception visit action labels', () => {
       receptionActionHref(getReceptionVisitAction('expected'), 'vis-1'),
       '/reception/check-in?visit=vis-1',
     );
+  });
+
+  it('lets reception re-queue or check out an on-site guest after host reject', async () => {
+    const { canQueueVisitToHost } = await import('../shared/visitReceptionActions.js');
+    const { isCheckoutEligible } = await import('../shared/visitCheckout.js');
+
+    assert.equal(canQueueVisitToHost({ status: 'reception_check_in' }), true);
+    assert.equal(canQueueVisitToHost({ status: 'rejected' }), false);
+    assert.equal(canQueueVisitToHost({ status: 'rejected', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(isCheckoutEligible('rejected'), false);
+    assert.equal(isCheckoutEligible({ status: 'rejected', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(isCheckoutEligible({ status: 'pending_approval' }), false);
+    assert.equal(isCheckoutEligible({ status: 'pending_approval', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(isCheckoutEligible('waiting'), true);
+  });
+
+  it('lets reception mark a waiting guest as with host', async () => {
+    const { canMarkInMeeting } = await import('../shared/visitReceptionActions.js');
+    assert.equal(canMarkInMeeting({ status: 'waiting' }), true);
+    assert.equal(canMarkInMeeting({ status: 'reception_check_in' }), false);
   });
 });
 

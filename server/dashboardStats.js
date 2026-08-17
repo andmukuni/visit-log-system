@@ -1,20 +1,12 @@
 import { rollingWeekDates } from '../shared/rollingWeekChart.js';
 
 export { rollingWeekDates } from '../shared/rollingWeekChart.js';
+export { ON_SITE_VISIT_STATUSES } from '../shared/visitOnSite.js';
 
 export function calcVisitTrend(today, yesterday) {
   if (yesterday === 0) return today > 0 ? 100 : 0;
   return Math.round(((today - yesterday) / yesterday) * 100);
 }
-
-export const ON_SITE_VISIT_STATUSES = [
-  'checked_in',
-  'reception_check_in',
-  'waiting',
-  'in_meeting',
-  'arrived_at_gate',
-  'entered_premises',
-];
 
 export function buildSiteScopeFilter(scope, { alias = 'vis' } = {}) {
   if (!scope?.site_id) return { sql: '', params: [] };

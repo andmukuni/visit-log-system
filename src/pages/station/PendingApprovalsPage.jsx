@@ -4,7 +4,7 @@ import {
   PageHeader,
   Card,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
   Spinner,
   ActionToolbar,
   RefreshAction,
@@ -14,6 +14,7 @@ import {
 import { formatDateTime, visitorDisplayName } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
+import { visitHasCheckedIn } from '../../../shared/visitCheckout.js';
 
 const RANGE_OPTIONS = [
   { value: 'today', label: 'Today' },
@@ -106,7 +107,7 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     ...(variant === 'pending' ? [{
       key: 'created_at',
@@ -118,11 +119,13 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <ConfirmAction
-          loading={acting === row.id}
-          onClick={() => approve(row.id)}
-          label="Approve"
-        />
+        visitHasCheckedIn(row) ? null : (
+          <ConfirmAction
+            loading={acting === row.id}
+            onClick={() => approve(row.id)}
+            label="Approve"
+          />
+        )
       ),
     }] : []),
   ];

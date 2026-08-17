@@ -14,7 +14,14 @@ import { resolveViewerAccessContext, applyVisitAccessPolicyToRows } from '../vis
 import { visitZoneMatchExpr } from '../receptionistService.js';
 import { visitSecurityScopeFilterClause } from '../securityGuardService.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
-import { GATE_EXIT_ELIGIBLE_STATUSES, isGateCheckoutEligible } from '../../shared/visitCheckout.js';
+import { isGateCheckoutEligible } from '../../shared/visitCheckout.js';
+import { visitOnSitePredicate, isVisitPhysicallyOnSite } from '../../shared/visitOnSite.js';
+import {
+  applyHostApproval,
+  applyHostRejection,
+} from '../hostApprovalService.js';
+import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
+import { markOverdueVisits } from '../visitOverdue.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, applyVisitListMasking, formatVisitResponse } from '../visitResponseService.js';
@@ -25,7 +32,7 @@ import {
   canTransitionVehicle,
 } from '../accessSchema.js';
 import { lookupNrc, getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
-import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend, fetchSecurityEventsByType, siteScopeFromId, ON_SITE_VISIT_STATUSES } from '../dashboardStats.js';
+import { fetchVisitsTodayYesterday, fetchWeeklyVisits, fetchWeeklyWalkingVisits, fetchWeeklyDriveInVisits, buildWeeklyTrend, fetchSecurityEventsByType, siteScopeFromId } from '../dashboardStats.js';
 import {
   assertStationPlacement,
   assertOfficePlacement,
@@ -184,7 +191,7 @@ export function createStationRouter() {
         return Number(row?.count || 0);
       };
 
-      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
+      const onSitePredicate = visitOnSitePredicate('vis');
       const visitorsTodayQuery = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartSiteSql, chartSiteParams);
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartSiteSql, chartSiteParams);
@@ -224,15 +231,14 @@ export function createStationRouter() {
         recentParams,
       );
 
+      await markOverdueVisits(pool, { organisationId: orgId, siteId: scope.site_id || null });
+
       res.json({
         ok: true,
         data: {
           visitorsToday: visitorsTodayQuery.visitsToday,
           vehiclesToday: Number(vehiclesToday?.count || 0),
-          currentlyInside: await countVisits(
-            ` AND vis.status IN (${onSitePlaceholders})`,
-            ON_SITE_VISIT_STATUSES,
-          ),
+          currentlyInside: await countVisits(` AND ${onSitePredicate}`),
           pendingApprovals: await countVisits(` AND vis.status IN ('pending_approval', 'pre_registered')`),
           overdueVisits: await countVisits(` AND vis.status = 'overdue'`),
           deniedRejected: await countVisits(
@@ -281,7 +287,7 @@ export function createStationRouter() {
          LEFT JOIN hosts h ON h.id = vis.host_id
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
          WHERE vis.organisation_id = ?${siteFilter}
-           AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')
+           AND ${visitOnSitePredicate('vis')}
          ORDER BY vis.checked_in_at DESC`,
         params,
       );
@@ -862,6 +868,23 @@ function shapeVisitsRouterRows(rows, access) {
 export function createVisitsRouter() {
   const router = express.Router();
 
+  async function requireScopedVisit(req) {
+    const userId = req.adminClaims?.sub;
+    const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+    if (!scopeResult.ok) return { ...scopeResult, userId };
+    const loaded = await loadVisitScoped(pool, req.params.id, scopeResult.scope, {
+      elevated: scopeResult.elevated,
+    });
+    if (!loaded.ok) return { ...loaded, userId };
+    return {
+      ok: true,
+      visit: loaded.visit,
+      scope: scopeResult.scope,
+      elevated: scopeResult.elevated,
+      userId,
+    };
+  }
+
   router.get('/', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -1021,8 +1044,8 @@ export function createVisitsRouter() {
 
       const access = await resolveVisitsRouterAccess(req);
       const visitType = String(req.query.type || 'walk-in').toLowerCase();
-      const statusPlaceholders = GATE_EXIT_ELIGIBLE_STATUSES.map(() => '?').join(', ');
-      const params = [scope.organisation_id, ...GATE_EXIT_ELIGIBLE_STATUSES];
+      const exitPredicate = `(${visitOnSitePredicate('vis')} OR vis.status = 'checked_out')`;
+      const params = [...access.zoneMatchParams, scope.organisation_id];
       let siteFilter = '';
       if (scope.site_id) {
         siteFilter = ' AND vis.site_id = ?';
@@ -1036,6 +1059,7 @@ export function createVisitsRouter() {
         typeFilter = ' AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)';
       }
       typeFilter += access.extraSql;
+      params.push(...access.extraParams);
 
       const zoneMatchSelect = access.zoneMatchSql ? `, ${access.zoneMatchSql} AS zone_match` : '';
 
@@ -1045,10 +1069,10 @@ export function createVisitsRouter() {
                  FROM vehicles veh WHERE veh.visit_id = vis.id) AS plate_numbers${zoneMatchSelect}
          FROM visits vis ${VISIT_JOINS}${access.extraJoins || ''}
          WHERE vis.organisation_id = ?
-           AND vis.status IN (${statusPlaceholders})${siteFilter}${typeFilter}
+           AND ${exitPredicate}${siteFilter}${typeFilter}
          ORDER BY COALESCE(vis.checked_in_at, vis.created_at) DESC
          LIMIT 100`,
-        [...params, ...access.extraParams, ...access.zoneMatchParams],
+        params,
       );
 
       res.json({ ok: true, data: shapeVisitsRouterRows(rows, access) });
@@ -1218,70 +1242,76 @@ export function createVisitsRouter() {
 
   router.post('/:id/approve', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const { reason } = req.body;
-      const visitId = req.params.id;
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
 
-      const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      const { visit, userId } = loaded;
+      const { reason } = req.body || {};
+
+      if (visit.status === 'pending_approval' && visit.host_id) {
+        const result = await applyHostApproval(pool, {
+          visit,
+          actorUserId: userId,
+          reason: reason || null,
+          source: 'staff_approve',
+        });
+        return res.json({ ok: true, message: result.message });
+      }
+
       if (!['pending_approval', 'pre_registered'].includes(visit.status)) {
         return res.status(400).json({ ok: false, message: 'Visit is not pending approval.' });
       }
 
+      const nextStatus = visit.expected_at ? 'expected' : 'approved';
       await pool.query(
         `UPDATE visits SET status = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?`,
-        [visit.expected_at ? 'expected' : 'approved', visitId],
+        [nextStatus, visit.id],
       );
 
       await pool.query(
         `INSERT INTO visit_approvals (id, visit_id, approver_user_id, decision, reason) VALUES (?, ?, ?, 'approved', ?)`,
-        [generateId('appr'), visitId, userId, reason || null],
+        [generateId('appr'), visit.id, userId, reason || null],
       );
 
       await writeVisitEvent(pool, {
-        visitId,
+        visitId: visit.id,
         eventType: 'approved',
         actorUserId: userId,
         reason: reason || null,
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'approved', actorUserId: userId });
+      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'approved', actorUserId: userId });
 
       res.json({ ok: true, message: 'Visit approved.' });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 
   router.post('/:id/reject', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const { reason } = req.body;
+      const { reason } = req.body || {};
       if (!reason?.trim()) {
         return res.status(400).json({ ok: false, message: 'Rejection reason is required.' });
       }
 
-      const visitId = req.params.id;
-      const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
 
-      await pool.query(`UPDATE visits SET status = 'rejected', updated_at = NOW() WHERE id = ?`, [visitId]);
-      await pool.query(
-        `INSERT INTO visit_approvals (id, visit_id, approver_user_id, decision, reason) VALUES (?, ?, ?, 'rejected', ?)`,
-        [generateId('appr'), visitId, userId, reason.trim()],
-      );
-      await writeVisitEvent(pool, {
-        visitId,
-        eventType: 'rejected',
-        actorUserId: userId,
+      const result = await applyHostRejection(pool, {
+        visit: loaded.visit,
+        actorUserId: loaded.userId,
         reason: reason.trim(),
+        source: 'staff_reject',
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'rejected', actorUserId: userId });
-
-      res.json({ ok: true, message: 'Visit rejected.' });
+      res.json({ ok: true, message: result.message || 'Visit rejected.' });
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 
@@ -1304,7 +1334,7 @@ export function createVisitsRouter() {
       }
       const visit = loaded.visit;
 
-      if (visit.status === 'checked_in') {
+      if (isVisitPhysicallyOnSite(visit, { includeGate: false })) {
         return res.status(400).json({ ok: false, message: 'Visitor is already checked in.' });
       }
       if (!canTransition(visit.status, 'reception_check_in') && !canTransition(visit.status, 'checked_in')) {
@@ -1355,7 +1385,9 @@ export function createVisitsRouter() {
       await conn.beginTransaction();
 
       const [[activeDuplicate]] = await conn.query(
-        `SELECT id FROM visits WHERE visitor_id = ? AND status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting') AND id != ? LIMIT 1 FOR UPDATE`,
+        `SELECT id FROM visits vis
+         WHERE vis.visitor_id = ? AND vis.id != ? AND ${visitOnSitePredicate('vis')}
+         LIMIT 1 FOR UPDATE`,
         [visit.visitor_id, visitId],
       );
       if (activeDuplicate) {
@@ -1400,7 +1432,7 @@ export function createVisitsRouter() {
 
       await writeVisitEvent(pool, {
         visitId,
-        eventType: 'checked_in',
+        eventType: 'reception_check_in',
         actorUserId: userId,
         stationId: scope?.station_id,
         details: { badgeNumber: assignedBadge },
@@ -1420,11 +1452,12 @@ export function createVisitsRouter() {
       // shouldn't page anyone.
       await notifyVisitEvent(pool, {
         visitId,
-        eventType: 'checked_in',
+        eventType: 'reception_check_in',
         actorUserId: userId,
         notifyVisitor: receptionZone.isReceptionist,
         notifyHost: receptionZone.isReceptionist,
       });
+      await markHostUnavailableForVisit(pool, visit);
 
       res.json({ ok: true, message: 'Visitor checked in.' });
     } catch (error) {
@@ -1437,26 +1470,22 @@ export function createVisitsRouter() {
 
   router.post('/:id/check-out', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const scope = await getUserScope(pool, userId);
-      const visitId = req.params.id;
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
 
-      const [[visit]] = await pool.query(`SELECT * FROM visits WHERE id = ?`, [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
-      if (!isGateCheckoutEligible(visit.status)) {
+      const { visit, scope, userId } = loaded;
+      if (!isGateCheckoutEligible(visit)) {
         return res.status(400).json({ ok: false, message: 'Visitor is not checked in.' });
       }
 
       await pool.query(
         `UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW() WHERE id = ?`,
-        [visitId],
+        [visit.id],
       );
 
-      await pool.query(
-        `UPDATE vehicles SET status = 'exited', exited_at = NOW(), exit_station_id = ?
-         WHERE visit_id = ? AND status IN ('on_site', 'arrived_at_gate', 'entry_approved')`,
-        [scope?.station_id || null, visitId],
-      );
+      await exitVisitVehicles(pool, { visitId: visit.id, stationId: scope?.station_id });
 
       if (visit.badge_number) {
         await pool.query(
@@ -1467,7 +1496,7 @@ export function createVisitsRouter() {
       }
 
       await writeVisitEvent(pool, {
-        visitId,
+        visitId: visit.id,
         eventType: 'checked_out',
         actorUserId: userId,
         stationId: scope?.station_id,
@@ -1478,11 +1507,12 @@ export function createVisitsRouter() {
         actorUserId: userId,
         action: 'visit.checkout',
         targetType: 'visit',
-        targetId: visitId,
+        targetId: visit.id,
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'checked_out', actorUserId: userId });
+      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out', actorUserId: userId });
       await refreshHostAvailabilityAfterVisit(pool, visit);
+      await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
 
       res.json({ ok: true, message: 'Visitor checked out.' });
     } catch (error) {
@@ -1494,7 +1524,7 @@ export function createVisitsRouter() {
     try {
       const userId = req.adminClaims?.sub;
       const scope = await getUserScope(pool, userId);
-      const { query, type } = req.body;
+      const { query, type, purpose } = req.body;
       if (!query?.trim()) {
         return res.status(400).json({ ok: false, message: 'Search query required.' });
       }
@@ -1538,7 +1568,10 @@ export function createVisitsRouter() {
 
       const perms = permissionsFromRequest(req);
       const masked = applyVisitListMasking(rows, perms);
-      const eligible = masked.filter((row) => CHECK_IN_ELIGIBLE_STATUSES.includes(row.status));
+      const lookupPurpose = String(purpose || 'check-in').toLowerCase();
+      const eligible = lookupPurpose === 'checkout'
+        ? masked.filter((row) => isGateCheckoutEligible(row))
+        : masked.filter((row) => CHECK_IN_ELIGIBLE_STATUSES.includes(row.status));
       res.json({ ok: true, data: eligible });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -1618,26 +1651,17 @@ export function createVisitsRouter() {
 
   router.post('/:id/left-premises', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const visitId = req.params.id;
-      const [[visit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
 
+      const { visit, userId } = loaded;
       if (!canTransition(visit.status, 'left_premises') && visit.status !== 'checked_out') {
         return res.status(400).json({ ok: false, message: 'Visit must be checked out before leaving premises.' });
       }
 
-      await pool.query("UPDATE visits SET status = 'left_premises', updated_at = NOW() WHERE id = ?", [visitId]);
-      await writeVisitEvent(pool, { visitId, eventType: 'left_premises', actorUserId: userId });
-      await pool.query("UPDATE visits SET status = 'completed', updated_at = NOW() WHERE id = ?", [visitId]);
-      // Guest SMS/email already went out on the first checkout (reception or
-      // gate). Confirming they left the premises must not notify them again.
-      await notifyVisitEvent(pool, {
-        visitId,
-        eventType: 'left_premises',
-        actorUserId: userId,
-        notifyVisitor: false,
-      });
+      await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
       res.json({ ok: true, message: 'Visitor marked as left premises.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -1646,18 +1670,29 @@ export function createVisitsRouter() {
 
   router.post('/:id/cancel', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const { reason } = req.body;
-      const visitId = req.params.id;
-      const [[visit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      const { reason } = req.body || {};
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const { visit, userId } = loaded;
       if (!canTransition(visit.status, 'cancelled')) {
         return res.status(400).json({ ok: false, message: 'Visit cannot be cancelled in its current state.' });
       }
 
-      await pool.query("UPDATE visits SET status = 'cancelled', updated_at = NOW() WHERE id = ?", [visitId]);
-      await writeVisitEvent(pool, { visitId, eventType: 'cancelled', actorUserId: userId, reason: reason || null });
-      await notifyVisitEvent(pool, { visitId, eventType: 'cancelled', actorUserId: userId });
+      await pool.query("UPDATE visits SET status = 'cancelled', updated_at = NOW() WHERE id = ?", [visit.id]);
+      if (visit.badge_number) {
+        await pool.query(
+          `UPDATE badges SET status = 'available', visit_id = NULL, returned_at = NOW()
+           WHERE organisation_id = ? AND badge_number = ?`,
+          [visit.organisation_id, visit.badge_number],
+        );
+      }
+      await exitVisitVehicles(pool, { visitId: visit.id });
+      await writeVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId, reason: reason || null });
+      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId });
+      await refreshHostAvailabilityAfterVisit(pool, visit);
       res.json({ ok: true, message: 'Visit cancelled.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -1666,32 +1701,33 @@ export function createVisitsRouter() {
 
   router.patch('/:id/reschedule', async (req, res) => {
     try {
-      const userId = req.adminClaims?.sub;
-      const { expectedAt, reason } = req.body;
+      const { expectedAt, reason } = req.body || {};
       if (!expectedAt) {
         return res.status(400).json({ ok: false, message: 'New expected date/time is required.' });
       }
 
-      const visitId = req.params.id;
-      const [[visit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
-      if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
+      const loaded = await requireScopedVisit(req);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
 
+      const { visit, userId } = loaded;
       await pool.query(
         'UPDATE visits SET expected_at = ?, status = ?, updated_at = NOW() WHERE id = ?',
-        [expectedAt, visit.status === 'approved' ? 'expected' : visit.status, visitId],
+        [expectedAt, visit.status === 'approved' ? 'expected' : visit.status, visit.id],
       );
       await pool.query(
         'UPDATE appointments SET scheduled_at = ?, updated_at = NOW() WHERE visit_id = ?',
-        [expectedAt, visitId],
+        [expectedAt, visit.id],
       );
       await writeVisitEvent(pool, {
-        visitId,
+        visitId: visit.id,
         eventType: 'rescheduled',
         actorUserId: userId,
         reason: reason || null,
         details: { expectedAt },
       });
-      await notifyVisitEvent(pool, { visitId, eventType: 'rescheduled', actorUserId: userId, extra: { expected_at: expectedAt } });
+      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'rescheduled', actorUserId: userId, extra: { expected_at: expectedAt } });
       res.json({ ok: true, message: 'Visit rescheduled.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -2042,9 +2078,17 @@ export function createVehiclesRouter() {
   router.post('/:id/check-out', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
-      const scope = await getUserScope(pool, userId);
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+      const { scope, elevated } = scopeResult;
+
       const [[vehicle]] = await pool.query(`SELECT * FROM vehicles WHERE id = ?`, [req.params.id]);
       if (!vehicle) return res.status(404).json({ ok: false, message: 'Vehicle not found.' });
+      if (!elevated && scope?.organisation_id && vehicle.organisation_id !== scope.organisation_id) {
+        return res.status(403).json({ ok: false, message: 'Access denied for this vehicle record.' });
+      }
 
       await pool.query(
         `UPDATE vehicles SET status = 'departed', exited_at = NOW(), exit_station_id = ? WHERE id = ?`,
@@ -4709,21 +4753,7 @@ export function createOrgAdminRouter() {
       const orgId = scope?.organisation_id;
       const guardId = req.params.id;
 
-      const [[row]] = await pool.query(
-        `SELECT g.*,
-               o.name AS organisation_name,
-               s.name AS site_name,
-               st.name AS station_name,
-               d.name AS department_name
-         FROM security_guards g
-         LEFT JOIN organisations o ON o.id = g.organisation_id
-         LEFT JOIN sites s ON s.id = g.site_id
-         LEFT JOIN stations st ON st.id = g.station_id
-         LEFT JOIN departments d ON d.id = g.department_id
-         WHERE g.id = ?
-         LIMIT 1`,
-        [guardId],
-      );
+      const row = await loadSecurityGuardRow(pool, guardId);
       if (!row) return res.status(404).json({ ok: false, message: 'Security guard not found.' });
       if (orgId && row.organisation_id !== orgId) {
         return res.status(403).json({ ok: false, message: 'Access denied for this security guard.' });
@@ -4945,16 +4975,16 @@ export function createOrgAdminRouter() {
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId);
       const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId);
 
-      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
       const [[currentlyInside]] = await pool.query(
-        `SELECT COUNT(*) AS count FROM visits WHERE status IN (${onSitePlaceholders})${andOrgClause}`,
-        [...ON_SITE_VISIT_STATUSES, ...orgParams],
+        `SELECT COUNT(*) AS count FROM visits vis WHERE ${visitOnSitePredicate('vis')}${orgId ? ' AND vis.organisation_id = ?' : ''}`,
+        orgParams,
       );
       const [[pendingApprovals]] = await pool.query(
         `SELECT COUNT(*) AS count FROM visits
          WHERE status IN ('pending_approval', 'pre_registered')${andOrgClause}`,
         orgParams,
       );
+      await markOverdueVisits(pool, { organisationId: orgId || null });
       const [[overdueVisits]] = await pool.query(
         `SELECT COUNT(*) AS count FROM visits WHERE status = 'overdue'${andOrgClause}`,
         orgParams,

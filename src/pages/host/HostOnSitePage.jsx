@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader, Card, DataTable, StatusBadge, Spinner } from '../../components/ui';
+import { PageHeader, Card, DataTable, VisitStatusBadge, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
 
@@ -39,7 +39,7 @@ export default function HostOnSitePage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
   ];
 

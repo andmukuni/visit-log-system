@@ -4,12 +4,20 @@ import {
   buildRestrictedReceptionVars,
   buildRestrictedReceptionMetadata,
   isReceptionNewExpectedEvent,
+  shouldNotifyReceptionNewExpected,
   parseAlertVisitorFlag,
 } from '../server/notificationService.js';
 
 describe('reception expected-visitor event routing', () => {
   it('routes confirmed host/executive bookings to reception', () => {
     assert.equal(isReceptionNewExpectedEvent('host_booking'), true);
+  });
+
+  it('does not fan out pending_approval for a guest already at reception', () => {
+    assert.equal(shouldNotifyReceptionNewExpected('pending_approval', { checked_in_at: '2026-08-17T10:00:00Z' }), false);
+    assert.equal(shouldNotifyReceptionNewExpected('pending_approval', { checked_in_at: null }), true);
+    assert.equal(shouldNotifyReceptionNewExpected('expected', { checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(shouldNotifyReceptionNewExpected('pending_approval', {}, { skip: true }), false);
   });
 });
 

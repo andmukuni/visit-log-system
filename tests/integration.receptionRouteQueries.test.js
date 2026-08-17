@@ -21,6 +21,7 @@ import { runMigrations } from '../server/migrations/index.js';
 import { visitZoneMatchExpr } from '../server/receptionistService.js';
 import { calendarSelectSql } from '../server/routes/reception.js';
 import { applyVisitAccessPolicyToRows } from '../server/visitorAccessPolicy.js';
+import { visitOnSitePredicate } from '../shared/visitOnSite.js';
 import appPool from '../server/db.js';
 
 after(async () => { try { await appPool.end(); } catch { /* never opened */ } });
@@ -163,9 +164,8 @@ describe('ROUTE QUERY: other reception routes carrying zone_match in the SELECT 
     assert.ok(Array.isArray(rows));
   });
 
-  it('host-queue shape binds correctly (statuses AFTER the site filter)', async () => {
+  it('host-queue shape binds correctly (zone_match params before org/site; statuses inlined)', async () => {
     const zm = visitZoneMatchExpr(ZONES());
-    const statuses = ['waiting', 'pending_approval'];
     const [rows] = await pool.query(
       `SELECT vis.id, vis.organisation_id, ${zm.sql} AS zone_match
        FROM visits vis
@@ -173,8 +173,8 @@ describe('ROUTE QUERY: other reception routes carrying zone_match in the SELECT 
        LEFT JOIN offices ofc ON ofc.id = h.office_id
        LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
        WHERE vis.organisation_id = ? AND vis.site_id = ?
-         AND vis.status IN (?, ?)`,
-      [...zm.params, ORG, SITE, ...statuses],
+         AND ${visitOnSitePredicate('vis', { includeGate: false })}`,
+      [...zm.params, ORG, SITE],
     );
     assert.ok(Array.isArray(rows));
   });
@@ -189,7 +189,7 @@ describe('ROUTE QUERY: other reception routes carrying zone_match in the SELECT 
        LEFT JOIN offices ofc ON ofc.id = h.office_id
        LEFT JOIN offices vis_ofc ON vis_ofc.id = vis.office_id
        WHERE vis.organisation_id = ? AND vis.site_id = ?
-         AND vis.status IN ('checked_in', 'waiting')`,
+         AND ${visitOnSitePredicate('vis', { includeGate: false })}`,
       [...zm.params, ORG, SITE],
     );
     assert.ok(Array.isArray(rows));

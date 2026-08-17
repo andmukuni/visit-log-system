@@ -5,7 +5,7 @@ import {
   PageHeader,
   Card,
   DataTable,
-  StatusBadge,
+  VisitStatusBadge,
   Spinner,
   ActionToolbar,
   RefreshAction,
@@ -77,7 +77,7 @@ export default function ReceptionApprovalsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'created_at',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Car, Footprints, RefreshCw, User } from 'lucide-react';
-import { LoadingButton, StatusBadge, VisitorTypeBadge } from '../../components/ui';
+import { LoadingButton, VisitStatusBadge, VisitorTypeBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { formatVisitHostPositionLine } from '../../components/visitors/visitorDetailUtils';
 import { formatTime, visitorDisplayName } from '../../utils/helpers';
@@ -112,7 +112,7 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-semibold text-navy-900">{visitorDisplayName(row)}</p>
                         <VisitorTypeBadge classification={row.classification} />
-                        <StatusBadge status={row.status} />
+                        <VisitStatusBadge visit={row} />
                       </div>
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs text-navy-500">
                         <User size={12} aria-hidden="true" />

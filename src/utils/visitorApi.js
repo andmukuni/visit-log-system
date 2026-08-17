@@ -76,7 +76,10 @@ export const visitorApi = {
   }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
   markLeftPremises: (id) => apiFetch(`/admin/visits/${id}/left-premises`, { method: 'POST' }),
-  lookupVisit: (query, type) => apiFetch('/admin/visits/lookup', { method: 'POST', body: JSON.stringify({ query, type }) }),
+  lookupVisit: (query, type, purpose = 'check-in') => apiFetch('/admin/visits/lookup', {
+    method: 'POST',
+    body: JSON.stringify({ query, type, purpose }),
+  }),
   getPendingCheckIns: (type = 'walk-in') => apiFetch(`/admin/visits/pending-check-in?type=${encodeURIComponent(type)}`),
   getExpectedArrivals: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

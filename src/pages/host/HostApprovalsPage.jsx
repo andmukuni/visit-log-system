@@ -1,7 +1,7 @@
 import { Check, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader, Card, DataTable, StatusBadge, Spinner, LoadingButton, IconButton, Modal, FormField, CancelAction } from '../../components/ui';
+import { PageHeader, Card, DataTable, VisitStatusBadge, Spinner, LoadingButton, IconButton, Modal, FormField, CancelAction } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
@@ -79,7 +79,7 @@ export default function HostApprovalsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'created_at',

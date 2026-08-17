@@ -11,7 +11,8 @@ export const VISIT_JOURNEY_STEPS = [
   { key: 'arrived_at_gate', label: 'At gate' },
   { key: 'reception_check_in', label: 'Reception' },
   { key: 'checked_in', label: 'On site' },
-  { key: 'in_meeting', label: 'In meeting' },
+  { key: 'waiting', label: 'Waiting for host' },
+  { key: 'in_meeting', label: 'With host' },
   { key: 'checked_out', label: 'Checked out' },
   { key: 'left_premises', label: 'Left premises' },
   { key: 'completed', label: 'Completed' },
@@ -25,7 +26,6 @@ export const VISIT_STATUS_ALIASES = {
   // case must keep showing "On site" instead of regressing to "Expected".
   pending_approval: 'expected',
   entered_premises: 'reception_check_in',
-  waiting: 'in_meeting',
 };
 
 /**
@@ -35,9 +35,13 @@ export const VISIT_STATUS_ALIASES = {
  * statuses (rejected, cancelled, etc.) that aren't part of the journey.
  */
 export function resolveJourneyStatusKey(status, hasCheckedIn) {
-  const normalized = status === 'pending_approval' && hasCheckedIn
-    ? 'checked_in'
-    : VISIT_STATUS_ALIASES[status] || status;
+  if (status === 'pending_approval' && hasCheckedIn) {
+    return 'checked_in';
+  }
+  if (status === 'rejected' && hasCheckedIn) {
+    return 'checked_in';
+  }
+  const normalized = VISIT_STATUS_ALIASES[status] || status;
   return VISIT_JOURNEY_STEPS.some((step) => step.key === normalized) ? normalized : null;
 }
 
@@ -46,4 +50,14 @@ export function resolveJourneyLabel(status, hasCheckedIn) {
   const key = resolveJourneyStatusKey(status, hasCheckedIn);
   if (!key) return null;
   return VISIT_JOURNEY_STEPS.find((step) => step.key === key)?.label || null;
+}
+
+/** Status badge props for list/table rows — aligns wording with journey + action stages. */
+export function resolveVisitStatusDisplay(status, hasCheckedIn = false) {
+  const journeyKey = resolveJourneyStatusKey(status, hasCheckedIn);
+  const journeyLabel = resolveJourneyLabel(status, hasCheckedIn);
+  if (journeyKey && journeyLabel) {
+    return { status: journeyKey, label: journeyLabel };
+  }
+  return { status, label: null };
 }

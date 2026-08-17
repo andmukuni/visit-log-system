@@ -1,7 +1,7 @@
 import { Eye } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, Card, FormField, DataTable, StatusBadge, Spinner, IconButton } from '../../components/ui';
+import { PageHeader, Card, FormField, DataTable, VisitStatusBadge, Spinner, IconButton } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
 
@@ -37,7 +37,7 @@ export default function HostVisitorsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} />,
     },
     {
       key: 'expected_at',
@@ -82,7 +82,7 @@ export default function HostVisitorsPage() {
               { value: 'pre_registered', label: 'Pre-registered' },
               { value: 'pending_approval', label: 'Pending approval' },
               { value: 'approved', label: 'Approved' },
-              { value: 'checked_in', label: 'Checked in' },
+              { value: 'checked_in', label: 'On site' },
               { value: 'completed', label: 'Completed' },
               { value: 'rejected', label: 'Rejected' },
             ]}

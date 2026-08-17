@@ -11,11 +11,13 @@ import {
   generateHostApprovalToken,
   hashHostApprovalToken,
   issueHostApprovalToken,
+  invalidateOtherHostApprovalTokens,
   loadHostApprovalByToken,
   loadPublicHostApproval,
   applyHostApproval,
   applyHostRejection,
   decidePublicHostApproval,
+  requestHostApproval,
   toPublicHostApprovalPayload,
   ensureHostApprovalSchema,
 } from '../server/hostApprovalService.js';
@@ -106,6 +108,28 @@ describe('host approval tokens and decisions', () => {
     const current = await loadHostApprovalByToken(pool, second.token);
     assert.equal(previous.payload.active, false);
     assert.equal(current.payload.active, true);
+  });
+
+  it('can issue a replacement token without killing the previous one until commit', async () => {
+    const { visitId } = await insertPendingVisit('visit-token-keep-old');
+    const first = await issueHostApprovalToken(pool, visitId);
+    const second = await issueHostApprovalToken(pool, visitId, { invalidateExisting: false });
+    assert.equal((await loadHostApprovalByToken(pool, first.token)).payload.active, true);
+    assert.equal((await loadHostApprovalByToken(pool, second.token)).payload.active, true);
+    await invalidateOtherHostApprovalTokens(pool, visitId, second.id);
+    assert.equal((await loadHostApprovalByToken(pool, first.token)).payload.active, false);
+    assert.equal((await loadHostApprovalByToken(pool, second.token)).payload.active, true);
+  });
+
+  it('reminder rotates only after the new request is issued', async () => {
+    const { visitId } = await insertPendingVisit('visit-token-resend');
+    const first = await requestHostApproval(pool, { visitId, requestedByUserId: 'usr-rcp-1', notify: false });
+    const second = await requestHostApproval(pool, { visitId, requestedByUserId: 'usr-rcp-1', resend: true, notify: false });
+    assert.notEqual(first.approvalUrl, second.approvalUrl);
+    const firstToken = first.approvalUrl.split('/').pop();
+    const secondToken = second.approvalUrl.split('/').pop();
+    assert.equal((await loadHostApprovalByToken(pool, firstToken)).payload.active, false);
+    assert.equal((await loadHostApprovalByToken(pool, secondToken)).payload.active, true);
   });
 
   it('treats an expired unused token as inactive', async () => {

@@ -6,6 +6,10 @@ import { writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { canTransition } from '../scopeService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
+import { isGateCheckoutEligible } from '../../shared/visitCheckout.js';
+import { isVisitPhysicallyOnSite } from '../../shared/visitOnSite.js';
+import { refreshHostAvailabilityAfterVisit, markHostUnavailableForVisit } from '../hostAvailability.js';
+import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
 
 export function createKioskRouter() {
   const router = express.Router();
@@ -185,10 +189,10 @@ export function createKioskRouter() {
       }
 
       if (!visit) return res.status(404).json({ ok: false, message: 'Visit not found.' });
-      if (visit.status === 'checked_in') {
+      if (isVisitPhysicallyOnSite(visit, { includeGate: false })) {
         return res.status(400).json({ ok: false, message: 'Already checked in.' });
       }
-      if (!canTransition(visit.status, 'checked_in')) {
+      if (!canTransition(visit.status, 'checked_in') && !canTransition(visit.status, 'reception_check_in')) {
         return res.status(400).json({ ok: false, message: 'Visit is not approved for check-in yet.' });
       }
 
@@ -220,6 +224,7 @@ export function createKioskRouter() {
         notifyVisitor: false,
         notifyHost: false,
       });
+      await markHostUnavailableForVisit(pool, visit);
 
       res.json({ ok: true, data: { passCode: visit.pass_code, badgeNumber: visit.badge_number } });
     } catch (error) {
@@ -236,15 +241,19 @@ export function createKioskRouter() {
       if (!passCode) return res.status(400).json({ ok: false, message: 'Pass code is required.' });
 
       const [[visit]] = await pool.query(
-        `SELECT * FROM visits WHERE organisation_id = ? AND pass_code = ? AND status = 'checked_in' LIMIT 1`,
+        `SELECT * FROM visits WHERE organisation_id = ? AND pass_code = ? ORDER BY created_at DESC LIMIT 1`,
         [org.id, passCode],
       );
-      if (!visit) return res.status(404).json({ ok: false, message: 'No active check-in found for this pass code.' });
+      if (!visit || !isGateCheckoutEligible(visit)) {
+        return res.status(404).json({ ok: false, message: 'No active check-in found for this pass code.' });
+      }
 
       await pool.query(
         `UPDATE visits SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW() WHERE id = ?`,
         [visit.id],
       );
+
+      await exitVisitVehicles(pool, { visitId: visit.id });
 
       if (visit.badge_number) {
         await pool.query(
@@ -260,6 +269,8 @@ export function createKioskRouter() {
       });
 
       await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out' });
+      await refreshHostAvailabilityAfterVisit(pool, visit);
+      await finalizeVisitDeparture(pool, { visitId: visit.id, notifyVisitor: false });
 
       res.json({ ok: true, message: 'Thank you — you have been checked out.' });
     } catch (error) {

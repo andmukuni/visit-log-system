@@ -37,6 +37,7 @@ import { createHostApprovalRouter } from './routes/hostApproval.js';
 import pool from './db.js';
 import { waitForDatabase } from './waitForDatabase.js';
 import { retryFailedDeliveries, notifyPreArrivalReminders } from './notificationService.js';
+import { markOverdueVisits } from './visitOverdue.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
 
@@ -270,6 +271,7 @@ async function main() {
   await bootstrapDatabase();
   startNotificationRetryWorker();
   startPreArrivalReminderWorker();
+  startOverdueVisitWorker();
   await startHttpServer();
 }
 
@@ -301,6 +303,22 @@ function startPreArrivalReminderWorker() {
   };
   // Run soon after boot, then on interval.
   setTimeout(tick, 5_000);
+  setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
+}
+
+function startOverdueVisitWorker() {
+  const intervalMs = Number(process.env.OVERDUE_VISIT_INTERVAL_MS || 60_000);
+  const tick = async () => {
+    try {
+      const result = await markOverdueVisits(pool);
+      if (result.marked > 0) {
+        console.log(`[visits] Marked ${result.marked} visit(s) overdue`);
+      }
+    } catch (error) {
+      console.error('[visits] Overdue worker error:', error.message);
+    }
+  };
+  setTimeout(tick, 8_000);
   setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
 }
 

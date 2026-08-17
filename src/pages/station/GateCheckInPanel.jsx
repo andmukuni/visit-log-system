@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Car, Footprints, LogIn, Search, User } from 'lucide-react';
-import { LoadingButton, StatusBadge } from '../../components/ui';
+import { LoadingButton, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { getReceptionCheckInActionLabel } from '../../../shared/visitReceptionActions.js';
@@ -245,7 +245,7 @@ export default function GateCheckInPanel({
                           {row.pass_code ? ` · Pass ${row.pass_code}` : ''}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 sm:hidden">
-                          <StatusBadge status={row.status} />
+                          <VisitStatusBadge visit={row} />
                           {isVehicle ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
                               <Car size={12} aria-hidden="true" />
@@ -270,7 +270,7 @@ export default function GateCheckInPanel({
                         <SignaturePreview src={row.check_in_signature} name={visitorDisplayName(row)} />
                       </div>
                       <div className="hidden flex-col gap-1 sm:flex sm:justify-start">
-                        <StatusBadge status={row.status} />
+                        <VisitStatusBadge visit={row} />
                         {isVehicle ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
                             <Car size={12} aria-hidden="true" />

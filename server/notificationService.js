@@ -21,6 +21,14 @@ export function isReceptionNewExpectedEvent(eventType) {
   return RECEPTION_NEW_EXPECTED_EVENTS.has(eventType);
 }
 
+/** Reception-queue guests are already at the desk — do not fan out "new expected". */
+export function shouldNotifyReceptionNewExpected(eventType, visit = null, { skip = false } = {}) {
+  if (skip) return false;
+  if (!isReceptionNewExpectedEvent(eventType)) return false;
+  if (eventType === 'pending_approval' && visit?.checked_in_at) return false;
+  return true;
+}
+
 /** Different-zone reception audiences only ever get {visitor_name, expected_at} (+ app branding). */
 function buildRestrictedReceptionVars(vars) {
   return { app_name: vars.app_name, visitor_name: vars.visitor_name, expected_at: vars.expected_at };
@@ -387,6 +395,8 @@ export async function notifyVisitEvent(pool, {
   extra = {},
   notifyVisitor = true,
   notifyHost = true,
+  skipReceptionExpected = false,
+  notificationKeySuffix = null,
   orgSettings: orgSettingsOverride = null,
 }) {
   const [[visit]] = await pool.query(
@@ -450,6 +460,7 @@ export async function notifyVisitEvent(pool, {
     phone: visit.host_phone || null,
   };
   const requestingReceptionistId = visit.approval_requested_by || visit.created_by || null;
+  const keySuffix = notificationKeySuffix ? `:${notificationKeySuffix}` : '';
 
   // Hosts are notified when a visitor is queued for their approval, checked
   // in at reception, and on checkout. checked_in/reception_check_in fire from
@@ -494,7 +505,7 @@ export async function notifyVisitEvent(pool, {
         categoryKey,
         channels,
         vars,
-        idempotencyKey: `${eventType}:${visitId}:host:${hostUserId}`,
+        idempotencyKey: `${eventType}:${visitId}:host:${hostUserId}${keySuffix}`,
         metadata: { ...metadata, audience: 'host' },
         orgSettings,
       });
@@ -510,7 +521,7 @@ export async function notifyVisitEvent(pool, {
         categoryKey,
         channels: ['email', 'sms'],
         vars,
-        idempotencyKey: `${eventType}:${visitId}:host:contact`,
+        idempotencyKey: `${eventType}:${visitId}:host:contact${keySuffix}`,
         metadata: { ...metadata, audience: 'host' },
         orgSettings,
       });
@@ -567,7 +578,7 @@ export async function notifyVisitEvent(pool, {
   // host books/expects a visitor, split by zone match. This previously did
   // not exist at all: reception only ever heard about a visit once it
   // reached the gate.
-  if (isReceptionNewExpectedEvent(eventType)) {
+  if (shouldNotifyReceptionNewExpected(eventType, visit, { skip: skipReceptionExpected })) {
     const { sameZone, differentZone } = await resolveReceptionAudienceByZone(pool, {
       organisationId: visit.organisation_id,
       siteId: visit.site_id,

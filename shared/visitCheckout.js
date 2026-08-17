@@ -4,6 +4,7 @@ export const CHECKOUT_ELIGIBLE_STATUSES = Object.freeze([
   'reception_check_in',
   'waiting',
   'in_meeting',
+  'overdue',
 ]);
 
 /** Gate kiosk checkout — includes arrivals logged at the gate before reception check-in. */
@@ -24,16 +25,54 @@ export const GATE_EXIT_ELIGIBLE_STATUSES = Object.freeze([
   'checked_out',
 ]);
 
-export function isCheckoutEligible(status) {
-  return CHECKOUT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
+export function visitHasCheckedIn(visit) {
+  if (!visit || typeof visit !== 'object') return false;
+  return Boolean(visit.checked_in_at || visit.check_in_at);
 }
 
-export function isGateCheckoutEligible(status) {
-  return GATE_CHECKOUT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
+function normalizeCheckoutStatus(statusOrVisit) {
+  if (statusOrVisit && typeof statusOrVisit === 'object') {
+    return String(statusOrVisit.status || '').toLowerCase();
+  }
+  return String(statusOrVisit || '').toLowerCase();
 }
 
-export function isGateExitEligible(status) {
-  return GATE_EXIT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
+function resolveCheckoutVisit(statusOrVisit, visit) {
+  if (visit && typeof visit === 'object') return visit;
+  if (statusOrVisit && typeof statusOrVisit === 'object') return statusOrVisit;
+  return null;
+}
+
+function isOnSiteExceptionStatus(status, visit) {
+  return ['pending_approval', 'rejected'].includes(status)
+    && visitHasCheckedIn(visit);
+}
+
+export function isCheckoutEligible(statusOrVisit, visit) {
+  const status = normalizeCheckoutStatus(statusOrVisit);
+  if (CHECKOUT_ELIGIBLE_STATUSES.includes(status)) return true;
+  return isOnSiteExceptionStatus(status, resolveCheckoutVisit(statusOrVisit, visit));
+}
+
+export function isGateCheckoutEligible(statusOrVisit, visit) {
+  const status = normalizeCheckoutStatus(statusOrVisit);
+  if (GATE_CHECKOUT_ELIGIBLE_STATUSES.includes(status)) return true;
+  return isOnSiteExceptionStatus(status, resolveCheckoutVisit(statusOrVisit, visit));
+}
+
+export function isGateExitEligible(statusOrVisit, visit) {
+  const status = normalizeCheckoutStatus(statusOrVisit);
+  if (GATE_EXIT_ELIGIBLE_STATUSES.includes(status)) return true;
+  return isOnSiteExceptionStatus(status, resolveCheckoutVisit(statusOrVisit, visit));
+}
+
+/** Gate / station checkout button copy — differs for confirm-exit vs first checkout. */
+export function getGateCheckoutActionLabel(statusOrVisit) {
+  const status = normalizeCheckoutStatus(statusOrVisit);
+  if (status === 'checked_out') {
+    return { label: 'Confirm left premises', loadingLabel: 'Confirming exit…' };
+  }
+  return { label: 'Check out', loadingLabel: 'Checking out…' };
 }
 
 /** Visits that are no longer on the live reception desk workload for today. */

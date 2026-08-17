@@ -21,11 +21,12 @@ import {
   fetchWeeklyDriveInVisits,
   fetchVisitsTodayYesterday,
   fetchSecurityEventsByType,
-  ON_SITE_VISIT_STATUSES,
 } from '../dashboardStats.js';
+import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 import { requireSecurityScopeContext, visitSecurityScopeFilterClause } from '../securityGuardService.js';
 import { buildSecurityExpectedVisitorDTO } from '../visitorDto.js';
 import { auditVisitAccessDenied } from '../visitorAccessPolicy.js';
+import { markOverdueVisits } from '../visitOverdue.js';
 
 /**
  * Site/building/gate scope for the logged-in security officer — elevated
@@ -113,7 +114,7 @@ export function createSecurityRouter() {
         return Number(row?.count || 0);
       };
 
-      const onSitePlaceholders = ON_SITE_VISIT_STATUSES.map(() => '?').join(', ');
+      const onSitePredicate = visitOnSitePredicate('vis');
       const chartSiteSql = ctx.securityScope?.siteId && !elevated ? ' AND vis.site_id = ?' : '';
       const chartSiteParams = ctx.securityScope?.siteId && !elevated ? [ctx.securityScope.siteId] : [];
       const { visitsToday, visitTrend } = await fetchVisitsTodayYesterday(pool, orgId, chartSiteSql, chartSiteParams);
@@ -151,14 +152,16 @@ export function createSecurityRouter() {
 
       const activeRollCall = await getActiveRollCall(pool, scope, { elevated });
 
+      await markOverdueVisits(pool, {
+        organisationId: orgId,
+        siteId: !elevated && scope.site_id ? scope.site_id : null,
+      });
+
       res.json({
         ok: true,
         data: {
           visitorsToday: visitsToday,
-          currentlyInside: await countVisits(
-            ` AND vis.status IN (${onSitePlaceholders})`,
-            ON_SITE_VISIT_STATUSES,
-          ),
+          currentlyInside: await countVisits(` AND ${onSitePredicate}`),
           pendingApprovals: await countVisits(` AND vis.status IN ('pending_approval', 'pre_registered')`),
           overdueVisits: await countVisits(` AND vis.status = 'overdue'`),
           exceptionsToday: await countVisits(
@@ -202,7 +205,7 @@ export function createSecurityRouter() {
          LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
          LEFT JOIN sites s ON s.id = vis.site_id
          WHERE vis.organisation_id = ?${sql}
-           AND vis.status IN ('checked_in', 'reception_check_in', 'waiting', 'in_meeting')
+           AND ${visitOnSitePredicate('vis')}
          ORDER BY vis.checked_in_at DESC`,
         params,
       );
@@ -249,6 +252,11 @@ export function createSecurityRouter() {
     try {
       const ctx = await getContext(req);
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      await markOverdueVisits(pool, {
+        organisationId: ctx.scope.organisation_id,
+        siteId: ctx.elevated ? null : ctx.scope.site_id || null,
+      });
 
       const { sql, params } = visitListSql(ctx, ` AND vis.status = 'overdue'`);
       const [rows] = await pool.query(sql, params);

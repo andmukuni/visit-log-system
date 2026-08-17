@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Building2, ClipboardList, MapPin, Phone, User, Users } from 'lucide-react';
-import { Card, Spinner, StatusBadge, VisitorTypeBadge } from '../ui';
+import { Card, Spinner, StatusBadge, VisitStatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
 import {
   VISIT_EVENT_LABELS,
@@ -27,8 +27,21 @@ function resolveJourneyIndex(status, hasCheckedIn) {
 }
 
 function VisitJourney({ status, hasCheckedIn }) {
-  const terminal = ['rejected', 'cancelled', 'denied', 'expired'].includes(status);
+  const terminal = ['cancelled', 'denied', 'expired'].includes(status)
+    || (status === 'rejected' && !hasCheckedIn);
+  const overdue = status === 'overdue';
   const currentIndex = resolveJourneyIndex(status, hasCheckedIn);
+
+  if (overdue) {
+    return (
+      <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
+        <p className="text-sm font-medium text-orange-800">Visit overdue — locate guest or check out</p>
+        <div className="mt-2">
+          <StatusBadge status="overdue" />
+        </div>
+      </div>
+    );
+  }
 
   if (terminal) {
     return (
@@ -151,7 +164,7 @@ export default function VisitActivityPanel({
         {!hideVisitorCard && (
         <Card title="Visitor">
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <StatusBadge status={visit.status || summary?.status} />
+            <VisitStatusBadge visit={visit} status={visit.status || summary?.status} />
             {(visit.classification || summary?.classification) && (
               <VisitorTypeBadge classification={visit.classification || summary?.classification} size="xs" />
             )}

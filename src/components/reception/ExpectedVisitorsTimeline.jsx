@@ -16,7 +16,7 @@ import {
   IconButton,
   RestrictedIndicator,
   Spinner,
-  StatusBadge,
+  VisitStatusBadge,
   VisitorTypeBadge,
 } from '../ui';
 import { formatTime } from '../../utils/helpers';
@@ -202,14 +202,14 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
   const showType = !isRestricted && (classification === 'vip' || classification === 'vvip');
   const detailPath = `/reception/visitors/${visitId}`;
   const visitStatus = row.visit_status || row.status;
-  const action = isRestricted ? { show: false } : getReceptionVisitAction(visitStatus);
+  const action = isRestricted ? { show: false } : getReceptionVisitAction(row);
   const actionHref = receptionActionHref(action, visitId);
   const ActionIcon = receptionActionIcon(action);
   const cardTone = statusCardTone(visitStatus);
   const timeChipTone = statusTimeChipTone(visitStatus);
   const hasMeta = Boolean(row.host_name || row.department_name || row.company || row.pass_code);
   const hasPurpose = Boolean(row.purpose || row.title);
-  const canCheckOut = !isRestricted && Boolean(onCheckOut) && isCheckoutEligible(visitStatus);
+  const canCheckOut = !isRestricted && Boolean(onCheckOut) && isCheckoutEligible(row);
 
   return (
     <article
@@ -254,7 +254,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
           ) : null}
           {!isRestricted ? (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <StatusBadge status={row.visit_status || row.status} />
+              <VisitStatusBadge visit={row} status={row.visit_status || row.status} />
               {row.expected_plates ? (
                 <span className="inline-flex items-center rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-600">
                   {row.expected_plates}

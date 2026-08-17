@@ -20,7 +20,7 @@ import {
   RefreshAction,
   ActionToolbar,
   Spinner,
-  StatusBadge,
+  VisitStatusBadge,
   ViewAllAction,
 } from '../../components/ui';
 import { DashboardOverviewLayout, metricTarget } from '../../components/dashboard';
@@ -130,7 +130,7 @@ export default function StationDashboardPage() {
     {
       key: 'visit_status',
       label: 'Status',
-      render: (_, row) => <StatusBadge status={row.visit_status} />,
+      render: (_, row) => <VisitStatusBadge visit={row} status={row.visit_status} />,
     },
   ];
 

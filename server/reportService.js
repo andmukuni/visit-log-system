@@ -1,6 +1,7 @@
 import { generateId } from './visitorSchema.js';
 import { writeAuditLog } from './auditService.js';
 import { resolveMaskLevel, maskRows, maskVisitorFields } from '../shared/reportMasking.js';
+import { visitOnSitePredicate } from '../shared/visitOnSite.js';
 
 export const REPORT_DEFINITIONS = {
   visitors: {
@@ -224,7 +225,7 @@ export async function runReportQuery(pool, {
        LEFT JOIN hosts h ON h.id = vis.host_id
        LEFT JOIN sites s ON s.id = vis.site_id
        LEFT JOIN visitor_categories vc ON vc.id = vis.category_id
-       WHERE vis.organisation_id = ?${siteSql} AND vis.status = 'checked_in'
+       WHERE vis.organisation_id = ?${siteSql} AND ${visitOnSitePredicate('vis')}
        ORDER BY vis.checked_in_at DESC`,
       params,
     );
