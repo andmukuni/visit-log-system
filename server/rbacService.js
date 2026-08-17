@@ -326,7 +326,7 @@ export function resolveVisitRoutePermissions(req) {
   if (path.includes('/check-in')) {
     return ['station.visitors.checkin', 'reception.visitors.checkin'];
   }
-  if (path.includes('/check-out')) {
+  if (path.includes('/check-out') || path.includes('/left-premises')) {
     return ['station.visitors.checkout'];
   }
   if (path.includes('/approve') || path.includes('/reject')) {

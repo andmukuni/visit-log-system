@@ -14,7 +14,7 @@ import { resolveViewerAccessContext, applyVisitAccessPolicyToRows } from '../vis
 import { visitZoneMatchExpr } from '../receptionistService.js';
 import { visitSecurityScopeFilterClause } from '../securityGuardService.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
-import { GATE_CHECKOUT_ELIGIBLE_STATUSES, isGateCheckoutEligible } from '../../shared/visitCheckout.js';
+import { GATE_EXIT_ELIGIBLE_STATUSES, isGateCheckoutEligible } from '../../shared/visitCheckout.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, applyVisitListMasking, formatVisitResponse } from '../visitResponseService.js';
@@ -1021,8 +1021,8 @@ export function createVisitsRouter() {
 
       const access = await resolveVisitsRouterAccess(req);
       const visitType = String(req.query.type || 'walk-in').toLowerCase();
-      const statusPlaceholders = GATE_CHECKOUT_ELIGIBLE_STATUSES.map(() => '?').join(', ');
-      const params = [scope.organisation_id, ...GATE_CHECKOUT_ELIGIBLE_STATUSES];
+      const statusPlaceholders = GATE_EXIT_ELIGIBLE_STATUSES.map(() => '?').join(', ');
+      const params = [scope.organisation_id, ...GATE_EXIT_ELIGIBLE_STATUSES];
       let siteFilter = '';
       if (scope.site_id) {
         siteFilter = ' AND vis.site_id = ?';

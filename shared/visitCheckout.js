@@ -13,10 +13,25 @@ export const GATE_CHECKOUT_ELIGIBLE_STATUSES = Object.freeze([
   'entered_premises',
 ]);
 
+/**
+ * Everyone the gate exit screen should list: visits still eligible for a
+ * direct gate checkout, plus visits already checked out elsewhere (e.g.
+ * reception) that are now just waiting on the gate to confirm they've
+ * physically left the premises.
+ */
+export const GATE_EXIT_ELIGIBLE_STATUSES = Object.freeze([
+  ...GATE_CHECKOUT_ELIGIBLE_STATUSES,
+  'checked_out',
+]);
+
 export function isCheckoutEligible(status) {
   return CHECKOUT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
 }
 
 export function isGateCheckoutEligible(status) {
   return GATE_CHECKOUT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
+}
+
+export function isGateExitEligible(status) {
+  return GATE_EXIT_ELIGIBLE_STATUSES.includes(String(status || '').toLowerCase());
 }

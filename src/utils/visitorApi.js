@@ -75,6 +75,7 @@ export const visitorApi = {
     body: JSON.stringify(badgeNumber != null && badgeNumber !== '' ? { badgeNumber } : {}),
   }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
+  markLeftPremises: (id) => apiFetch(`/admin/visits/${id}/left-premises`, { method: 'POST' }),
   lookupVisit: (query, type) => apiFetch('/admin/visits/lookup', { method: 'POST', body: JSON.stringify({ query, type }) }),
   getPendingCheckIns: (type = 'walk-in') => apiFetch(`/admin/visits/pending-check-in?type=${encodeURIComponent(type)}`),
   getExpectedArrivals: (params = {}) => {

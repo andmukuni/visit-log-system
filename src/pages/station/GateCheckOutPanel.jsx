@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Car, Footprints, LogOut, Search, User } from 'lucide-react';
 import { LoadingButton, StatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
-import { isGateCheckoutEligible } from '../../../shared/visitCheckout.js';
+import { isGateExitEligible } from '../../../shared/visitCheckout.js';
 import { formatNrcInput } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
@@ -62,7 +62,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     setLoading(true);
     try {
       const rows = await visitorApi.getOnSiteVisits(mode);
-      setVisits(Array.isArray(rows) ? rows.filter((v) => isGateCheckoutEligible(v.status)) : []);
+      setVisits(Array.isArray(rows) ? rows.filter((v) => isGateExitEligible(v.status)) : []);
     } catch (err) {
       toast.error(err.message || 'Failed to load on-site visits.');
       setVisits([]);
@@ -97,11 +97,18 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     });
   }, [query, visits]);
 
-  const handleCheckOut = async (visitId) => {
+  const handleCheckOut = async (row) => {
+    const visitId = row.id;
+    const alreadyCheckedOut = row.status === 'checked_out';
     setCheckingOut(visitId);
     try {
-      await visitorApi.checkOutVisit(visitId);
-      toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked out successfully.`);
+      if (alreadyCheckedOut) {
+        await visitorApi.markLeftPremises(visitId);
+        toast.success(`${row.full_name || (isVehicle ? 'Vehicle' : 'Visitor')} marked as left premises.`);
+      } else {
+        await visitorApi.checkOutVisit(visitId);
+        toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked out successfully.`);
+      }
       setVisits((prev) => prev.filter((v) => v.id !== visitId));
     } catch (err) {
       toast.error(err.message);
@@ -179,12 +186,13 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                   <div className="flex sm:justify-end">
                     <LoadingButton
                       loading={checkingOut === row.id}
-                      loadingLabel="Checking out…"
-                      aria-label="Checkout"
+                      loadingLabel={row.status === 'checked_out' ? 'Confirming exit…' : 'Checking out…'}
+                      aria-label={row.status === 'checked_out' ? 'Confirm left premises' : 'Checkout'}
+                      title={row.status === 'checked_out' ? 'Confirm visitor has left premises' : 'Check visitor out'}
                       icon={LogOut}
                       iconOnly
                       size="lg"
-                      onClick={() => handleCheckOut(row.id)}
+                      onClick={() => handleCheckOut(row)}
                       className="bg-navy-800 hover:bg-navy-700 border-navy-800"
                     />
                   </div>
