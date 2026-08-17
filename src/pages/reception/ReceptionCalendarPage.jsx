@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader, RefreshAction, ActionToolbar } from '../../components/ui';
 import ExpectedVisitorsTimeline from '../../components/reception/ExpectedVisitorsTimeline';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
-import { periodQueryRange, normalizePeriodStart, startOfDay } from '../../components/executive/calendarUtils';
+import { periodQueryRange, normalizePeriodStart } from '../../components/executive/calendarUtils';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
 
@@ -65,30 +65,19 @@ export default function ReceptionCalendarPage() {
     load();
   }, [load]);
 
-  const isSelectedToday = useMemo(() => {
-    const today = startOfDay(new Date());
-    const selected = startOfDay(selectedDate);
-    return (
-      today.getFullYear() === selected.getFullYear()
-      && today.getMonth() === selected.getMonth()
-      && today.getDate() === selected.getDate()
-    );
-  }, [selectedDate]);
-
   const kpis = useMemo(() => {
-    const vipToday = appointments.filter((row) => (
+    const inZone = appointments.filter((row) => row._accessLevel !== 'restricted');
+    const vipToday = inZone.filter((row) => (
       ['vip', 'vvip'].includes(String(row.classification || '').toLowerCase())
     )).length;
 
     return {
-      expectedToday: isSelectedToday
-        ? (dashboard?.expectedToday ?? appointments.length)
-        : appointments.length,
+      expectedToday: inZone.length,
       onSiteNow: dashboard?.checkedInAtDesk || 0,
       pendingApprovals: dashboard?.pendingApprovals || 0,
       vipToday,
     };
-  }, [appointments, dashboard, isSelectedToday]);
+  }, [appointments, dashboard]);
 
   const handleDateChange = useCallback((nextDate) => {
     setSelectedDate(normalizePeriodStart(nextDate, 'day'));

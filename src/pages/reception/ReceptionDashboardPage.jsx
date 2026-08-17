@@ -74,8 +74,6 @@ export default function ReceptionDashboardPage() {
     load();
   }, [load]);
 
-  const targets = data?.targets || {};
-
   const metricsSection = data ? {
     title: '',
     variant: 'overview',
@@ -83,7 +81,7 @@ export default function ReceptionDashboardPage() {
       {
         title: 'Expected today',
         value: data.expectedToday,
-        target: targets.expectedToday ?? data.scheduledToday ?? null,
+        showProgress: false,
         accent: 'light',
         icon: CalendarDays,
       },
@@ -97,15 +95,14 @@ export default function ReceptionDashboardPage() {
       {
         title: 'On-site at desk',
         value: data.checkedInAtDesk,
-        target: targets.checkedInAtDesk ?? data.scheduledToday ?? null,
+        showProgress: false,
         accent: 'light',
         icon: Users,
       },
       {
         title: 'Waiting for host',
         value: data.waitingForHost,
-        target: targets.waitingForHost ?? null,
-        showProgress: (targets.waitingForHost ?? 0) > 0,
+        showProgress: false,
         accent: 'charcoal',
         icon: UserCheck,
       },
@@ -212,7 +209,7 @@ export default function ReceptionDashboardPage() {
               </Link>
             </Card>
             <Card title="Check-in today" subtitle="Appointments for hosts in your zone">
-              <p className="text-3xl font-bold text-navy-900">{(data.checkInAppointments || []).length}</p>
+              <p className="text-3xl font-bold text-navy-900">{data.checkInToday ?? 0}</p>
               <Link to="/reception/check-in" className="mt-3 inline-flex text-sm font-medium text-cyan-700 hover:text-cyan-800">
                 Open check-in desk
               </Link>

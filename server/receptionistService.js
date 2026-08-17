@@ -333,6 +333,24 @@ export function visitZoneMatchExpr(zoneIds, {
 }
 
 /**
+ * WHERE clause: the visit is in the receptionist's live host-zone set.
+ * Wraps visitZoneMatchExpr so KPI/count queries use the same host_zones
+ * intersection as desk lists (not the frozen visits.zone_id snapshot).
+ * Empty zoneIds deny every row. Params bind at this clause's position —
+ * place them after org/site placeholders and before any extra predicates.
+ */
+export function visitInZoneClause(zoneIds, aliases = {}) {
+  const match = visitZoneMatchExpr(zoneIds, aliases);
+  if (!match.params.length) {
+    return { sql: ' AND 1=0', params: [] };
+  }
+  return {
+    sql: ` AND (${match.sql}) = 1`,
+    params: match.params,
+  };
+}
+
+/**
  * Search predicate for reception visit lists that now include cross-zone rows.
  *
  * Without this split, search is an inference oracle: a receptionist could type

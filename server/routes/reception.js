@@ -31,6 +31,7 @@ import {
   officeZoneFilterClause,
   requireReceptionZoneContext,
   resolveHostZoneId,
+  visitInZoneClause,
   visitZoneFilterClause,
   visitZoneMatchExpr,
 } from '../receptionistService.js';
@@ -38,6 +39,8 @@ import { applyVisitAccessPolicy, applyVisitAccessPolicyToRows, auditFullRecordVi
 import { resolveHostZoneIds } from '../hostPortalService.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
+const DESK_ON_SITE_STATUSES = ['reception_check_in', 'checked_in', 'waiting', 'in_meeting'];
+const VISIT_SCHEDULED_AT_SQL = 'COALESCE(a.scheduled_at, vis.expected_at, vis.created_at)';
 
 function siteFilterClause(scope, alias = 'vis') {
   if (!scope?.site_id) return { sql: '', params: [] };
@@ -185,6 +188,7 @@ export function createReceptionRouter() {
             checkedInAtDesk: 0,
             waitingForHost: 0,
             hostsOccupied: 0,
+            checkInToday: 0,
             checkInAppointments: [],
             weeklyTrend: [],
             visitTrend: 0,
@@ -198,65 +202,61 @@ export function createReceptionRouter() {
       }
 
       const siteId = scope.site_id;
-      const { site, zone } = receptionVisitFilters(scope, zoneReq.zoneIds);
-      const baseParams = [orgId, ...site.params, ...zone.params];
-      const chartScopeSql = `${siteId ? ' AND vis.site_id = ?' : ''}${zone.sql}`;
-      const chartScopeParams = [
-        ...(siteId ? [siteId] : []),
-        ...zone.params,
-      ];
-      const chartJoins = `
+      const site = siteFilterClause(scope);
+      const inZone = visitInZoneClause(zoneReq.zoneIds);
+      const baseParams = [orgId, ...site.params, ...inZone.params];
+      const chartScopeSql = `${site.sql}${inZone.sql}`;
+      const chartScopeParams = [...site.params, ...inZone.params];
+      const zoneJoins = `
         LEFT JOIN hosts h ON h.id = vis.host_id
         ${ZONE_OFFICE_JOINS}
+      `;
+      const chartJoins = `
+        ${zoneJoins}
+        LEFT JOIN appointments a ON a.visit_id = vis.id
       `;
       const visitFrom = `
         FROM visits vis
         LEFT JOIN hosts h ON h.id = vis.host_id
         ${ZONE_OFFICE_JOINS}
+        LEFT JOIN appointments a ON a.visit_id = vis.id
       `;
 
-      const countVisits = async (extra = '') => {
+      const countVisits = async (extra = '', extraParams = []) => {
         const [[row]] = await pool.query(
-          `SELECT COUNT(*) AS count ${visitFrom}
-           WHERE vis.organisation_id = ?${site.sql}${zone.sql} ${extra}`,
-          baseParams,
+          `SELECT COUNT(DISTINCT vis.id) AS count ${visitFrom}
+           WHERE vis.organisation_id = ?${site.sql}${inZone.sql} ${extra}`,
+          [...baseParams, ...extraParams],
         );
         return Number(row?.count || 0);
       };
 
       const expectedToday = await countVisits(
-        `AND vis.status IN ('expected', 'approved', 'pre_registered')
-         AND DATE(COALESCE(
-           vis.expected_at,
-           (SELECT a.scheduled_at FROM appointments a WHERE a.visit_id = vis.id LIMIT 1),
-           vis.created_at
-         )) = CURDATE()`,
+        `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
+         AND DATE(${VISIT_SCHEDULED_AT_SQL}) = CURDATE()`,
       );
-      const pendingApprovals = await countVisits(
-        `AND vis.status IN ('pending_approval', 'pre_registered')`,
-      );
+      const pendingApprovals = await countVisits(`AND vis.status = 'pending_approval'`);
       const checkedInAtDesk = await countVisits(
-        `AND vis.status IN ('reception_check_in', 'checked_in', 'waiting', 'in_meeting')`,
+        `AND vis.status IN (${DESK_ON_SITE_STATUSES.map(() => '?').join(', ')})`,
+        DESK_ON_SITE_STATUSES,
       );
       const waitingForHost = await countVisits(`AND vis.status = 'waiting'`);
 
       const [[hostsOccupiedRow]] = await pool.query(
         `SELECT COUNT(DISTINCT vis.host_id) AS count
          ${visitFrom}
-         WHERE vis.organisation_id = ?${site.sql}${zone.sql}
+         WHERE vis.organisation_id = ?${site.sql}${inZone.sql}
            AND vis.host_id IS NOT NULL
            AND vis.status IN (${HOST_OCCUPIED_STATUSES.map(() => '?').join(', ')})`,
         [...baseParams, ...HOST_OCCUPIED_STATUSES],
       );
 
-      const checkInRows = await fetchCheckInAppointments(scope, 'walk-in', zoneReq.zoneIds);
+      const checkInRows = await fetchCheckInAppointments(scope, 'all', zoneReq.zoneIds);
 
-      const scheduledToday = await countVisits(
-        `AND vis.status NOT IN ('cancelled', 'rejected', 'denied')
-         AND DATE(COALESCE(vis.expected_at, vis.created_at)) = CURDATE()`,
-      );
-
-      const chartOpts = { joins: chartJoins };
+      const chartOpts = {
+        joins: chartJoins,
+        dateExpr: VISIT_SCHEDULED_AT_SQL,
+      };
       const weeklyVisits = await fetchWeeklyVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
       const weeklyWalking = await fetchWeeklyWalkingVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
       const weeklyDriveIn = await fetchWeeklyDriveInVisits(pool, orgId, chartScopeSql, chartScopeParams, chartOpts);
@@ -272,7 +272,7 @@ export function createReceptionRouter() {
         orgId,
         chartScopeSql,
         chartScopeParams,
-        chartOpts,
+        { joins: zoneJoins },
       );
 
       const recentParams = [orgId];
@@ -306,6 +306,8 @@ export function createReceptionRouter() {
 
       const perms = permissionsFromRequest(req);
       const viewer = buildReceptionViewer(scope, zoneReq, perms);
+      const checkInAppointments = applyVisitAccessPolicyToRows(checkInRows, viewer, { zoneMatchColumn: 'zone_match' });
+      const checkInToday = checkInAppointments.filter((row) => row._accessLevel === 'full').length;
       res.json({
         ok: true,
         data: {
@@ -314,17 +316,14 @@ export function createReceptionRouter() {
           checkedInAtDesk,
           waitingForHost,
           hostsOccupied: Number(hostsOccupiedRow?.count || 0),
-          scheduledToday,
-          checkInAppointments: applyVisitAccessPolicyToRows(checkInRows, viewer, { zoneMatchColumn: 'zone_match' }),
+          scheduledToday: expectedToday,
+          checkInToday,
+          checkInAppointments,
           visitTrend,
           visitsToday,
           weeklyTrend: buildWeeklyTrend(weeklyVisits, weeklyWalking, weeklyDriveIn),
           eventsByType,
-          targets: {
-            expectedToday: scheduledToday,
-            checkedInAtDesk: scheduledToday,
-            waitingForHost: checkedInAtDesk > 0 ? checkedInAtDesk : null,
-          },
+          targets: {},
           recentActivity,
           scope: {
             organisationId: orgId,

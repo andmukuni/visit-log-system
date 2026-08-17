@@ -59,7 +59,7 @@ export async function fetchVisitsTodayYesterday(
   organisationId = null,
   siteSql = '',
   siteParams = [],
-  { joins = '' } = {},
+  { joins = '', dateExpr = 'vis.created_at' } = {},
 ) {
   const params = [];
   let orgFilter = '';
@@ -69,16 +69,15 @@ export async function fetchVisitsTodayYesterday(
   }
   params.push(...siteParams);
   const [[todayRow]] = await pool.query(
-    `SELECT COUNT(*) AS count FROM visits vis
+    `SELECT COUNT(DISTINCT vis.id) AS count FROM visits vis
      ${joins}
-     WHERE vis.created_at >= CURDATE()${orgFilter}${siteSql}`,
+     WHERE DATE(${dateExpr}) = CURDATE()${orgFilter}${siteSql}`,
     params,
   );
   const [[yesterdayRow]] = await pool.query(
-    `SELECT COUNT(*) AS count FROM visits vis
+    `SELECT COUNT(DISTINCT vis.id) AS count FROM visits vis
      ${joins}
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
-       AND vis.created_at < CURDATE()${orgFilter}${siteSql}`,
+     WHERE DATE(${dateExpr}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)${orgFilter}${siteSql}`,
     params,
   );
   const visitsToday = Number(todayRow?.count || 0);
@@ -91,7 +90,7 @@ export async function fetchWeeklyVisits(
   organisationId = null,
   siteSql = '',
   siteParams = [],
-  { joins = '' } = {},
+  { joins = '', dateExpr = 'vis.created_at' } = {},
 ) {
   const params = [];
   let orgFilter = '';
@@ -101,11 +100,11 @@ export async function fetchWeeklyVisits(
   }
   params.push(...siteParams);
   const [rows] = await pool.query(
-    `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
+    `SELECT DATE(${dateExpr}) AS visit_date, COUNT(DISTINCT vis.id) AS count
      FROM visits vis
      ${joins}
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
-     GROUP BY DATE(vis.created_at)`,
+     WHERE DATE(${dateExpr}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
+     GROUP BY DATE(${dateExpr})`,
     params,
   );
   return mapRowsToRollingWeekSeries(rows);
@@ -116,7 +115,7 @@ export async function fetchWeeklyWalkingVisits(
   organisationId = null,
   siteSql = '',
   siteParams = [],
-  { joins = '' } = {},
+  { joins = '', dateExpr = 'vis.created_at' } = {},
 ) {
   const params = [];
   let orgFilter = '';
@@ -126,12 +125,12 @@ export async function fetchWeeklyWalkingVisits(
   }
   params.push(...siteParams);
   const [rows] = await pool.query(
-    `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
+    `SELECT DATE(${dateExpr}) AS visit_date, COUNT(DISTINCT vis.id) AS count
      FROM visits vis
      ${joins}
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
+     WHERE DATE(${dateExpr}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
        AND NOT EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)
-     GROUP BY DATE(vis.created_at)`,
+     GROUP BY DATE(${dateExpr})`,
     params,
   );
   return mapRowsToRollingWeekSeries(rows);
@@ -142,7 +141,7 @@ export async function fetchWeeklyDriveInVisits(
   organisationId = null,
   siteSql = '',
   siteParams = [],
-  { joins = '' } = {},
+  { joins = '', dateExpr = 'vis.created_at' } = {},
 ) {
   const params = [];
   let orgFilter = '';
@@ -152,12 +151,12 @@ export async function fetchWeeklyDriveInVisits(
   }
   params.push(...siteParams);
   const [rows] = await pool.query(
-    `SELECT DATE(vis.created_at) AS visit_date, COUNT(*) AS count
+    `SELECT DATE(${dateExpr}) AS visit_date, COUNT(DISTINCT vis.id) AS count
      FROM visits vis
      ${joins}
-     WHERE vis.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
+     WHERE DATE(${dateExpr}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)${orgFilter}${siteSql}
        AND EXISTS (SELECT 1 FROM vehicles veh WHERE veh.visit_id = vis.id)
-     GROUP BY DATE(vis.created_at)`,
+     GROUP BY DATE(${dateExpr})`,
     params,
   );
   return mapRowsToRollingWeekSeries(rows);

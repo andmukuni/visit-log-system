@@ -20,7 +20,9 @@ import {
 } from '../shared/portalNavigation.js';
 import {
   hostZoneFilterClause,
+  visitInZoneClause,
   visitZoneFilterClause,
+  visitZoneMatchExpr,
 } from '../server/receptionistService.js';
 
 const HOST_OCCUPIED_STATUSES = ['waiting', 'in_meeting', 'reception_check_in', 'checked_in'];
@@ -162,5 +164,23 @@ describe('reception zone filters', () => {
     assert.deepEqual(visit.params, zones);
     assert.match(host.sql, /COALESCE\(NULLIF\(h\.zone_id/);
     assert.deepEqual(host.params, zones);
+  });
+});
+
+describe('visitInZoneClause', () => {
+  it('denies all rows when zoneIds is null or empty', () => {
+    assert.match(visitInZoneClause(null).sql, /1=0/);
+    assert.deepEqual(visitInZoneClause(null).params, []);
+    assert.match(visitInZoneClause([]).sql, /1=0/);
+    assert.deepEqual(visitInZoneClause([]).params, []);
+  });
+
+  it('wraps visitZoneMatchExpr as a WHERE predicate with the same params', () => {
+    const zones = ['zone-a', 'zone-b'];
+    const match = visitZoneMatchExpr(zones);
+    const clause = visitInZoneClause(zones);
+    assert.equal(clause.sql, ` AND (${match.sql}) = 1`);
+    assert.deepEqual(clause.params, match.params);
+    assert.deepEqual(clause.params, [...zones, ...zones]);
   });
 });
