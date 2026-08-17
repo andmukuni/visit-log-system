@@ -18,7 +18,7 @@ describe('email adapter', () => {
 
   beforeEach(() => {
     process.env.EMAIL_PROVIDER = 'console';
-    process.env.EMAIL_FROM = 'test@vm360.local';
+    process.env.EMAIL_FROM = 'test@visitors.local';
   });
 
   afterEach(() => {

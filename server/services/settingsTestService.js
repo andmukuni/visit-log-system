@@ -4,10 +4,12 @@ import {
   getGeneralSettings,
   isSmtpConfigured,
   isSmsConfigured,
+  resolveAppName,
   resolveSmtpPass,
 } from './adminSettingsService.js';
 import { sendOntechSms, normalizeZmPhone } from '../adapters/ontechSmsClient.js';
-import { APP_NAME, SMS_SENDER_PREFIX } from '../../shared/branding.js';
+import { resolveEmailFromName } from '../adapters/emailAdapter.js';
+import { APP_NAME } from '../../shared/branding.js';
 
 function formatSmtpError(error) {
   const code = error?.code || '';
@@ -34,7 +36,7 @@ export async function sendTestEmail(to) {
   const general = await getGeneralSettings();
   const appName = general.app_name || APP_NAME;
   const fromAddress = smtp.from || smtp.user || 'noreply@visitors.local';
-  const fromName = smtp.from_name || appName;
+  const fromName = await resolveEmailFromName(smtp.from_name, { generalSettings: general }, appName);
 
   let nodemailer;
   try {
@@ -107,7 +109,7 @@ export async function testSmsConnection({ phone, message } = {}) {
 
   const provider = String(config.provider || 'console').toLowerCase();
   const testPhone = String(phone || '').trim();
-  const testMessage = String(message || '').trim() || `${SMS_SENDER_PREFIX} SMS test — connection successful.`;
+  const testMessage = String(message || '').trim() || `${await resolveAppName()} SMS test — connection successful.`;
 
   if (provider === 'console') {
     console.log('[sms:test:console] ─────────────────────────');

@@ -1,4 +1,4 @@
-# VM360 Visitor Log System — Implementation Plan
+# Visitor Log System — Implementation Plan
 
 Generated from the build prompt and scope documents (`scoopofwork/Visitor Log System Short Scope.md`, `scoopofwork/sidebar links design.md`).
 

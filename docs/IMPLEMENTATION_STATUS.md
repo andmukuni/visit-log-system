@@ -1,4 +1,4 @@
-# VM360 — Implementation Status
+# Visitor Log System — Implementation Status
 
 Last updated: 2026-08-10
 

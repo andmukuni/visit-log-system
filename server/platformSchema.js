@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import pool from './db.js';
 import { generateId } from './visitorSchema.js';
-import { APP_NAME, SMS_SENDER_PREFIX } from '../shared/branding.js';
 
 export function generateInviteToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -150,155 +149,155 @@ const DEFAULT_TEMPLATES = [
     key: 'visit.pending_approval',
     subject: 'Approval required',
     inApp: 'Visitor {{visitor_name}} is awaiting your approval.',
-    email: `Hello {{host_name}},\n\nVisitor {{visitor_name}} requires your approval before check-in.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} needs approval. Pass code {{pass_code}}.`,
+    email: `Hello {{host_name}},\n\nVisitor {{visitor_name}} requires your approval before check-in.\n\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} needs approval. Pass code {{pass_code}}.`,
   },
   {
     key: 'visit.approved',
     subject: 'Visit approved',
     inApp: 'Your visit for {{visitor_name}} has been approved.',
-    email: `Hello {{visitor_name}},\n\nYour visit has been approved.\n\nPass code: {{pass_code}}\nConfirm details: {{invite_url}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit approved. Pass code {{pass_code}}. {{invite_url}}`,
+    email: `Hello {{visitor_name}},\n\nYour visit has been approved.\n\nPass code: {{pass_code}}\nConfirm details: {{invite_url}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit approved. Pass code {{pass_code}}. {{invite_url}}`,
   },
   {
     key: 'visit.host_approved',
     subject: 'Visit approved',
     inApp: 'Visit for {{visitor_name}} was approved.',
-    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been approved.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit approved for {{visitor_name}}. Code {{pass_code}}.`,
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been approved.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit approved for {{visitor_name}}. Code {{pass_code}}.`,
   },
   {
     key: 'visit.host_booking',
     subject: 'Visit confirmed',
     inApp: 'Host booking confirmed for {{visitor_name}}.',
-    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} is confirmed.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit confirmed. Pass code {{pass_code}}. Expected {{expected_at}}. {{invite_url}}`,
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} is confirmed.\n\nPass code: {{pass_code}}\nExpected: {{expected_at}}\nDetails: {{invite_url}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit confirmed. Pass code {{pass_code}}. Expected {{expected_at}}. {{invite_url}}`,
   },
   {
     key: 'visit.pre_arrival_alert',
     subject: 'Expected arrival in 1 hour',
     inApp: '{{visitor_name}} is expected in about 1 hour (host: {{host_name}}). Pass code {{pass_code}}.',
-    email: `Expected arrival in about 1 hour\n\nVisitor: {{visitor_name}}\nHost: {{host_name}}\nSite: {{site_name}}\nExpected: {{expected_at}}\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Expected in ~1h — {{visitor_name}} ({{host_name}}). Code {{pass_code}}.`,
+    email: `Expected arrival in about 1 hour\n\nVisitor: {{visitor_name}}\nHost: {{host_name}}\nSite: {{site_name}}\nExpected: {{expected_at}}\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Expected in ~1h — {{visitor_name}} ({{host_name}}). Code {{pass_code}}.`,
   },
   {
     key: 'visit.visitor_reminder',
     subject: 'Visit reminder',
     inApp: 'Reminder: your visit is expected soon.',
-    email: `Hello {{visitor_name}},\n\nReminder: your visit with {{host_name}} is expected at {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Reminder — visit at {{expected_at}}. Code {{pass_code}}. {{invite_url}}`,
+    email: `Hello {{visitor_name}},\n\nReminder: your visit with {{host_name}} is expected at {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Reminder — visit at {{expected_at}}. Code {{pass_code}}. {{invite_url}}`,
   },
   {
     key: 'visit.rejected',
     subject: 'Visit rejected',
     inApp: 'The visit for {{visitor_name}} was rejected.',
-    email: `Hello {{visitor_name}},\n\nUnfortunately your visit request was not approved.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Your visit request was not approved.`,
+    email: `Hello {{visitor_name}},\n\nUnfortunately your visit request was not approved.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Your visit request was not approved.`,
   },
   {
     key: 'visit.host_rejected',
     subject: 'Visit rejected',
     inApp: 'The visit for {{visitor_name}} was rejected.',
-    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was not approved.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit for {{visitor_name}} was rejected.`,
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was not approved.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit for {{visitor_name}} was rejected.`,
   },
   {
     key: 'visit.checked_in',
     subject: 'Visitor arrived',
     inApp: '{{visitor_name}} has checked in at reception.',
-    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked in.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked in.`,
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked in.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} has checked in.`,
   },
   {
     key: 'visit.visitor_checked_in',
     subject: 'You are checked in',
     inApp: 'You have checked in.',
-    email: `Hello {{visitor_name}},\n\nYou have checked in at reception. Your host {{host_name}} has been notified.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Checked in. Host {{host_name}} notified.`,
+    email: `Hello {{visitor_name}},\n\nYou have checked in at reception. Your host {{host_name}} has been notified.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Checked in. Host {{host_name}} notified.`,
   },
   {
     key: 'visit.waiting_at_reception',
     subject: 'Visitor waiting',
     inApp: '{{visitor_name}} is waiting for you at reception.',
-    email: `Hello {{host_name}},\n\n{{visitor_name}} is waiting for you at reception.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} is waiting at reception.`,
+    email: `Hello {{host_name}},\n\n{{visitor_name}} is waiting for you at reception.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} is waiting at reception.`,
   },
   {
     key: 'visit.in_meeting',
     subject: 'Meeting started',
     inApp: 'Meeting with {{visitor_name}} has started.',
-    email: `Hello {{host_name}},\n\nYour meeting with {{visitor_name}} has started.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Meeting with {{visitor_name}} started.`,
+    email: `Hello {{host_name}},\n\nYour meeting with {{visitor_name}} has started.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Meeting with {{visitor_name}} started.`,
   },
   {
     key: 'visit.checked_out',
     subject: 'Visitor departed',
     inApp: '{{visitor_name}} has checked out.',
-    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked out.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} has checked out.`,
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has checked out.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} has checked out.`,
   },
   {
     key: 'visit.visitor_checked_out',
     subject: 'Visit complete',
     inApp: 'Your visit is complete.',
-    email: `Hello {{visitor_name}},\n\nThank you for visiting. Your check-out is complete.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit complete. Thank you.`,
+    email: `Hello {{visitor_name}},\n\nThank you for visiting. Your check-out is complete.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit complete. Thank you.`,
   },
   {
     key: 'visit.invite_sent',
     subject: 'Visitor invitation',
     inApp: 'An invitation was sent to {{visitor_name}}.',
-    email: `Hello {{visitor_name}},\n\nYou are invited to visit. Please confirm your details:\n{{invite_url}}\n\nYour pass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX} invite: confirm at {{invite_url}} Pass code {{pass_code}}`,
+    email: `Hello {{visitor_name}},\n\nYou are invited to visit. Please confirm your details:\n{{invite_url}}\n\nYour pass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}} invite: confirm at {{invite_url}} Pass code {{pass_code}}`,
   },
   {
     key: 'visit.arrived_at_gate',
     subject: 'Visitor at gate',
     inApp: '{{visitor_name}} has arrived at the gate.',
-    email: `Hello {{host_name}},\n\n{{visitor_name}} has arrived at the gate.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} at gate. Code {{pass_code}}`,
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has arrived at the gate.\n\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} at gate. Code {{pass_code}}`,
   },
   {
     key: 'visit.entered_premises',
     subject: 'Visitor on premises',
     inApp: '{{visitor_name}} has entered the premises.',
-    email: `Hello {{host_name}},\n\n{{visitor_name}} has entered the premises.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} entered premises. Code {{pass_code}}`,
+    email: `Hello {{host_name}},\n\n{{visitor_name}} has entered the premises.\n\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} entered premises. Code {{pass_code}}`,
   },
   {
     key: 'visit.vip_arrival',
     subject: 'VIP visitor arrival',
     inApp: 'VIP/VVIP visitor {{visitor_name}} has arrived.',
-    email: `VIP/VVIP visitor {{visitor_name}} has arrived.\n\nHost: {{host_name}}\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX} VIP arrival: {{visitor_name}}`,
+    email: `VIP/VVIP visitor {{visitor_name}} has arrived.\n\nHost: {{host_name}}\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}} VIP arrival: {{visitor_name}}`,
   },
   {
     key: 'visit.cancelled',
     subject: 'Visit cancelled',
     inApp: 'The visit for {{visitor_name}} was cancelled.',
-    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been cancelled.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit for {{visitor_name}} cancelled.`,
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} has been cancelled.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit for {{visitor_name}} cancelled.`,
   },
   {
     key: 'visit.visitor_cancelled',
     subject: 'Visit cancelled',
     inApp: 'Your visit was cancelled.',
-    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} has been cancelled.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Your visit has been cancelled.`,
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} has been cancelled.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Your visit has been cancelled.`,
   },
   {
     key: 'visit.rescheduled',
     subject: 'Visit rescheduled',
     inApp: 'The visit for {{visitor_name}} was rescheduled to {{expected_at}}.',
-    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was rescheduled to {{expected_at}}.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled for {{visitor_name}} to {{expected_at}}.`,
+    email: `Hello {{host_name}},\n\nThe visit for {{visitor_name}} was rescheduled to {{expected_at}}.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit rescheduled for {{visitor_name}} to {{expected_at}}.`,
   },
   {
     key: 'visit.visitor_rescheduled',
     subject: 'Visit rescheduled',
     inApp: 'Your visit was rescheduled.',
-    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} was rescheduled to {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: Visit rescheduled to {{expected_at}}. Code {{pass_code}}.`,
+    email: `Hello {{visitor_name}},\n\nYour visit with {{host_name}} was rescheduled to {{expected_at}}.\n\nPass code: {{pass_code}}\nDetails: {{invite_url}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: Visit rescheduled to {{expected_at}}. Code {{pass_code}}.`,
   },
   // Zone-based access control (Logic.md) — same-zone reception gets the full
   // picture; different-zone reception gets name + time only, nothing else.
@@ -306,36 +305,36 @@ const DEFAULT_TEMPLATES = [
     key: 'visit.reception_new_expected',
     subject: 'New expected visitor',
     inApp: '{{visitor_name}} is expected for {{host_name}} at {{expected_at}}.',
-    email: `Hello,\n\n{{visitor_name}} ({{company}}) is expected for {{host_name}} at {{expected_at}}.\n\nPass code: {{pass_code}}\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected for {{host_name}} at {{expected_at}}. Code {{pass_code}}.`,
+    email: `Hello,\n\n{{visitor_name}} ({{company}}) is expected for {{host_name}} at {{expected_at}}.\n\nPass code: {{pass_code}}\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} expected for {{host_name}} at {{expected_at}}. Code {{pass_code}}.`,
   },
   {
     key: 'visit.reception_new_expected_restricted',
     subject: 'New expected visitor',
     inApp: '{{visitor_name}} — expected {{expected_at}}.',
-    email: `A visitor is expected in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+    email: `A visitor is expected in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} expected {{expected_at}}.`,
   },
   {
     key: 'visit.arrived_at_gate_restricted',
     subject: 'Visitor at gate',
     inApp: '{{visitor_name}} — expected {{expected_at}}.',
-    email: `A visitor has arrived at the gate in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+    email: `A visitor has arrived at the gate in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} expected {{expected_at}}.`,
   },
   {
     key: 'visit.entered_premises_restricted',
     subject: 'Visitor on premises',
     inApp: '{{visitor_name}} — expected {{expected_at}}.',
-    email: `A visitor has entered the premises in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+    email: `A visitor has entered the premises in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} expected {{expected_at}}.`,
   },
   {
     key: 'visit.pre_arrival_alert_restricted',
     subject: 'Expected arrival in 1 hour',
     inApp: '{{visitor_name}} — expected {{expected_at}}.',
-    email: `A visitor is expected soon in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— ${APP_NAME}`,
-    sms: `${SMS_SENDER_PREFIX}: {{visitor_name}} expected {{expected_at}}.`,
+    email: `A visitor is expected soon in another zone.\n\n{{visitor_name}} — expected {{expected_at}}.\n\n— {{app_name}}`,
+    sms: `{{app_name}}: {{visitor_name}} expected {{expected_at}}.`,
   },
 ];
 
@@ -372,9 +371,30 @@ async function seedTemplatesForOrg(organisationId) {
   }
 }
 
+/**
+ * Rows seeded before templates switched to the {{app_name}} variable have the
+ * product name of that era baked into their bodies ("VM360", later "Visitors
+ * Log System"). Swap those literals for {{app_name}} so every send renders
+ * the Application name currently set in System Settings. Idempotent; leaves
+ * admin-customised wording otherwise untouched.
+ */
+async function migrateLegacyTemplateBranding() {
+  await pool.query(
+    `UPDATE notification_templates
+     SET body_template = REPLACE(REPLACE(REPLACE(body_template,
+       'Visitors Log System', '{{app_name}}'),
+       'Visitors Log', '{{app_name}}'),
+       'VM360', '{{app_name}}')
+     WHERE body_template LIKE '%VM360%'
+        OR body_template LIKE '%Visitors Log%'`,
+  );
+}
+
 export async function seedPlatformData() {
   const [orgs] = await pool.query('SELECT id FROM organisations');
   if (!orgs.length) return;
+
+  await migrateLegacyTemplateBranding();
 
   for (const org of orgs) {
     const [[existingSub]] = await pool.query(

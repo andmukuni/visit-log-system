@@ -14,8 +14,9 @@ describe('reception expected-visitor event routing', () => {
 });
 
 describe('buildRestrictedReceptionVars — different-zone notification payload (scenario 2)', () => {
-  it('is a fresh two-key object, never "full vars minus fields"', () => {
+  it('is a fresh allowlisted object, never "full vars minus fields"', () => {
     const fullVars = {
+      app_name: 'WG - Visitor Management',
       visitor_name: 'Jane Doe',
       expected_at: '12 Aug 2026, 09:00',
       host_name: 'CEO Office',
@@ -26,9 +27,11 @@ describe('buildRestrictedReceptionVars — different-zone notification payload (
       invite_url: 'https://example.com/visit/invite/secret-token',
     };
     const restricted = buildRestrictedReceptionVars(fullVars);
-    assert.deepEqual(Object.keys(restricted).sort(), ['expected_at', 'visitor_name']);
+    // app_name is org-wide branding, not visit data — the only non-visit key allowed through.
+    assert.deepEqual(Object.keys(restricted).sort(), ['app_name', 'expected_at', 'visitor_name']);
     assert.equal(restricted.visitor_name, 'Jane Doe');
     assert.equal(restricted.expected_at, '12 Aug 2026, 09:00');
+    assert.equal(restricted.app_name, 'WG - Visitor Management');
   });
 
   it('never carries VIP status through — a different-zone recipient never learns a visit is VIP', () => {

@@ -3,7 +3,7 @@ import { writeVisitEvent } from './auditService.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { sendSms } from './adapters/smsAdapter.js';
 import { getAppBaseUrl, getDeliveryConfig } from './adapters/deliveryConfig.js';
-import { getNotificationSettings } from './services/adminSettingsService.js';
+import { getNotificationSettings, resolveAppName } from './services/adminSettingsService.js';
 import { categoryKeyForEvent } from '../shared/notificationCategories.js';
 import { resolveReceptionAudienceByZone } from './receptionistService.js';
 import { resolveSecurityAudienceForVisit } from './securityGuardService.js';
@@ -20,9 +20,9 @@ export function isReceptionNewExpectedEvent(eventType) {
   return RECEPTION_NEW_EXPECTED_EVENTS.has(eventType);
 }
 
-/** Different-zone reception audiences only ever get {visitor_name, expected_at}. */
+/** Different-zone reception audiences only ever get {visitor_name, expected_at} (+ app branding). */
 function buildRestrictedReceptionVars(vars) {
-  return { visitor_name: vars.visitor_name, expected_at: vars.expected_at };
+  return { app_name: vars.app_name, visitor_name: vars.visitor_name, expected_at: vars.expected_at };
 }
 
 /**
@@ -248,6 +248,10 @@ export async function sendFromTemplate(pool, {
     return [{ ok: false, error: `No templates for ${templateKey}` }];
   }
 
+  const renderVars = vars.app_name === undefined
+    ? { ...vars, app_name: await resolveAppName() }
+    : vars;
+
   const results = [];
   for (const tpl of templates) {
     if (!skipPreferenceCheck && categoryKey) {
@@ -264,8 +268,8 @@ export async function sendFromTemplate(pool, {
       }
     }
 
-    const title = tpl.subject || templateKey;
-    const body = renderTemplate(tpl.body_template, vars);
+    const title = renderTemplate(tpl.subject || templateKey, renderVars);
+    const body = renderTemplate(tpl.body_template, renderVars);
     const channelKey = idempotencyKey ? `${idempotencyKey}:${tpl.channel}` : null;
 
     let channelRecipient = null;
@@ -403,11 +407,13 @@ export async function notifyVisitEvent(pool, {
   if (!categoryKey) return;
 
   const orgSettings = await getNotificationSettings();
+  const appName = await resolveAppName();
   const inviteUrl = visit.invite_token
     ? `${getAppBaseUrl()}/visit/invite/${visit.invite_token}`
     : '';
 
   const vars = {
+    app_name: appName,
     visitor_name: visit.visitor_name,
     host_name: visit.host_name || 'Host',
     pass_code: visit.pass_code,
@@ -694,6 +700,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
   );
 
   const orgSettings = await getNotificationSettings();
+  const appName = await resolveAppName();
   const categoryKey = 'visit_reminder';
   let notified = 0;
 
@@ -703,6 +710,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
       : '';
 
     const vars = {
+      app_name: appName,
       visitor_name: visit.visitor_name,
       host_name: visit.host_name || 'Host',
       pass_code: visit.pass_code,
@@ -817,7 +825,7 @@ export async function notifyPreArrivalReminders(pool, { limit = 50 } = {}) {
       eventType: 'pre_arrival_reminder',
       details: {
         arrivalAt: visit.arrival_at,
-        staffNotified: staff.length,
+        staffNotified: securityStaff.length + sameZone.length + differentZone.length,
       },
     });
     notified += 1;

@@ -597,3 +597,10 @@ export async function getSecuritySettings() {
 export async function getGeneralSettings() {
   return getSetting(SETTING_KEYS.GENERAL);
 }
+
+/** Application name shown in emails/SMS — the System Settings value, not a hardcoded brand. */
+export async function resolveAppName() {
+  const general = await getGeneralSettings().catch(() => null);
+  const name = String(general?.app_name || '').trim();
+  return name || APP_NAME;
+}

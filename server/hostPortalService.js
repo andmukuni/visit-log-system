@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { hashPassword } from './auth.js';
 import { sendEmail } from './adapters/emailAdapter.js';
 import { getAppBaseUrl } from './adapters/deliveryConfig.js';
-import { APP_NAME } from '../shared/branding.js';
+import { resolveAppName } from './services/adminSettingsService.js';
 import { loadZoneInOrg } from './orgStructureService.js';
 
 const HOST_ROLE_SLUG = 'host';
@@ -425,11 +425,12 @@ export async function sendHostPasswordResetEmail(pool, {
   });
 
   const resetUrl = `${getAppBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
-  const subject = `${APP_NAME} — Reset your password`;
+  const appName = await resolveAppName();
+  const subject = `${appName} — Reset your password`;
   const body = [
     `Hello ${host.name || 'there'},`,
     '',
-    `An administrator requested a password reset for your ${APP_NAME} host account.`,
+    `An administrator requested a password reset for your ${appName} host account.`,
     '',
     'Use this link to choose a new password:',
     resetUrl,
@@ -438,7 +439,7 @@ export async function sendHostPasswordResetEmail(pool, {
     '',
     'If you did not expect this email, you can ignore it.',
     '',
-    `— ${APP_NAME}`,
+    `— ${appName}`,
   ].join('\n');
 
   const delivery = await sendEmail({ to: email, subject, body });

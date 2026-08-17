@@ -1,9 +1,33 @@
 import { getEmailConfig } from './deliveryConfig.js';
 import {
   getEffectiveSmtpConfig,
+  getGeneralSettings,
   isSmtpConfigured,
   resolveSmtpPass,
 } from '../services/adminSettingsService.js';
+import { EMAIL_FROM_NAME_DEFAULT } from '../../shared/branding.js';
+
+/**
+ * From-names carried over from earlier product brandings. A stored value equal
+ * to one of these is treated as "never customised" so the Application name from
+ * System Settings wins instead.
+ */
+const LEGACY_FROM_NAMES = new Set(['VM360', EMAIL_FROM_NAME_DEFAULT]);
+
+/**
+ * Sender display name: explicit (non-legacy) SMTP from-name, else the
+ * Application name from System Settings, else the given fallback.
+ * `options.generalSettings` can be injected for tests to avoid DB access.
+ */
+export async function resolveEmailFromName(configuredName, options = {}, fallback = EMAIL_FROM_NAME_DEFAULT) {
+  const name = String(configuredName || '').trim();
+  if (name && !LEGACY_FROM_NAMES.has(name)) return name;
+  const general = options.generalSettings !== undefined
+    ? options.generalSettings
+    : await getGeneralSettings().catch(() => null);
+  const appName = String(general?.app_name || '').trim();
+  return appName || name || fallback;
+}
 
 async function sendViaConsole({ to, subject, body }) {
   console.log('[email:console] ─────────────────────────');
@@ -91,7 +115,7 @@ export async function resolveEmailDeliveryConfig(options = {}) {
     return {
       provider: 'smtp',
       from: effectiveSmtp.from || envConfig.from,
-      fromName: effectiveSmtp.from_name || envConfig.fromName,
+      fromName: await resolveEmailFromName(effectiveSmtp.from_name, options, envConfig.fromName),
       sendgrid: envConfig.sendgrid,
       smtp: {
         host: effectiveSmtp.host,
@@ -105,11 +129,13 @@ export async function resolveEmailDeliveryConfig(options = {}) {
     };
   }
 
+  const fromName = await resolveEmailFromName(envConfig.fromName, options, envConfig.fromName);
+
   if (envConfig.provider === 'sendgrid' && envConfig.sendgrid.apiKey) {
-    return { ...envConfig, configured: true, source: 'env' };
+    return { ...envConfig, fromName, configured: true, source: 'env' };
   }
 
-  return { ...envConfig, source: envConfig.configured ? 'env' : 'none' };
+  return { ...envConfig, fromName, source: envConfig.configured ? 'env' : 'none' };
 }
 
 /**
