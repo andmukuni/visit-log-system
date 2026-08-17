@@ -316,6 +316,7 @@ export default function AdminSecurityGuardDetailPage() {
 
   const loginLinked = Boolean(guard.user_id);
   const isActive = (guard.status || 'active') === 'active';
+  const passwordActionLabel = loginLinked ? 'Change password' : 'Set password';
 
   return (
     <div className="flex flex-col gap-3">
@@ -344,7 +345,7 @@ export default function AdminSecurityGuardDetailPage() {
               className="inline-flex items-center gap-1.5 rounded-md border border-navy-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-navy-800 shadow-sm hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
             >
               <KeyRound size={14} />
-              Set password
+              {passwordActionLabel}
             </button>
             <button
               type="button"
@@ -450,6 +451,16 @@ export default function AdminSecurityGuardDetailPage() {
                 icon={KeyRound}
                 label="Portal login"
                 value={loginLinked ? guard.email : 'Not linked — edit to set email'}
+                action={guard.email ? (
+                  <button
+                    type="button"
+                    onClick={openPasswordModal}
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 hover:underline"
+                  >
+                    <KeyRound size={12} aria-hidden="true" />
+                    {passwordActionLabel}
+                  </button>
+                ) : null}
               />
             </div>
           </div>
@@ -514,7 +525,7 @@ export default function AdminSecurityGuardDetailPage() {
               onClick={openPasswordModal}
               className="mt-3 w-full border-navy-200"
             >
-              Set password
+              {passwordActionLabel}
             </LoadingButton>
           </div>
 
@@ -636,7 +647,7 @@ export default function AdminSecurityGuardDetailPage() {
       <Modal
         isOpen={passwordModalOpen}
         onClose={() => !savingPassword && setPasswordModalOpen(false)}
-        title="Set password"
+        title={passwordActionLabel}
         subtitle={`Station portal login for ${guard.email}`}
         size="sm"
         footer={(

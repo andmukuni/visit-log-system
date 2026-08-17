@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
   Edit3,
+  KeyRound,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -77,6 +78,9 @@ export default function AdminSecurityGuardsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -282,6 +286,50 @@ export default function AdminSecurityGuardsPage() {
     }
   };
 
+  const openPasswordModal = (row) => {
+    if (!row?.email?.trim()) {
+      toast.error('Add an email address before setting a password.');
+      return;
+    }
+    setPasswordTarget(row);
+    setPasswordForm({ password: '', confirmPassword: '' });
+  };
+
+  const handlePasswordSave = async () => {
+    if (!passwordTarget?.id) return;
+    const password = passwordForm.password.trim();
+    const confirmPassword = passwordForm.confirmPassword.trim();
+    if (!password) {
+      toast.error('Enter a new password.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await visitorApi.updateSecurityGuard(passwordTarget.id, {
+        name: passwordTarget.name,
+        email: passwordTarget.email,
+        phone: passwordTarget.phone,
+        siteId: passwordTarget.site_id,
+        stationId: passwordTarget.station_id || null,
+        departmentId: passwordTarget.department_id || null,
+        status: passwordTarget.status,
+        password,
+      });
+      toast.success('Password updated. The guard can sign in with the new password.');
+      setPasswordTarget(null);
+      setPasswordForm({ password: '', confirmPassword: '' });
+      await load();
+    } catch (err) {
+      toast.error(err?.message || 'Could not update password.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const openShow = useCallback((row) => {
     if (!row?.id) return;
     navigate(`/admin/security-guards/${row.id}`);
@@ -321,6 +369,25 @@ export default function AdminSecurityGuardsPage() {
             }}
           />
           <IconButton
+            icon={Edit3}
+            label="Edit security guard"
+            iconSize={16}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+          />
+          <IconButton
+            icon={KeyRound}
+            label="Change password"
+            iconSize={16}
+            disabled={!row.email}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPasswordModal(row);
+            }}
+          />
+          <IconButton
             icon={Trash2}
             label="Delete security guard"
             iconSize={16}
@@ -334,7 +401,7 @@ export default function AdminSecurityGuardsPage() {
         </div>
       ),
     },
-  ], []);
+  ], [openShow]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3">
@@ -521,14 +588,67 @@ export default function AdminSecurityGuardsPage() {
               { value: 'inactive', label: 'Inactive' },
             ]}
           />
+          {!editing ? (
+            <FormField
+              label="Temporary password"
+              name="password"
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder="Optional — defaults to demo password"
+              helpText="Optional. Defaults to the portal demo password if empty."
+            />
+          ) : (
+            <p className="rounded-lg border border-navy-100 bg-navy-50/60 px-3 py-2 text-xs text-navy-600">
+              Use the key icon in the table or the guard detail page to change the Station portal password.
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(passwordTarget)}
+        onClose={() => !savingPassword && setPasswordTarget(null)}
+        title="Change password"
+        subtitle={passwordTarget?.email ? `Station portal login for ${passwordTarget.email}` : 'Station portal login'}
+        size="sm"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={savingPassword}
+              onClick={() => setPasswordTarget(null)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700"
+            >
+              Cancel
+            </button>
+            <LoadingButton loading={savingPassword} onClick={handlePasswordSave}>
+              Save password
+            </LoadingButton>
+          </div>
+        )}
+      >
+        <div className="space-y-3">
           <FormField
-            label={editing ? 'Reset password' : 'Temporary password'}
+            label="New password"
             name="password"
             type="password"
-            value={form.password}
-            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder={editing ? 'Leave blank to keep current' : 'Optional — defaults to demo password'}
-            helpText={editing ? 'Leave blank to keep the current password.' : 'Optional. Defaults to the portal demo password if empty.'}
+            required
+            autoComplete="new-password"
+            value={passwordForm.password}
+            onChange={(e) => setPasswordForm((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder="Enter new password"
+            helpText="Minimum length follows your organisation security settings (usually 8 characters)."
+          />
+          <FormField
+            label="Confirm password"
+            name="confirmPassword"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={passwordForm.confirmPassword}
+            onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+            placeholder="Re-enter new password"
           />
         </div>
       </Modal>
