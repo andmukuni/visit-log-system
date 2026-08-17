@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import pool from './db.js';
 import { generateId } from './visitorSchema.js';
+import { resolveAppName } from './services/adminSettingsService.js';
 
 export function generateInviteToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -387,6 +388,21 @@ async function migrateLegacyTemplateBranding() {
        'VM360', '{{app_name}}')
      WHERE body_template LIKE '%VM360%'
         OR body_template LIKE '%Visitors Log%'`,
+  );
+
+  // Notification bodies are rendered at creation time, so rows still awaiting
+  // external delivery carry whatever brand the template had back then — and the
+  // retry worker will happily send them. Rewrite the not-yet-delivered ones to
+  // the current Application name; delivered history is left untouched.
+  const appName = await resolveAppName();
+  await pool.query(
+    `UPDATE notifications
+     SET title = REPLACE(REPLACE(REPLACE(title, 'Visitors Log System', ?), 'Visitors Log', ?), 'VM360', ?),
+         body = REPLACE(REPLACE(REPLACE(body, 'Visitors Log System', ?), 'Visitors Log', ?), 'VM360', ?)
+     WHERE status IN ('pending', 'failed')
+       AND (body LIKE '%VM360%' OR body LIKE '%Visitors Log%'
+         OR title LIKE '%VM360%' OR title LIKE '%Visitors Log%')`,
+    [appName, appName, appName, appName, appName, appName],
   );
 }
 
