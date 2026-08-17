@@ -1,3 +1,14 @@
+/**
+ * Visit rows can arrive shaped two ways depending on the viewer's access
+ * level: the full row keeps `full_name`, while the gate/security allowlist
+ * DTO (buildSecurityExpectedVisitorDTO) renames it to `visitor_name` —
+ * same value, different key. Read either so gate/security staff don't see
+ * a blank "Visitor" fallback for a name that's actually present.
+ */
+export function visitorDisplayName(row, fallback = 'Visitor') {
+  return row?.full_name || row?.visitor_name || fallback;
+}
+
 export function formatDate(value) {
   if (!value) return '—';
   const date = new Date(value);

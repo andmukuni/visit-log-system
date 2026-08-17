@@ -11,7 +11,7 @@ import {
   ConfirmAction,
   FilterPills,
 } from '../../components/ui';
-import { formatDateTime } from '../../utils/helpers';
+import { formatDateTime, visitorDisplayName } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 
@@ -73,7 +73,21 @@ export default function PendingApprovalsPage({ variant = 'pending' }) {
   };
 
   const columns = [
-    { key: 'full_name', label: 'Visitor', type: 'avatar' },
+    {
+      key: 'full_name',
+      label: 'Visitor',
+      render: (_, row) => {
+        const name = visitorDisplayName(row, '—');
+        return (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+              {name.charAt(0).toUpperCase()}
+            </span>
+            <span className="truncate font-medium text-gray-900">{name}</span>
+          </div>
+        );
+      },
+    },
     { key: 'host_name', label: 'Host' },
     {
       key: 'purpose',

@@ -3,7 +3,7 @@ import { Car, Footprints, LogOut, Search, User } from 'lucide-react';
 import { LoadingButton, StatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { isGateExitEligible } from '../../../shared/visitCheckout.js';
-import { formatNrcInput } from '../../utils/helpers';
+import { formatNrcInput, visitorDisplayName } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 const INPUT_MD =
@@ -81,7 +81,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     if (!term) return visits;
     return visits.filter((row) => {
       const haystack = [
-        row.full_name,
+        visitorDisplayName(row, ''),
         row.host_name,
         row.pass_code,
         row.badge_number,
@@ -104,7 +104,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     try {
       if (alreadyCheckedOut) {
         await visitorApi.markLeftPremises(visitId);
-        toast.success(`${row.full_name || (isVehicle ? 'Vehicle' : 'Visitor')} marked as left premises.`);
+        toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} marked as left premises.`);
       } else {
         await visitorApi.checkOutVisit(visitId);
         toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked out successfully.`);
@@ -169,7 +169,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                   className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_7.5rem_5.75rem_7rem_3rem] sm:items-center sm:gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
+                    <p className="truncate text-base font-semibold text-navy-900">{visitorDisplayName(row)}</p>
                   </div>
                   <div className="min-w-0">
                     <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">NRC</span>
@@ -177,7 +177,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                   </div>
                   <div className="flex flex-col gap-1 sm:justify-start">
                     <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Signature</span>
-                    <SignaturePreview src={row.check_in_signature} name={row.full_name} />
+                    <SignaturePreview src={row.check_in_signature} name={visitorDisplayName(row)} />
                   </div>
                   <div className="flex flex-col gap-1 sm:justify-start">
                     <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Status</span>

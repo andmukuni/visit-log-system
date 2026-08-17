@@ -3,7 +3,7 @@ import { CalendarClock, Car, Footprints, RefreshCw, User } from 'lucide-react';
 import { LoadingButton, StatusBadge, VisitorTypeBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { formatVisitHostPositionLine } from '../../components/visitors/visitorDetailUtils';
-import { formatTime } from '../../utils/helpers';
+import { formatTime, visitorDisplayName } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 function FormSection({ title, subtitle, children, actions = null }) {
@@ -110,7 +110,7 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
+                        <p className="truncate text-sm font-semibold text-navy-900">{visitorDisplayName(row)}</p>
                         <VisitorTypeBadge classification={row.classification} />
                         <StatusBadge status={row.status} />
                       </div>

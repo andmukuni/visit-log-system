@@ -15,7 +15,7 @@ import {
   AddAction,
 } from '../../components/ui';
 import { formatVisitHostName, getVisitHostPosition } from '../../components/visitors/visitorDetailUtils';
-import { formatDateTime } from '../../utils/helpers';
+import { formatDateTime, visitorDisplayName } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
 
 const STATUS_OPTIONS = [
@@ -54,7 +54,21 @@ export default function VisitorLogsPage() {
   }, [load]);
 
   const columns = [
-    { key: 'full_name', label: 'Visitor', type: 'avatar' },
+    {
+      key: 'full_name',
+      label: 'Visitor',
+      render: (_, row) => {
+        const name = visitorDisplayName(row, '—');
+        return (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+              {name.charAt(0).toUpperCase()}
+            </span>
+            <span className="truncate font-medium text-gray-900">{name}</span>
+          </div>
+        );
+      },
+    },
     { key: 'phone', label: 'Phone' },
     {
       key: 'host_name',
@@ -86,7 +100,7 @@ export default function VisitorLogsPage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <Link to={`/station/visitors/${row.id}`} aria-label={`View ${row.full_name}`}>
+        <Link to={`/station/visitors/${row.id}`} aria-label={`View ${visitorDisplayName(row)}`}>
           <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
         </Link>
       ),

@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { getReceptionCheckInActionLabel } from '../../../shared/visitReceptionActions.js';
 import { visitorApi } from '../../utils/visitorApi';
+import { visitorDisplayName } from '../../utils/helpers';
 
 const INPUT_MD =
   'w-full rounded-xl border border-navy-200 bg-navy-50 text-navy-900 placeholder:text-navy-400 transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-500 py-3 pl-10 pr-3 text-base';
@@ -216,7 +217,7 @@ export default function GateCheckInPanel({
                       key={row.id}
                       role={rowInteractive ? 'button' : undefined}
                       tabIndex={rowInteractive && !busy ? 0 : undefined}
-                      aria-label={rowInteractive ? `View ${row.full_name || 'visitor'}` : undefined}
+                      aria-label={rowInteractive ? `View ${visitorDisplayName(row, 'visitor')}` : undefined}
                       onClick={() => {
                         if (!rowInteractive || busy) return;
                         onRowClick(row);
@@ -237,7 +238,7 @@ export default function GateCheckInPanel({
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-navy-900">{row.full_name || 'Visitor'}</p>
+                        <p className="truncate text-base font-semibold text-navy-900">{visitorDisplayName(row)}</p>
                         <p className="mt-0.5 truncate text-sm text-navy-500">
                           Host: {row.host_name || '—'}
                           {row.plate_numbers ? ` · ${row.plate_numbers}` : ''}
@@ -266,7 +267,7 @@ export default function GateCheckInPanel({
                       </div>
                       <div className="flex flex-col gap-1 sm:justify-start">
                         <span className="text-xs font-semibold uppercase tracking-wide text-navy-400 sm:hidden">Signature</span>
-                        <SignaturePreview src={row.check_in_signature} name={row.full_name} />
+                        <SignaturePreview src={row.check_in_signature} name={visitorDisplayName(row)} />
                       </div>
                       <div className="hidden flex-col gap-1 sm:flex sm:justify-start">
                         <StatusBadge status={row.status} />
