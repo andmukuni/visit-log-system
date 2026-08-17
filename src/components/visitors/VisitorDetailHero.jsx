@@ -8,7 +8,7 @@ import {
 import { RestrictedIndicator, StatusBadge, VisitorTypeBadge } from '../ui';
 import { formatDateTime } from '../../utils/helpers';
 import { formatVisitHostName, getVisitHostPosition, visitorInitials } from './visitorDetailUtils';
-import { VISIT_JOURNEY_STEPS, resolveJourneyStatusKey } from '../logbook/visitLogConstants';
+import { resolveJourneyStatusKey, resolveJourneyLabel } from '../../../shared/visitJourney.js';
 
 function MetaBlock({ icon: Icon, label, children }) {
   if (!children) return null;
@@ -38,9 +38,7 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
 
   const hasCheckedIn = Boolean(visit.checked_in_at || visit.check_in_at);
   const journeyKey = resolveJourneyStatusKey(visit.status, hasCheckedIn);
-  const journeyLabel = journeyKey
-    ? VISIT_JOURNEY_STEPS.find((step) => step.key === journeyKey)?.label
-    : null;
+  const journeyLabel = resolveJourneyLabel(visit.status, hasCheckedIn);
 
   return (
     <section className={`overflow-hidden rounded-2xl border border-navy-100 bg-gradient-to-br from-white via-white to-cyan-50/40 shadow-sm ${compact ? '' : 'mb-6'}`}>

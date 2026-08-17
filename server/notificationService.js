@@ -381,6 +381,7 @@ export async function notifyVisitEvent(pool, {
   actorUserId = null,
   extra = {},
   notifyVisitor = true,
+  notifyHost = true,
 }) {
   const [[visit]] = await pool.query(
     `SELECT vis.*, v.full_name AS visitor_name, v.phone AS visitor_phone, v.email AS visitor_email,
@@ -437,10 +438,15 @@ export async function notifyVisitEvent(pool, {
   if (hostUserId) hostTargets.add(hostUserId);
   if (eventType === 'pending_approval' && visit.created_by) hostTargets.add(visit.created_by);
 
-  // Hosts are only ever notified when a visitor is queued for their approval
-  // and on checkout — every other lifecycle event is silent for hosts too.
+  // Hosts are notified when a visitor is queued for their approval, checked
+  // in at reception, and on checkout. checked_in/reception_check_in fire from
+  // both the gate and reception through the same code path — callers gate
+  // notifyHost on whether the actor is actually reception (see notifyVisitor
+  // below, which does the same for the guest side).
   const hostTemplateMap = {
     pending_approval: 'visit.pending_approval',
+    checked_in: 'visit.checked_in',
+    reception_check_in: 'visit.checked_in',
     checked_out: 'visit.checked_out',
     left_premises: 'visit.checked_out',
   };
@@ -456,6 +462,8 @@ export async function notifyVisitEvent(pool, {
 
   const hostChannelsByEvent = {
     pending_approval: ['in_app', 'email', 'sms'],
+    checked_in: ['in_app', 'email', 'sms'],
+    reception_check_in: ['in_app', 'email', 'sms'],
     checked_out: ['in_app'],
     left_premises: ['in_app'],
   };
@@ -463,7 +471,7 @@ export async function notifyVisitEvent(pool, {
   // Host notifications
   const hostTemplateKey = hostTemplateMap[eventType];
 
-  if (hostTemplateKey) {
+  if (hostTemplateKey && notifyHost) {
     const channels = hostChannelsByEvent[eventType] || ['in_app'];
     for (const userId of hostTargets) {
       if (userId === actorUserId) {

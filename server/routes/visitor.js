@@ -1414,7 +1414,17 @@ export function createVisitsRouter() {
         targetId: visitId,
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'checked_in', actorUserId: userId });
+      // This endpoint is shared by the gate and reception (both go through
+      // GateCheckInPanel). Only notify the guest/host when the actor
+      // performing the check-in is actually reception — a gate check-in
+      // shouldn't page anyone.
+      await notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'checked_in',
+        actorUserId: userId,
+        notifyVisitor: receptionZone.isReceptionist,
+        notifyHost: receptionZone.isReceptionist,
+      });
 
       res.json({ ok: true, message: 'Visitor checked in.' });
     } catch (error) {

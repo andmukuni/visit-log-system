@@ -213,7 +213,13 @@ export function createKioskRouter() {
         details: { source: 'kiosk' },
       });
 
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_in' });
+      // Self-service kiosk, not reception — stays silent like the gate.
+      await notifyVisitEvent(pool, {
+        visitId: visit.id,
+        eventType: 'checked_in',
+        notifyVisitor: false,
+        notifyHost: false,
+      });
 
       res.json({ ok: true, data: { passCode: visit.pass_code, badgeNumber: visit.badge_number } });
     } catch (error) {

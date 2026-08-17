@@ -11,6 +11,8 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import { VISIT_STATUS_ALIASES } from '../../../shared/visitJourney.js';
+
 const colorMap = {
   upcoming: { bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/20', icon: Clock },
   ongoing: { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/20', icon: CircleDot },
@@ -95,10 +97,15 @@ const labelMap = {
 };
 
 function normalizeStatusKey(status) {
-  return String(status || 'default')
+  const raw = String(status || 'default')
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
+  // Collapse visit statuses that mean the same thing in different places
+  // (e.g. 'waiting' and 'in_meeting') onto one canonical key, so every page
+  // that renders a visit status agrees on wording and color. These keys are
+  // exclusive to visits — no other entity in the app uses them.
+  return VISIT_STATUS_ALIASES[raw] || raw;
 }
 
 function formatStatusLabel(status, normalized) {

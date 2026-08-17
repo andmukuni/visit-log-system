@@ -333,7 +333,8 @@ export function resolveVisitRoutePermissions(req) {
     return ['host.approvals', 'security.approvals', 'station.visitors.view'];
   }
   if (path.includes('/waiting') || path.includes('/in-meeting')) {
-    return ['reception.host.queue', 'station.visitors.checkin', 'station.visitors.register'];
+    // Queueing to a host is reception's job, not the gate's.
+    return ['reception.host.queue'];
   }
   if (method === 'GET') {
     return [
