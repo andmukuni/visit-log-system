@@ -72,9 +72,9 @@ function ReceptionHeroActions({
       {canQueue ? (
         <LoadingButton
           size="md"
+          variant="reception"
           icon={Send}
           onClick={onQueueHost}
-          className="border-cyan-600 bg-cyan-600 hover:bg-cyan-500"
         >
           Queue to host
         </LoadingButton>

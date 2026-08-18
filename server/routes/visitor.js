@@ -1395,7 +1395,7 @@ export function createVisitsRouter() {
         return res.status(400).json({ ok: false, message: 'Visitor already has an active check-in.' });
       }
 
-      let assignedBadge = badgeNumber?.trim();
+      let assignedBadge = badgeNumber?.trim() || null;
       if (assignedBadge) {
         const [[badge]] = await conn.query(
           `SELECT * FROM badges WHERE organisation_id = ? AND badge_number = ? AND status = 'available' LIMIT 1 FOR UPDATE`,
@@ -1416,6 +1416,8 @@ export function createVisitsRouter() {
         || receptionZone.zoneIds[0]
         || null;
 
+      const nextBadgeNumber = assignedBadge || visit.badge_number || null;
+
       await conn.query(
         `UPDATE visits
          SET status = 'reception_check_in',
@@ -1425,7 +1427,7 @@ export function createVisitsRouter() {
              zone_id = COALESCE(zone_id, ?),
              updated_at = NOW()
          WHERE id = ?`,
-        [assignedBadge || visit.badge_number, scope?.station_id, stampedZoneId, visitId],
+        [nextBadgeNumber, scope?.station_id ?? null, stampedZoneId, visitId],
       );
 
       await conn.commit();
@@ -1434,7 +1436,7 @@ export function createVisitsRouter() {
         visitId,
         eventType: 'reception_check_in',
         actorUserId: userId,
-        stationId: scope?.station_id,
+        stationId: scope?.station_id ?? null,
         details: { badgeNumber: assignedBadge },
       });
 
@@ -1450,14 +1452,17 @@ export function createVisitsRouter() {
       // GateCheckInPanel). Only notify the guest/host when the actor
       // performing the check-in is actually reception — a gate check-in
       // shouldn't page anyone.
-      await notifyVisitEvent(pool, {
-        visitId,
-        eventType: 'reception_check_in',
-        actorUserId: userId,
-        notifyVisitor: receptionZone.isReceptionist,
-        notifyHost: receptionZone.isReceptionist,
-      });
-      await markHostUnavailableForVisit(pool, visit);
+      try {
+        await notifyVisitEvent(pool, {
+          visitId,
+          eventType: 'reception_check_in',
+          actorUserId: userId,
+          notifyVisitor: receptionZone.isReceptionist,
+          notifyHost: receptionZone.isReceptionist,
+        });
+      } catch (notifyError) {
+        console.warn('[visit.checkin] notify failed:', notifyError.message);
+      }
 
       res.json({ ok: true, message: 'Visitor checked in.' });
     } catch (error) {

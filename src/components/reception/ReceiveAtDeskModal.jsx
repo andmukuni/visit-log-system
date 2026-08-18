@@ -58,8 +58,8 @@ export default function ReceiveAtDeskModal({
           <LoadingButton
             loading={submitting}
             loadingLabel="Receiving…"
+            variant="reception"
             onClick={handleConfirm}
-            className="border-cyan-600 bg-cyan-600 hover:bg-cyan-500"
           >
             Receive at desk
           </LoadingButton>

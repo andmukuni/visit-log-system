@@ -158,8 +158,8 @@ export default function QueueToHostModal({
           <LoadingButton
             loading={submitting}
             loadingLabel="Queuing…"
+            variant="reception"
             onClick={handleConfirm}
-            className="bg-cyan-600 hover:bg-cyan-500 border-cyan-600"
           >
             Queue visitor
           </LoadingButton>
