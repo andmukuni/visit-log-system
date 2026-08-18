@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useNavigation } from 'react-router-dom';
-import { LogOut, Menu, ShieldCheck } from 'lucide-react';
+import { LogOut, Menu, ShieldCheck, Tablet } from 'lucide-react';
 import AdminUserMenu from '../admin/AdminUserMenu';
 import Breadcrumbs from './Breadcrumbs';
 import AppSidebar from './AppSidebar';
@@ -46,6 +46,16 @@ function isGateEntryKiosk(pathname) {
   return pathname.endsWith('/gate-entry');
 }
 
+const TABLET_MODE_OVERRIDE_KEY = 'reception:tabletModeOverride';
+
+function readTabletModeOverride() {
+  if (typeof window === 'undefined') return null;
+  const stored = window.localStorage.getItem(TABLET_MODE_OVERRIDE_KEY);
+  if (stored === 'on') return true;
+  if (stored === 'off') return false;
+  return null;
+}
+
 function PortalOutlet() {
   const location = useLocation();
   const navigation = useNavigation();
@@ -62,7 +72,7 @@ function PortalOutlet() {
   );
 }
 
-function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk, tabletMode }) {
+function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk, tabletMode, onToggleTabletMode }) {
   const location = useLocation();
   const mainRef = useRef(null);
   const { user, hasPermission } = useAuth();
@@ -171,6 +181,24 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
                 to="/reception/notifications"
               />
             ) : null}
+            {portalId === 'reception' ? (
+              <button
+                type="button"
+                onClick={onToggleTabletMode}
+                aria-pressed={tabletMode}
+                aria-label={tabletMode ? 'Turn off tablet mode' : 'Turn on tablet mode'}
+                title={tabletMode ? 'Tablet mode on' : 'Tablet mode off'}
+                className={`inline-flex shrink-0 items-center justify-center rounded-lg transition-colors ${
+                  compactChrome ? 'h-8 w-8' : 'h-9 w-9'
+                } ${
+                  tabletMode
+                    ? 'bg-cyan-600/10 text-cyan-700 hover:bg-cyan-600/20'
+                    : 'text-navy-500 hover:bg-navy-100 hover:text-navy-700'
+                }`}
+              >
+                <Tablet size={compactChrome ? 16 : 18} aria-hidden="true" />
+              </button>
+            ) : null}
             <PortalSwitcherMenu compact={compactChrome} />
             <AdminUserMenu compact={compactChrome} />
           </div>
@@ -212,7 +240,17 @@ function ShellBody({ portalId, title }) {
   const toast = useToast();
   const isKiosk = isGateEntryKiosk(location.pathname);
   const isTabletDevice = useIsTabletDevice();
-  const tabletMode = portalId === 'reception' && isTabletDevice && !isKiosk;
+  const [tabletModeOverride, setTabletModeOverride] = useState(readTabletModeOverride);
+  const effectiveTabletDevice = tabletModeOverride !== null ? tabletModeOverride : isTabletDevice;
+  const tabletMode = portalId === 'reception' && effectiveTabletDevice && !isKiosk;
+  const toggleTabletMode = useCallback(() => {
+    setTabletModeOverride((prev) => {
+      const current = prev !== null ? prev : isTabletDevice;
+      const next = !current;
+      window.localStorage.setItem(TABLET_MODE_OVERRIDE_KEY, next ? 'on' : 'off');
+      return next;
+    });
+  }, [isTabletDevice]);
   const { user, permissions, roleSlugs, hasPermission } = useAuth();
   const isPublicRoute = location.pathname.startsWith('/visit/');
   const pwaEnabled = Boolean(user?.id) && !isPublicRoute;
@@ -345,6 +383,7 @@ function ShellBody({ portalId, title }) {
                   onCloseSidebar={closeSidebar}
                   isKiosk={isKiosk}
                   tabletMode={tabletMode}
+                  onToggleTabletMode={toggleTabletMode}
                 />
               </AdminOrganisationProvider>
             ) : (
@@ -355,6 +394,7 @@ function ShellBody({ portalId, title }) {
                 onCloseSidebar={closeSidebar}
                 isKiosk={isKiosk}
                 tabletMode={tabletMode}
+                onToggleTabletMode={toggleTabletMode}
               />
             )}
           </PageHeaderProvider>
