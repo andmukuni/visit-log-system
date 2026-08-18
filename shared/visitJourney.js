@@ -10,7 +10,6 @@ export const VISIT_JOURNEY_STEPS = [
   { key: 'approved', label: 'Approved' },
   { key: 'arrived_at_gate', label: 'At gate' },
   { key: 'reception_check_in', label: 'Reception' },
-  { key: 'checked_in', label: 'On site' },
   { key: 'waiting', label: 'Waiting for host' },
   { key: 'in_meeting', label: 'With host' },
   { key: 'checked_out', label: 'Checked out' },
@@ -20,12 +19,9 @@ export const VISIT_JOURNEY_STEPS = [
 
 export const VISIT_STATUS_ALIASES = {
   pre_registered: 'expected',
-  // Default for a pre-arrival approval request. Overridden to 'checked_in' in
-  // resolveJourneyStatusKey when the visitor already has a check-in timestamp —
-  // reception can only queue an on-site visitor to pending_approval, so that
-  // case must keep showing "On site" instead of regressing to "Expected".
   pending_approval: 'expected',
   entered_premises: 'reception_check_in',
+  checked_in: 'reception_check_in',
 };
 
 /**
@@ -36,10 +32,10 @@ export const VISIT_STATUS_ALIASES = {
  */
 export function resolveJourneyStatusKey(status, hasCheckedIn) {
   if (status === 'pending_approval' && hasCheckedIn) {
-    return 'checked_in';
+    return 'waiting';
   }
   if (status === 'rejected' && hasCheckedIn) {
-    return 'checked_in';
+    return 'reception_check_in';
   }
   const normalized = VISIT_STATUS_ALIASES[status] || status;
   return VISIT_JOURNEY_STEPS.some((step) => step.key === normalized) ? normalized : null;

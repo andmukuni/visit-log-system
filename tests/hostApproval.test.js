@@ -161,7 +161,7 @@ describe('host approval tokens and decisions', () => {
     assert.equal(updated.status, 'expected');
   });
 
-  it('approves an on-site queued guest to waiting', async () => {
+  it('approves an on-site queued guest to in_meeting', async () => {
     const { visitId } = await insertPendingVisit('visit-guest-approve', {
       checkedInAt: '2026-08-17T10:00:00Z',
       expectedAt: null,
@@ -174,7 +174,7 @@ describe('host approval tokens and decisions', () => {
       actorUserId: host.userId,
       notify: false,
     });
-    assert.equal(result.nextStatus, 'waiting');
+    assert.equal(result.nextStatus, 'in_meeting');
     assert.equal(result.isReceptionQueue, true);
   });
 

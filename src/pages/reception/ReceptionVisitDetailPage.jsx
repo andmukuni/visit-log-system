@@ -4,14 +4,16 @@ import { LogIn, LogOut, Send, UserCheck, Users } from 'lucide-react';
 import { LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
+import ReceiveAtDeskModal from '../../components/reception/ReceiveAtDeskModal';
 import { useToast } from '../../context/ToastContext';
-import { receptionApi } from '../../utils/visitorApi';
+import { receptionApi, visitorApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import {
   getReceptionVisitAction,
   canQueueVisitToHost,
   canMarkInMeeting,
+  isReceiveAtDeskAction,
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
@@ -23,21 +25,40 @@ const RECEPTION_ACTION_ICONS = {
   queue: Users,
 };
 
-function ReceptionHeroActions({ visit, onQueueHost, onMarkInMeeting, onCheckOut, checkingOut, markingInMeeting }) {
+function ReceptionHeroActions({
+  visit,
+  onQueueHost,
+  onReceiveAtDesk,
+  onMarkInMeeting,
+  onCheckOut,
+  checkingOut,
+  markingInMeeting,
+}) {
   const action = getReceptionVisitAction(visit);
   const canQueue = canQueueVisitToHost(visit);
   const canMeeting = canMarkInMeeting(visit);
   const canCheckOut = isCheckoutEligible(visit);
+  const isReceiveModal = isReceiveAtDeskAction(action);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
 
   if (!action?.show && !canQueue && !canMeeting && !canCheckOut) return null;
 
   return (
     <>
-      {action?.show && action.href && !action.disabled && !canQueue ? (
+      {action?.show && !action.disabled && !canQueue && isReceiveModal ? (
+        <LoadingButton
+          size="md"
+          icon={ActionIcon}
+          onClick={onReceiveAtDesk}
+          className={`border ${receptionActionButtonClass(action.tone)}`}
+        >
+          {action.label}
+        </LoadingButton>
+      ) : null}
+      {action?.show && action.href && !action.disabled && !canQueue && !isReceiveModal ? (
         <Link
           to={receptionActionHref(action, visit.id)}
-          className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors ${receptionActionButtonClass(action.tone)}`}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors ${receptionActionButtonClass(action.tone)}`}
         >
           <ActionIcon size={16} aria-hidden="true" />
           {action.label}
@@ -93,7 +114,9 @@ export default function ReceptionVisitDetailPage() {
   const [departments, setDepartments] = useState([]);
   const [offices, setOffices] = useState([]);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const [queuing, setQueuing] = useState(false);
+  const [receiving, setReceiving] = useState(false);
   const [visitForModal, setVisitForModal] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -125,6 +148,22 @@ export default function ReceptionVisitDetailPage() {
       toast.error(err.message);
     } finally {
       setQueuing(false);
+    }
+  };
+
+  const handleReceiveConfirm = async ({ badgeNumber }) => {
+    if (!visitForModal?.id) return;
+    setReceiving(true);
+    try {
+      await visitorApi.checkInVisit(visitForModal.id, badgeNumber);
+      const name = visitForModal.full_name || visitForModal.visitor_name || 'Visitor';
+      toast.success(`${name} received at reception.`);
+      setReceiveOpen(false);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err?.message || 'Could not receive visitor at desk.');
+    } finally {
+      setReceiving(false);
     }
   };
 
@@ -160,6 +199,7 @@ export default function ReceptionVisitDetailPage() {
     <ReceptionHeroActions
       visit={visit}
       onQueueHost={() => setQueueOpen(true)}
+      onReceiveAtDesk={() => setReceiveOpen(true)}
       onMarkInMeeting={() => handleMarkInMeeting(visit)}
       onCheckOut={() => handleCheckOut(visit)}
       checkingOut={checkingOut}
@@ -182,16 +222,30 @@ export default function ReceptionVisitDetailPage() {
         backLabel="Back to logs"
         renderHeroFooter={renderHeroFooter}
         extraContent={(
-          <QueueToHostModal
-            isOpen={queueOpen}
-            onClose={() => !queuing && setQueueOpen(false)}
-            visit={visitForModal}
-            hosts={hosts}
-            departments={departments}
-            offices={offices}
-            submitting={queuing}
-            onConfirm={handleQueueConfirm}
-          />
+          <>
+            <ReceiveAtDeskModal
+              isOpen={receiveOpen}
+              onClose={() => !receiving && setReceiveOpen(false)}
+              visit={visitForModal}
+              submitting={receiving}
+              onConfirm={handleReceiveConfirm}
+              showQueueNext={canQueueVisitToHost(visitForModal)}
+              onQueueNext={() => {
+                setReceiveOpen(false);
+                setQueueOpen(true);
+              }}
+            />
+            <QueueToHostModal
+              isOpen={queueOpen}
+              onClose={() => !queuing && setQueueOpen(false)}
+              visit={visitForModal}
+              hosts={hosts}
+              departments={departments}
+              offices={offices}
+              submitting={queuing}
+              onConfirm={handleQueueConfirm}
+            />
+          </>
         )}
       />
     </>

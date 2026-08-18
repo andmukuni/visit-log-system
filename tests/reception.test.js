@@ -111,12 +111,13 @@ describe('host occupied lifecycle', () => {
     assert.equal(canTransition('in_meeting', 'checked_out'), true);
   });
 
-  it('queues checked-in visitors to host approvals, then waiting on accept', () => {
-    assert.equal(canTransition('reception_check_in', 'pending_approval'), true);
-    assert.equal(canTransition('checked_in', 'pending_approval'), true);
-    assert.equal(canTransition('pending_approval', 'waiting'), true);
+  it('queues checked-in visitors to waiting, then in_meeting on host accept', () => {
+    assert.equal(canTransition('reception_check_in', 'waiting'), true);
+    assert.equal(canTransition('checked_in', 'waiting'), true);
+    assert.equal(canTransition('pending_approval', 'in_meeting'), true);
+    assert.equal(canTransition('waiting', 'in_meeting'), true);
     assert.equal(canTransition('expected', 'waiting'), false);
-    assert.equal(canTransition('rejected', 'pending_approval'), true);
+    assert.equal(canTransition('rejected', 'waiting'), true);
     assert.equal(canTransition('rejected', 'checked_out'), true);
   });
 });
@@ -127,9 +128,14 @@ describe('reception visit action labels', () => {
       getReceptionVisitAction,
       getReceptionCheckInActionLabel,
       receptionActionHref,
+      isReceiveAtDeskAction,
     } = await import('../shared/visitReceptionActions.js');
 
-    assert.equal(getReceptionVisitAction('arrived_at_gate').label, 'Receive at desk');
+    const gateAction = getReceptionVisitAction('arrived_at_gate');
+    assert.equal(gateAction.label, 'Receive at desk');
+    assert.equal(gateAction.actionKind, 'receive-modal');
+    assert.equal(isReceiveAtDeskAction(gateAction), true);
+    assert.equal(receptionActionHref(gateAction, 'vis-1'), null);
     assert.equal(getReceptionVisitAction('expected').label, 'Check in');
     assert.equal(getReceptionVisitAction('reception_check_in').label, 'Queue to host');
     assert.equal(getReceptionVisitAction('waiting').label, 'View host queue');

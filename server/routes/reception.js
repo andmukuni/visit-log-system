@@ -3,7 +3,7 @@ import pool from '../db.js';
 import { getUserScope, requireUserScope, canTransition } from '../scopeService.js';
 import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
-import { requestHostApproval } from '../hostApprovalService.js';
+import { requestHostApproval, isReceptionQueueVisit } from '../hostApprovalService.js';
 import { isCheckoutEligible, VISIT_CLOSED_STATUSES } from '../../shared/visitCheckout.js';
 import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 import { exitVisitVehicles } from '../visitExit.js';
@@ -1004,8 +1004,10 @@ export function createReceptionRouter() {
       }
 
       const visit = loaded.visit;
-      const alreadyQueued = visit.status === 'pending_approval';
-      if (!alreadyQueued && !canTransition(visit.status, 'pending_approval')) {
+      const isOnSiteQueue = isReceptionQueueVisit(visit);
+      const nextQueueStatus = isOnSiteQueue ? 'waiting' : 'pending_approval';
+      const alreadyQueued = visit.status === nextQueueStatus;
+      if (!alreadyQueued && !canTransition(visit.status, nextQueueStatus)) {
         return res.status(400).json({
           ok: false,
           message: `Cannot queue from ${visit.status}. Check the visitor in at the desk first.`,
@@ -1106,19 +1108,19 @@ export function createReceptionRouter() {
 
       await pool.query(
         `UPDATE visits
-         SET status = 'pending_approval',
+         SET status = ?,
              host_id = ?,
              department_id = COALESCE(?, department_id),
              office_id = COALESCE(?, office_id),
              zone_id = ?,
              updated_at = NOW()
          WHERE id = ?`,
-        [nextHostId, nextDepartmentId, nextOfficeId, nextZoneId, visitId],
+        [nextQueueStatus, nextHostId, nextDepartmentId, nextOfficeId, nextZoneId, visitId],
       );
 
       await writeVisitEvent(pool, {
         visitId,
-        eventType: 'pending_approval',
+        eventType: nextQueueStatus,
         actorUserId: userId,
         stationId: scopeResult.scope?.station_id,
         details: {
@@ -1140,7 +1142,9 @@ export function createReceptionRouter() {
         ok: true,
         message: alreadyQueued
           ? 'Approval request resent to host.'
-          : 'Visitor sent to host for approval.',
+          : (isOnSiteQueue
+            ? 'Visitor is waiting for the host.'
+            : 'Visitor sent to host for approval.'),
         data: {
           hostId: nextHostId,
           departmentId: nextDepartmentId,

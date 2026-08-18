@@ -369,6 +369,7 @@ export default function ReceptionCheckInPage() {
                                 <ReceptionVisitRowActions
                                   row={row}
                                   visitId={visitId}
+                                  onRefresh={loadExpectedVisitors}
                                 />
                               </div>
                             </li>

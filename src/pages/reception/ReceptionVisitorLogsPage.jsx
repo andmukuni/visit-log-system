@@ -112,6 +112,7 @@ export default function ReceptionVisitorLogsPage() {
           row={row}
           onCheckOut={handleCheckOut}
           checkingOut={checkingOutId === row.id}
+          onRefresh={load}
         />
       ),
     },

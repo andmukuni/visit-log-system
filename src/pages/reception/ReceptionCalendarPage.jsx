@@ -132,6 +132,7 @@ export default function ReceptionCalendarPage() {
         onStatusFilterChange={setStatusFilter}
         onCheckOut={handleCheckOut}
         checkingOutId={checkingOutId}
+        onRefresh={load}
       />
     </div>
   );

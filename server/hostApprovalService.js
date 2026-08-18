@@ -326,7 +326,7 @@ export async function applyHostApproval(pool, {
 
   const isReceptionQueue = isReceptionQueueVisit(visit);
   const nextStatus = isReceptionQueue
-    ? 'waiting'
+    ? 'in_meeting'
     : (visit.expected_at ? 'expected' : 'approved');
 
   if (!canTransition(visit.status, nextStatus) && !canTransition(visit.status, 'approved')) {
@@ -403,7 +403,7 @@ export async function applyHostApproval(pool, {
     );
   }
 
-  const eventType = isReceptionQueue ? 'waiting' : 'approved';
+  const eventType = isReceptionQueue ? 'in_meeting' : 'approved';
   await writeVisitEvent(pool, {
     visitId: visit.id,
     eventType,
@@ -427,8 +427,8 @@ export async function applyHostApproval(pool, {
 
   await invalidateHostApprovalTokens(pool, visit.id);
 
-  if (isReceptionQueue || nextStatus === 'waiting') {
-    await markHostUnavailableForVisit(pool, { ...visit, host_id: hostRow.id });
+  if (isReceptionQueue || nextStatus === 'waiting' || nextStatus === 'in_meeting') {
+    await markHostUnavailableForVisit(pool, { ...visit, host_id: hostRow.id, status: nextStatus });
   }
 
   if (notify) {
@@ -449,7 +449,7 @@ export async function applyHostApproval(pool, {
     isReceptionQueue,
     eventType,
     message: isReceptionQueue
-      ? 'Visitor accepted and added to your timeline.'
+      ? 'Visitor accepted and marked as with you.'
       : 'Visit approved.',
   };
 }
@@ -542,7 +542,11 @@ export async function decidePublicHostApproval(pool, {
       payload,
     });
   }
-  if (expired || visit.status !== 'pending_approval') {
+  const isOnSiteApproval = isReceptionQueueVisit(visit);
+  const statusAllowed = isOnSiteApproval
+    ? ['waiting', 'pending_approval'].includes(String(visit.status || ''))
+    : visit.status === 'pending_approval';
+  if (expired || !statusAllowed) {
     throw httpError(410, 'This approval link has expired.');
   }
 

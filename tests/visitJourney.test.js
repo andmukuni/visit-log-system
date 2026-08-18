@@ -15,9 +15,9 @@ describe('visit journey status mapping', () => {
     assert.equal(resolveJourneyLabel('in_meeting', true), 'With host');
   });
 
-  it('shows on-site guests at the desk step after host reject or queue', () => {
-    assert.equal(resolveJourneyStatusKey('pending_approval', true), 'checked_in');
-    assert.equal(resolveJourneyStatusKey('rejected', true), 'checked_in');
+  it('maps on-site queued guests to waiting and rejected guests back to reception', () => {
+    assert.equal(resolveJourneyStatusKey('pending_approval', true), 'waiting');
+    assert.equal(resolveJourneyStatusKey('rejected', true), 'reception_check_in');
     assert.equal(resolveJourneyStatusKey('rejected', false), null);
   });
 
@@ -25,11 +25,15 @@ describe('visit journey status mapping', () => {
     const { resolveVisitStatusDisplay } = await import('../shared/visitJourney.js');
     assert.deepEqual(
       resolveVisitStatusDisplay('pending_approval', true),
-      { status: 'checked_in', label: 'On site' },
+      { status: 'waiting', label: 'Waiting for host' },
     );
     assert.deepEqual(
       resolveVisitStatusDisplay('waiting', true),
       { status: 'waiting', label: 'Waiting for host' },
+    );
+    assert.deepEqual(
+      resolveVisitStatusDisplay('reception_check_in', true),
+      { status: 'reception_check_in', label: 'Reception' },
     );
   });
 });

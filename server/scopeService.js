@@ -184,8 +184,8 @@ export async function loadVisitScoped(pool, visitId, scope, { elevated = false }
 
 export const VISIT_TRANSITIONS = {
   pre_registered: ['pending_approval', 'approved', 'expected', 'cancelled', 'rejected'],
-  // Host can approve pre-arrival (approved/expected) or accept a reception-queued visitor (waiting).
-  pending_approval: ['approved', 'expected', 'waiting', 'rejected', 'cancelled', 'checked_out', 'overdue'],
+  // Host can approve pre-arrival (approved/expected) or accept a reception-queued visitor (in_meeting).
+  pending_approval: ['approved', 'expected', 'waiting', 'in_meeting', 'rejected', 'cancelled', 'checked_out', 'overdue'],
   approved: ['expected', 'arrived_at_gate', 'checked_in', 'reception_check_in', 'cancelled', 'expired'],
   expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'queue', 'expired'],
   arrived_at_gate: ['entered_premises', 'reception_check_in', 'checked_in', 'checked_out', 'cancelled'],
@@ -199,7 +199,7 @@ export const VISIT_TRANSITIONS = {
   checked_out: ['left_premises', 'completed'],
   left_premises: ['completed'],
   // On-site guests rejected by a host can be re-queued or checked out at the desk.
-  rejected: ['pending_approval', 'checked_out', 'cancelled'],
+  rejected: ['pending_approval', 'waiting', 'checked_out', 'cancelled'],
   cancelled: [],
   denied: [],
   expired: [],

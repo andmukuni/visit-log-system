@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -21,8 +21,12 @@ import {
 } from '../ui';
 import { formatTime } from '../../utils/helpers';
 import { addDays, startOfDay } from '../executive/calendarUtils';
+import ReceiveAtDeskModal from './ReceiveAtDeskModal';
+import { useToast } from '../../context/ToastContext';
+import { visitorApi } from '../../utils/visitorApi';
 import {
   getReceptionVisitAction,
+  isReceiveAtDeskAction,
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
@@ -194,7 +198,7 @@ function KpiTile({ label, value, accent = 'navy' }) {
   );
 }
 
-function ArrivalCard({ row, onCheckOut, checkingOut }) {
+function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
   const navigate = useNavigate();
   const visitId = visitIdOf(row);
   const isRestricted = row._accessLevel === 'restricted';
@@ -204,6 +208,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
   const visitStatus = row.visit_status || row.status;
   const action = isRestricted ? { show: false } : getReceptionVisitAction(row);
   const actionHref = receptionActionHref(action, visitId);
+  const isReceiveModal = isReceiveAtDeskAction(action);
   const ActionIcon = receptionActionIcon(action);
   const cardTone = statusCardTone(visitStatus);
   const timeChipTone = statusTimeChipTone(visitStatus);
@@ -284,13 +289,24 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
             onClick={() => onCheckOut(row)}
           />
         ) : null}
-        {action.show && actionHref ? (
+        {action.show && (actionHref || isReceiveModal) ? (
           action.disabled ? (
             <Button
               size="sm"
-              variant="primary"
+              variant="ghost"
               disabled
               className={receptionActionButtonClass(action.tone)}
+            >
+              <ActionIcon size={14} aria-hidden="true" />
+              {action.label}
+            </Button>
+          ) : isReceiveModal ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className={receptionActionButtonClass(action.tone)}
+              aria-label={`${action.label} ${row.visitor_name || 'visitor'}`}
+              onClick={() => onReceiveAtDesk?.(row)}
             >
               <ActionIcon size={14} aria-hidden="true" />
               {action.label}
@@ -299,15 +315,10 @@ function ArrivalCard({ row, onCheckOut, checkingOut }) {
             <Link
               to={actionHref}
               aria-label={`${action.label} ${row.visitor_name || 'visitor'}`}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors ${receptionActionButtonClass(action.tone)}`}
             >
-              <Button
-                size="sm"
-                variant="primary"
-                className={receptionActionButtonClass(action.tone)}
-              >
-                <ActionIcon size={14} aria-hidden="true" />
-                {action.label}
-              </Button>
+              <ActionIcon size={14} aria-hidden="true" />
+              {action.label}
             </Link>
           )
         ) : null}
@@ -326,7 +337,29 @@ export default function ExpectedVisitorsTimeline({
   onStatusFilterChange,
   onCheckOut,
   checkingOutId = null,
+  onRefresh,
 }) {
+  const toast = useToast();
+  const [receiveVisit, setReceiveVisit] = useState(null);
+  const [receiving, setReceiving] = useState(false);
+
+  const handleReceiveConfirm = async ({ badgeNumber }) => {
+    const visitId = visitIdOf(receiveVisit);
+    if (!visitId) return;
+    setReceiving(true);
+    try {
+      await visitorApi.checkInVisit(visitId, badgeNumber);
+      const name = receiveVisit?.visitor_name || receiveVisit?.full_name || 'Visitor';
+      toast.success(`${name} received at reception.`);
+      setReceiveVisit(null);
+      await onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not receive visitor at desk.');
+    } finally {
+      setReceiving(false);
+    }
+  };
+
   const today = useMemo(() => startOfDay(new Date()), []);
   const selected = useMemo(() => startOfDay(selectedDate || new Date()), [selectedDate]);
   const isToday = isSameDay(selected, today);
@@ -471,6 +504,7 @@ export default function ExpectedVisitorsTimeline({
                         row={row}
                         onCheckOut={onCheckOut}
                         checkingOut={checkingOutId === visitIdOf(row)}
+                        onReceiveAtDesk={setReceiveVisit}
                       />
                     </li>
                   ))}
@@ -484,6 +518,14 @@ export default function ExpectedVisitorsTimeline({
       {loading && appointments.length > 0 ? (
         <p className="shrink-0 text-center text-xs text-navy-400">Refreshing…</p>
       ) : null}
+
+      <ReceiveAtDeskModal
+        isOpen={Boolean(receiveVisit)}
+        onClose={() => !receiving && setReceiveVisit(null)}
+        visit={receiveVisit}
+        submitting={receiving}
+        onConfirm={handleReceiveConfirm}
+      />
     </div>
   );
 }

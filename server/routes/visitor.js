@@ -1512,7 +1512,6 @@ export function createVisitsRouter() {
 
       await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out', actorUserId: userId });
       await refreshHostAvailabilityAfterVisit(pool, visit);
-      await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
 
       res.json({ ok: true, message: 'Visitor checked out.' });
     } catch (error) {

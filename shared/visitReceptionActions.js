@@ -27,6 +27,7 @@ export function canMarkInMeeting(visit) {
  *   label: string,
  *   loadingLabel?: string,
  *   href: string|null,
+ *   actionKind?: 'receive-modal'|'queue-navigate'|'navigate'|'none',
  *   show: boolean,
  *   disabled?: boolean,
  *   tone?: 'emerald'|'cyan'|'muted',
@@ -44,6 +45,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
       stage: 'queue',
       label: 'View host queue',
       href: '/reception/host-queue',
+      actionKind: 'queue-navigate',
       show: true,
       tone: 'cyan',
       icon: 'queue',
@@ -56,6 +58,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
       label: 'Re-queue to host',
       loadingLabel: 'Opening queue…',
       href: '/reception/host-queue',
+      actionKind: 'queue-navigate',
       show: true,
       tone: 'cyan',
       icon: 'send',
@@ -69,7 +72,8 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         stage: 'gate',
         label: 'Receive at desk',
         loadingLabel: 'Receiving…',
-        href: '/reception/check-in',
+        href: null,
+        actionKind: 'receive-modal',
         show: true,
         tone: 'cyan',
         icon: 'check-in',
@@ -82,6 +86,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         label: 'Check in',
         loadingLabel: 'Checking in…',
         href: '/reception/check-in',
+        actionKind: 'navigate',
         show: true,
         tone: 'cyan',
         icon: 'check-in',
@@ -91,6 +96,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         stage: 'expected',
         label: 'Awaiting approval',
         href: '/reception/approvals',
+        actionKind: 'navigate',
         show: true,
         disabled: true,
         tone: 'muted',
@@ -103,6 +109,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         label: 'Queue to host',
         loadingLabel: 'Opening queue…',
         href: '/reception/host-queue',
+        actionKind: 'queue-navigate',
         show: true,
         tone: 'cyan',
         icon: 'send',
@@ -112,6 +119,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         stage: 'queue',
         label: 'View host queue',
         href: '/reception/host-queue',
+        actionKind: 'queue-navigate',
         show: true,
         tone: 'cyan',
         icon: 'queue',
@@ -149,11 +157,17 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         label: 'Check in',
         loadingLabel: 'Checking in…',
         href: '/reception/check-in',
+        actionKind: 'navigate',
         show: true,
         tone: 'cyan',
         icon: 'check-in',
       };
   }
+}
+
+/** Whether the primary reception action opens the receive-at-desk modal. */
+export function isReceiveAtDeskAction(action) {
+  return action?.actionKind === 'receive-modal';
 }
 
 /** Desk check-in button copy (gate panel / icon-only actions). */
@@ -174,7 +188,7 @@ export function receptionActionHref(action, visitId) {
 
 export function receptionActionButtonClass(tone = 'cyan') {
   if (tone === 'muted') {
-    return 'bg-navy-100 text-navy-600 hover:bg-navy-200 border-navy-200 cursor-default';
+    return 'border border-navy-200 bg-navy-100 text-navy-600 hover:bg-navy-200 cursor-default';
   }
-  return 'bg-cyan-600 hover:bg-cyan-500 border-cyan-600';
+  return 'border border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-500';
 }
