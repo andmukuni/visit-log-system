@@ -3,6 +3,7 @@ const VARIANTS = {
   secondary: 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200',
   ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 border border-transparent',
   danger: 'bg-red-600 text-white hover:bg-red-500 border border-red-600',
+  reception: 'bg-cyan-600 text-white hover:bg-cyan-500 border border-cyan-600',
 };
 
 const SIZES = {

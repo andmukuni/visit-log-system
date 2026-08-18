@@ -190,5 +190,5 @@ export function receptionActionButtonClass(tone = 'cyan') {
   if (tone === 'muted') {
     return 'border border-navy-200 bg-navy-100 text-navy-600 hover:bg-navy-200 cursor-default';
   }
-  return 'border border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-500';
+  return 'border border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-500 hover:border-cyan-500';
 }

@@ -48,9 +48,9 @@ function ReceptionHeroActions({
       {action?.show && !action.disabled && !canQueue && isReceiveModal ? (
         <LoadingButton
           size="md"
+          variant="reception"
           icon={ActionIcon}
           onClick={onReceiveAtDesk}
-          className={`border ${receptionActionButtonClass(action.tone)}`}
         >
           {action.label}
         </LoadingButton>

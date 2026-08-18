@@ -291,20 +291,14 @@ function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
         ) : null}
         {action.show && (actionHref || isReceiveModal) ? (
           action.disabled ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled
-              className={receptionActionButtonClass(action.tone)}
-            >
+            <span className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium ${receptionActionButtonClass(action.tone)}`}>
               <ActionIcon size={14} aria-hidden="true" />
               {action.label}
-            </Button>
+            </span>
           ) : isReceiveModal ? (
             <Button
               size="sm"
-              variant="ghost"
-              className={receptionActionButtonClass(action.tone)}
+              variant="reception"
               aria-label={`${action.label} ${row.visitor_name || 'visitor'}`}
               onClick={() => onReceiveAtDesk?.(row)}
             >

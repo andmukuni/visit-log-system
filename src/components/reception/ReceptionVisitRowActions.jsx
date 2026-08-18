@@ -72,10 +72,9 @@ export default function ReceptionVisitRowActions({
         <>
           <LoadingButton
             size="sm"
-            variant="ghost"
+            variant="reception"
             icon={ActionIcon}
             iconSize={14}
-            className={receptionActionButtonClass(action.tone)}
             aria-label={`${action.label} ${visitorName}`}
             onClick={(e) => {
               e.stopPropagation();
