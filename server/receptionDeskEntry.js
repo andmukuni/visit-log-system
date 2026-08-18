@@ -2,7 +2,7 @@ import { generateId } from './visitorSchema.js';
 import { writeAuditLog, writeVisitEvent, generatePassCode } from './auditService.js';
 import { resolveGateEntryPlacement, requireUserScope, canTransition } from './scopeService.js';
 import { findWatchlistMatches } from './watchlistService.js';
-import { notifyVisitEvent } from './notificationService.js';
+import { notifyVisitEvent, parseAlertVisitorFlag } from './notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, formatVisitResponse } from './visitResponseService.js';
 import { permissionsFromRequest } from './classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from './accessSchema.js';
@@ -76,7 +76,13 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     idNumber,
     dojahOverride,
     checkInSignature,
+    notifyVisitor: notifyVisitorRequested,
   } = body;
+  // Reception now chooses per check-in whether to alert the guest — default
+  // to the historical always-on behaviour when the caller sends nothing.
+  const notifyVisitor = notifyVisitorRequested === undefined
+    ? true
+    : parseAlertVisitorFlag(notifyVisitorRequested);
 
   if (hostId) {
     const zoneCheck = await assertTargetInReceptionZones(pool, {
@@ -254,7 +260,7 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
   }
 
   try {
-    await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId });
+    await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor });
   } catch {
     // Non-blocking
   }
@@ -308,7 +314,11 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
     purpose,
     occupantCount = 0,
     checkInSignature,
+    notifyVisitor: notifyVisitorRequested,
   } = body;
+  const notifyVisitor = notifyVisitorRequested === undefined
+    ? true
+    : parseAlertVisitorFlag(notifyVisitorRequested);
 
   if (!plateNumber?.trim()) {
     return { ok: false, status: 400, message: 'Plate number is required.' };
@@ -474,7 +484,7 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
       );
       await writeVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, stationId: scope.station_id });
       try {
-        await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId });
+        await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor });
       } catch (error) {
         console.warn('[reception_entry.vehicle] notify failed:', error.message);
       }

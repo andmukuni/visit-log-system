@@ -24,7 +24,7 @@ import {
   Users,
   Bike,
 } from 'lucide-react';
-import { LoadingButton, PhoneInput, SegmentedControl, Spinner } from '../../components/ui';
+import { LoadingButton, NotifyVisitorField, PhoneInput, SegmentedControl, Spinner } from '../../components/ui';
 import CameraCapture from '../../components/ui/CameraCapture';
 import SignaturePad from '../../components/ui/SignaturePad';
 import { useToast } from '../../context/ToastContext';
@@ -474,8 +474,12 @@ export default function GateEntryCheckInForm({
   const [dojahOverride, setDojahOverride] = useState(false);
   const [executive, setExecutive] = useState(false);
   const [executiveModalOpen, setExecutiveModalOpen] = useState(false);
+  const [notifyVisitor, setNotifyVisitor] = useState(true);
 
   const executiveEnabled = entryContext === 'reception';
+  // Gate walk-ins land on 'arrived_at_gate', which never messages the guest —
+  // the notify choice only makes sense (and is only shown) at reception.
+  const notifyChoiceEnabled = entryContext === 'reception';
   const steps = mode === 'vehicle' ? VEHICLE_STEPS : executive ? EXECUTIVE_WALKIN_STEPS : WALKIN_STEPS;
   const dojahEnabled = Boolean(refData?.integrations?.dojah?.enabled && refData?.integrations?.dojah?.configured);
 
@@ -508,6 +512,7 @@ export default function GateEntryCheckInForm({
     setDojahOverride(false);
     setExecutive(false);
     setExecutiveModalOpen(false);
+    setNotifyVisitor(true);
   }, [mode]);
 
   useEffect(() => {
@@ -678,6 +683,7 @@ export default function GateEntryCheckInForm({
     setNrcLookup(emptyNrcLookup());
     setDojahOverride(false);
     setExecutive(false);
+    setNotifyVisitor(true);
     setStep(0);
   };
 
@@ -710,6 +716,7 @@ export default function GateEntryCheckInForm({
         phone: buildFullPhone(walkIn.phoneCountry, walkIn.phone),
         dojahOverride: dojahOverride || undefined,
         checkInSignature,
+        notifyVisitor: notifyChoiceEnabled ? notifyVisitor : undefined,
       });
       toast.success(copy.successWalkIn(visit));
       resetForm();
@@ -742,6 +749,7 @@ export default function GateEntryCheckInForm({
         ...vehicle,
         phone: buildFullPhone(vehicle.phoneCountry, vehicle.phone),
         checkInSignature,
+        notifyVisitor: notifyChoiceEnabled ? notifyVisitor : undefined,
       });
       toast.success(copy.successVehicle(result));
       resetForm();
@@ -885,6 +893,10 @@ export default function GateEntryCheckInForm({
             <ReviewRow label="Host" value={hostName(vehicle.hostId)} />
             <ReviewRow label="Purpose" value={vehicle.purpose} />
           </ReviewCard>
+
+          {notifyChoiceEnabled ? (
+            <NotifyVisitorField value={notifyVisitor} onChange={setNotifyVisitor} label="Notify driver?" />
+          ) : null}
         </div>
       );
     }
@@ -1135,6 +1147,10 @@ export default function GateEntryCheckInForm({
             <ReviewRow label="Host" value={hostName(walkIn.hostId)} />
             <ReviewRow label="Purpose" value={walkIn.purpose} />
           </ReviewCard>
+
+          {notifyChoiceEnabled ? (
+            <NotifyVisitorField value={notifyVisitor} onChange={setNotifyVisitor} />
+          ) : null}
         </div>
       );
     }

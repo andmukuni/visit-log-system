@@ -70,9 +70,12 @@ export const visitorApi = {
   registerVisit: (body) => apiFetch('/admin/visits', { method: 'POST', body: JSON.stringify(body) }),
   approveVisit: (id, reason) => apiFetch(`/admin/visits/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason }) }),
   rejectVisit: (id, reason) => apiFetch(`/admin/visits/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  checkInVisit: (id, badgeNumber) => apiFetch(`/admin/visits/${id}/check-in`, {
+  checkInVisit: (id, badgeNumber, notifyVisitor) => apiFetch(`/admin/visits/${id}/check-in`, {
     method: 'POST',
-    body: JSON.stringify(badgeNumber != null && badgeNumber !== '' ? { badgeNumber } : {}),
+    body: JSON.stringify({
+      ...(badgeNumber != null && badgeNumber !== '' ? { badgeNumber } : {}),
+      ...(typeof notifyVisitor === 'boolean' ? { notifyVisitor } : {}),
+    }),
   }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
   markLeftPremises: (id) => apiFetch(`/admin/visits/${id}/left-premises`, { method: 'POST' }),

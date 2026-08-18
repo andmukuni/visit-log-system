@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Car, Footprints, LogIn, Search, User } from 'lucide-react';
-import { LoadingButton, VisitStatusBadge } from '../../components/ui';
+import { LoadingButton, Modal, NotifyVisitorField, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { getReceptionCheckInActionLabel } from '../../../shared/visitReceptionActions.js';
@@ -60,6 +60,8 @@ export default function GateCheckInPanel({
   const [searching, setSearching] = useState(false);
   const [loadingPending, setLoadingPending] = useState(true);
   const [checkingIn, setCheckingIn] = useState(null);
+  const [pendingRow, setPendingRow] = useState(null);
+  const [notifyVisitor, setNotifyVisitor] = useState(true);
   const hasSearch = Boolean(query.trim());
 
   const loadPending = useCallback(async () => {
@@ -107,13 +109,26 @@ export default function GateCheckInPanel({
     }
   };
 
-  const handleCheckIn = async (visitId) => {
+  const openCheckInPrompt = (row) => {
+    setPendingRow(row);
+    setNotifyVisitor(true);
+  };
+
+  const closeCheckInPrompt = () => {
+    if (checkingIn) return;
+    setPendingRow(null);
+  };
+
+  const confirmCheckIn = async () => {
+    if (!pendingRow) return;
+    const visitId = pendingRow.id;
     setCheckingIn(visitId);
     try {
-      await visitorApi.checkInVisit(visitId);
+      await visitorApi.checkInVisit(visitId, undefined, notifyVisitor);
       toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked in successfully.`);
       onCheckedIn?.(visitId);
       setResults((prev) => prev.filter((v) => v.id !== visitId));
+      setPendingRow(null);
       if (!hasSearch) {
         void loadPending();
       }
@@ -292,7 +307,7 @@ export default function GateCheckInPanel({
                           iconOnly
                           size="lg"
                           disabled={busy}
-                          onClick={() => void handleCheckIn(row.id)}
+                          onClick={() => openCheckInPrompt(row)}
                           className="shrink-0 bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
                         />
                       </div>
@@ -304,6 +319,32 @@ export default function GateCheckInPanel({
           </div>
         )}
       </FormSection>
+
+      <Modal
+        isOpen={Boolean(pendingRow)}
+        onClose={closeCheckInPrompt}
+        title={isVehicle ? 'Check in vehicle' : 'Check in visitor'}
+        subtitle={pendingRow ? `Confirm check-in for ${visitorDisplayName(pendingRow)}` : undefined}
+        size="md"
+        footer={(
+          <>
+            <LoadingButton variant="secondary" onClick={closeCheckInPrompt} disabled={Boolean(checkingIn)}>
+              Cancel
+            </LoadingButton>
+            <LoadingButton
+              loading={Boolean(checkingIn)}
+              loadingLabel="Checking in…"
+              icon={LogIn}
+              onClick={confirmCheckIn}
+              className="bg-emerald-600 hover:bg-emerald-500 border-emerald-600"
+            >
+              {isVehicle ? 'Check in vehicle' : 'Check in visitor'}
+            </LoadingButton>
+          </>
+        )}
+      >
+        <NotifyVisitorField value={notifyVisitor} onChange={setNotifyVisitor} />
+      </Modal>
     </div>
   );
 }

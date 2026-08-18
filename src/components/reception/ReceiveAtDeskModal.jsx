@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { User } from 'lucide-react';
-import { Modal, FormField, LoadingButton } from '../ui';
+import { Modal, FormField, LoadingButton, NotifyVisitorField } from '../ui';
 
 function visitSummaryLine(visit) {
   const parts = [
@@ -21,17 +21,19 @@ export default function ReceiveAtDeskModal({
   onQueueNext,
 }) {
   const [badgeNumber, setBadgeNumber] = useState('');
+  const [notifyVisitor, setNotifyVisitor] = useState(true);
 
   useEffect(() => {
     if (!isOpen || !visit) return;
     setBadgeNumber(visit.badge_number || '');
+    setNotifyVisitor(true);
   }, [isOpen, visit]);
 
   const visitorName = visit?.full_name || visit?.visitor_name || 'Visitor';
   const summary = visitSummaryLine(visit);
 
   const handleConfirm = () => {
-    onConfirm?.({ badgeNumber: badgeNumber.trim() || undefined });
+    onConfirm?.({ badgeNumber: badgeNumber.trim() || undefined, notifyVisitor });
   };
 
   return (
@@ -90,6 +92,8 @@ export default function ReceiveAtDeskModal({
           placeholder="Optional — assign a visitor badge"
           helpText="Leave blank if no badge is issued."
         />
+
+        <NotifyVisitorField value={notifyVisitor} onChange={setNotifyVisitor} />
       </div>
     </Modal>
   );

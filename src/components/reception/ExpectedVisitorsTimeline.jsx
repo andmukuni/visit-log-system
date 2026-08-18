@@ -368,12 +368,12 @@ export default function ExpectedVisitorsTimeline({
     setRefLoaded(true);
   };
 
-  const handleReceiveConfirm = async ({ badgeNumber }) => {
+  const handleReceiveConfirm = async ({ badgeNumber, notifyVisitor }) => {
     const visitId = visitIdOf(receiveVisit);
     if (!visitId) return;
     setReceiving(true);
     try {
-      await visitorApi.checkInVisit(visitId, badgeNumber);
+      await visitorApi.checkInVisit(visitId, badgeNumber, notifyVisitor);
       const name = receiveVisit?.visitor_name || receiveVisit?.full_name || 'Visitor';
       toast.success(`${name} received at reception.`);
       setReceiveVisit(null);

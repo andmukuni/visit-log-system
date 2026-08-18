@@ -62,11 +62,11 @@ export default function ReceptionVisitRowActions({
     setRefLoaded(true);
   }, [refLoaded]);
 
-  const handleReceiveConfirm = async ({ badgeNumber }) => {
+  const handleReceiveConfirm = async ({ badgeNumber, notifyVisitor }) => {
     if (!visitId) return;
     setReceiving(true);
     try {
-      await visitorApi.checkInVisit(visitId, badgeNumber);
+      await visitorApi.checkInVisit(visitId, badgeNumber, notifyVisitor);
       toast.success(`${visitorName} received at reception.`);
       setReceiveOpen(false);
       await onRefresh?.();

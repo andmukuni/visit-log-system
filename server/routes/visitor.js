@@ -24,7 +24,7 @@ import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
 import { markOverdueVisits } from '../visitOverdue.js';
 import { applyVisitReceptionCheckIn } from '../visitCheckInService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
-import { notifyVisitEvent } from '../notificationService.js';
+import { notifyVisitEvent, parseAlertVisitorFlag } from '../notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, applyVisitListMasking, formatVisitResponse } from '../visitResponseService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import {
@@ -1330,7 +1330,7 @@ export function createVisitsRouter() {
       }
       const { scope, elevated } = scopeResult;
 
-      const { badgeNumber } = req.body;
+      const { badgeNumber, notifyVisitor: notifyVisitorRequested } = req.body;
       const visitId = req.params.id;
 
       const loaded = await loadVisitScoped(pool, visitId, scope, { elevated });
@@ -1412,15 +1412,19 @@ export function createVisitsRouter() {
       });
 
       // This endpoint is shared by the gate and reception (both go through
-      // GateCheckInPanel). Only notify the guest/host when the actor
-      // performing the check-in is actually reception — a gate check-in
-      // shouldn't page anyone.
+      // GateCheckInPanel). Reception now chooses per check-in whether to
+      // alert the guest; a gate check-in still shouldn't page anyone, so a
+      // caller that doesn't send an explicit choice falls back to the old
+      // isReceptionist-gated default.
+      const notifyVisitor = notifyVisitorRequested === undefined
+        ? receptionZone.isReceptionist
+        : parseAlertVisitorFlag(notifyVisitorRequested);
       try {
         await notifyVisitEvent(pool, {
           visitId,
           eventType: 'reception_check_in',
           actorUserId: userId,
-          notifyVisitor: receptionZone.isReceptionist,
+          notifyVisitor,
           notifyHost: receptionZone.isReceptionist,
         });
       } catch (notifyError) {

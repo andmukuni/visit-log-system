@@ -168,11 +168,11 @@ export default function ReceptionVisitDetailPage() {
     }
   };
 
-  const handleReceiveConfirm = async ({ badgeNumber }) => {
+  const handleReceiveConfirm = async ({ badgeNumber, notifyVisitor }) => {
     if (!visitForModal?.id) return;
     setReceiving(true);
     try {
-      await visitorApi.checkInVisit(visitForModal.id, badgeNumber);
+      await visitorApi.checkInVisit(visitForModal.id, badgeNumber, notifyVisitor);
       const name = visitForModal.full_name || visitForModal.visitor_name || 'Visitor';
       toast.success(`${name} received at reception.`);
       setReceiveOpen(false);
