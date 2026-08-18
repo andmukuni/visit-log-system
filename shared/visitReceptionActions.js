@@ -57,8 +57,8 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
       stage: 'reception',
       label: 'Re-queue to host',
       loadingLabel: 'Opening queue…',
-      href: '/reception/host-queue',
-      actionKind: 'queue-navigate',
+      href: null,
+      actionKind: 'queue-modal',
       show: true,
       tone: 'cyan',
       icon: 'send',
@@ -108,8 +108,8 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         stage: 'reception',
         label: 'Queue to host',
         loadingLabel: 'Opening queue…',
-        href: '/reception/host-queue',
-        actionKind: 'queue-navigate',
+        href: null,
+        actionKind: 'queue-modal',
         show: true,
         tone: 'cyan',
         icon: 'send',
@@ -168,6 +168,11 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
 /** Whether the primary reception action opens the receive-at-desk modal. */
 export function isReceiveAtDeskAction(action) {
   return action?.actionKind === 'receive-modal';
+}
+
+/** Whether the primary reception action opens the queue-to-host modal. */
+export function isQueueToHostAction(action) {
+  return action?.actionKind === 'queue-modal';
 }
 
 /** Desk check-in button copy (gate panel / icon-only actions). */

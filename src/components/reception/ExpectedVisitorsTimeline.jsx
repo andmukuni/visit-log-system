@@ -22,10 +22,14 @@ import {
 import { formatTime } from '../../utils/helpers';
 import { addDays, startOfDay } from '../executive/calendarUtils';
 import ReceiveAtDeskModal from './ReceiveAtDeskModal';
+import QueueToHostModal from './QueueToHostModal';
 import { useToast } from '../../context/ToastContext';
-import { visitorApi } from '../../utils/visitorApi';
+import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import {
   getReceptionVisitAction,
+  isQueueToHostAction,
   isReceiveAtDeskAction,
   receptionActionButtonClass,
   receptionActionHref,
@@ -198,7 +202,7 @@ function KpiTile({ label, value, accent = 'navy' }) {
   );
 }
 
-function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
+function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk, onQueueToHost }) {
   const navigate = useNavigate();
   const visitId = visitIdOf(row);
   const isRestricted = row._accessLevel === 'restricted';
@@ -209,6 +213,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
   const action = isRestricted ? { show: false } : getReceptionVisitAction(row);
   const actionHref = receptionActionHref(action, visitId);
   const isReceiveModal = isReceiveAtDeskAction(action);
+  const isQueueModal = isQueueToHostAction(action);
   const ActionIcon = receptionActionIcon(action);
   const cardTone = statusCardTone(visitStatus);
   const timeChipTone = statusTimeChipTone(visitStatus);
@@ -289,7 +294,7 @@ function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
             onClick={() => onCheckOut(row)}
           />
         ) : null}
-        {action.show && (actionHref || isReceiveModal) ? (
+        {action.show && (actionHref || isReceiveModal || isQueueModal) ? (
           action.disabled ? (
             <span className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium ${receptionActionButtonClass(action.tone)}`}>
               <ActionIcon size={14} aria-hidden="true" />
@@ -301,6 +306,16 @@ function ArrivalCard({ row, onCheckOut, checkingOut, onReceiveAtDesk }) {
               variant="reception"
               aria-label={`${action.label} ${row.visitor_name || 'visitor'}`}
               onClick={() => onReceiveAtDesk?.(row)}
+            >
+              <ActionIcon size={14} aria-hidden="true" />
+              {action.label}
+            </Button>
+          ) : isQueueModal ? (
+            <Button
+              size="sm"
+              variant="reception"
+              aria-label={`${action.label} ${row.visitor_name || 'visitor'}`}
+              onClick={() => onQueueToHost?.(row)}
             >
               <ActionIcon size={14} aria-hidden="true" />
               {action.label}
@@ -335,7 +350,23 @@ export default function ExpectedVisitorsTimeline({
 }) {
   const toast = useToast();
   const [receiveVisit, setReceiveVisit] = useState(null);
+  const [queueVisit, setQueueVisit] = useState(null);
   const [receiving, setReceiving] = useState(false);
+  const [queuing, setQueuing] = useState(false);
+  const [hosts, setHosts] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [offices, setOffices] = useState([]);
+  const [refLoaded, setRefLoaded] = useState(false);
+
+  const ensureQueueReferenceData = async () => {
+    if (refLoaded) return;
+    const rawRef = await receptionApi.getReferenceData().catch(() => ({}));
+    const ref = scopeReceptionReferenceData(rawRef);
+    setHosts(ref.hosts || []);
+    setDepartments(ref.departments || []);
+    setOffices(ref.offices || []);
+    setRefLoaded(true);
+  };
 
   const handleReceiveConfirm = async ({ badgeNumber }) => {
     const visitId = visitIdOf(receiveVisit);
@@ -352,6 +383,27 @@ export default function ExpectedVisitorsTimeline({
     } finally {
       setReceiving(false);
     }
+  };
+
+  const handleQueueConfirm = async (payload) => {
+    const visitId = visitIdOf(queueVisit);
+    if (!visitId) return;
+    setQueuing(true);
+    try {
+      const result = await receptionApi.queueToHost(visitId, payload);
+      toastHostApprovalRequested(toast, result, 'Visitor sent to host for approval.');
+      setQueueVisit(null);
+      await onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not queue visitor to host.');
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  const handleQueueOpen = async (row) => {
+    await ensureQueueReferenceData();
+    setQueueVisit(row);
   };
 
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -499,6 +551,7 @@ export default function ExpectedVisitorsTimeline({
                         onCheckOut={onCheckOut}
                         checkingOut={checkingOutId === visitIdOf(row)}
                         onReceiveAtDesk={setReceiveVisit}
+                        onQueueToHost={handleQueueOpen}
                       />
                     </li>
                   ))}
@@ -519,6 +572,16 @@ export default function ExpectedVisitorsTimeline({
         visit={receiveVisit}
         submitting={receiving}
         onConfirm={handleReceiveConfirm}
+      />
+      <QueueToHostModal
+        isOpen={Boolean(queueVisit)}
+        onClose={() => !queuing && setQueueVisit(null)}
+        visit={queueVisit}
+        hosts={hosts}
+        departments={departments}
+        offices={offices}
+        submitting={queuing}
+        onConfirm={handleQueueConfirm}
       />
     </div>
   );

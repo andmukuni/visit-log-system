@@ -129,6 +129,7 @@ describe('reception visit action labels', () => {
       getReceptionCheckInActionLabel,
       receptionActionHref,
       isReceiveAtDeskAction,
+      isQueueToHostAction,
     } = await import('../shared/visitReceptionActions.js');
 
     const gateAction = getReceptionVisitAction('arrived_at_gate');
@@ -137,7 +138,11 @@ describe('reception visit action labels', () => {
     assert.equal(isReceiveAtDeskAction(gateAction), true);
     assert.equal(receptionActionHref(gateAction, 'vis-1'), null);
     assert.equal(getReceptionVisitAction('expected').label, 'Check in');
-    assert.equal(getReceptionVisitAction('reception_check_in').label, 'Queue to host');
+    const queueAction = getReceptionVisitAction('reception_check_in');
+    assert.equal(queueAction.label, 'Queue to host');
+    assert.equal(queueAction.actionKind, 'queue-modal');
+    assert.equal(isQueueToHostAction(queueAction), true);
+    assert.equal(receptionActionHref(queueAction, 'vis-1'), null);
     assert.equal(getReceptionVisitAction('waiting').label, 'View host queue');
     assert.equal(getReceptionVisitAction('in_meeting').show, false);
     assert.equal(getReceptionVisitAction('overdue').show, false);

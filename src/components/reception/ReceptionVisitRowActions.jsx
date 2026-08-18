@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, LogIn, LogOut, Send, Users } from 'lucide-react';
 import ReceiveAtDeskModal from './ReceiveAtDeskModal';
+import QueueToHostModal from './QueueToHostModal';
 import { IconButton, LoadingButton } from '../ui';
 import { useToast } from '../../context/ToastContext';
-import { visitorApi } from '../../utils/visitorApi';
+import { receptionApi, visitorApi } from '../../utils/visitorApi';
+import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
+import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
 import {
   getReceptionVisitAction,
+  isQueueToHostAction,
   isReceiveAtDeskAction,
   receptionActionButtonClass,
   receptionActionHref,
@@ -30,16 +34,33 @@ export default function ReceptionVisitRowActions({
 }) {
   const toast = useToast();
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const [receiving, setReceiving] = useState(false);
+  const [queuing, setQueuing] = useState(false);
+  const [hosts, setHosts] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [offices, setOffices] = useState([]);
+  const [refLoaded, setRefLoaded] = useState(false);
 
   const visitId = visitIdProp || row?.id || row?.visit_id;
   const isRestricted = row?._accessLevel === 'restricted';
   const action = isRestricted ? { show: false } : getReceptionVisitAction(row);
   const actionHref = receptionActionHref(action, visitId);
   const isReceiveModal = isReceiveAtDeskAction(action);
+  const isQueueModal = isQueueToHostAction(action);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
   const canCheckOut = !isRestricted && Boolean(onCheckOut) && isCheckoutEligible(row);
   const visitorName = row?.full_name || row?.visitor_name || 'visitor';
+
+  const ensureQueueReferenceData = useCallback(async () => {
+    if (refLoaded) return;
+    const rawRef = await receptionApi.getReferenceData().catch(() => ({}));
+    const ref = scopeReceptionReferenceData(rawRef);
+    setHosts(ref.hosts || []);
+    setDepartments(ref.departments || []);
+    setOffices(ref.offices || []);
+    setRefLoaded(true);
+  }, [refLoaded]);
 
   const handleReceiveConfirm = async ({ badgeNumber }) => {
     if (!visitId) return;
@@ -54,6 +75,28 @@ export default function ReceptionVisitRowActions({
     } finally {
       setReceiving(false);
     }
+  };
+
+  const handleQueueConfirm = async (payload) => {
+    if (!visitId) return;
+    setQueuing(true);
+    try {
+      const result = await receptionApi.queueToHost(visitId, payload);
+      toastHostApprovalRequested(toast, result, 'Visitor sent to host for approval.');
+      setQueueOpen(false);
+      await onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not queue visitor to host.');
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  const openQueueModal = async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    await ensureQueueReferenceData();
+    setQueueOpen(true);
   };
 
   const renderPrimaryAction = () => {
@@ -90,6 +133,33 @@ export default function ReceptionVisitRowActions({
             visit={row}
             submitting={receiving}
             onConfirm={handleReceiveConfirm}
+          />
+        </>
+      );
+    }
+
+    if (isQueueModal) {
+      return (
+        <>
+          <LoadingButton
+            size="sm"
+            variant="reception"
+            icon={ActionIcon}
+            iconSize={14}
+            aria-label={`${action.label} ${visitorName}`}
+            onClick={openQueueModal}
+          >
+            {action.label}
+          </LoadingButton>
+          <QueueToHostModal
+            isOpen={queueOpen}
+            onClose={() => !queuing && setQueueOpen(false)}
+            visit={row}
+            hosts={hosts}
+            departments={departments}
+            offices={offices}
+            submitting={queuing}
+            onConfirm={handleQueueConfirm}
           />
         </>
       );
