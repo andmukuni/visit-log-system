@@ -71,7 +71,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         loadingLabel: 'Receiving…',
         href: '/reception/check-in',
         show: true,
-        tone: 'emerald',
+        tone: 'cyan',
         icon: 'check-in',
       };
     case 'approved':
@@ -83,7 +83,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         loadingLabel: 'Checking in…',
         href: '/reception/check-in',
         show: true,
-        tone: 'emerald',
+        tone: 'cyan',
         icon: 'check-in',
       };
     case 'pending_approval':
@@ -150,7 +150,7 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
         loadingLabel: 'Checking in…',
         href: '/reception/check-in',
         show: true,
-        tone: 'emerald',
+        tone: 'cyan',
         icon: 'check-in',
       };
   }
@@ -172,12 +172,9 @@ export function receptionActionHref(action, visitId) {
   return `${action.href}${sep}visit=${encodeURIComponent(visitId)}`;
 }
 
-export function receptionActionButtonClass(tone = 'emerald') {
-  if (tone === 'cyan') {
-    return 'bg-cyan-600 hover:bg-cyan-500 border-cyan-600';
-  }
+export function receptionActionButtonClass(tone = 'cyan') {
   if (tone === 'muted') {
     return 'bg-navy-100 text-navy-600 hover:bg-navy-200 border-navy-200 cursor-default';
   }
-  return 'bg-emerald-600 hover:bg-emerald-500 border-emerald-600';
+  return 'bg-cyan-600 hover:bg-cyan-500 border-cyan-600';
 }
