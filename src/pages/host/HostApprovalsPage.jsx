@@ -5,9 +5,11 @@ import { PageHeader, Card, DataTable, VisitStatusBadge, Spinner, LoadingButton, 
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
+import { useViewerHostId } from '../../hooks/useViewerHostId';
 
 export default function HostApprovalsPage() {
   const navigate = useNavigate();
+  const viewerHostId = useViewerHostId();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +81,7 @@ export default function HostApprovalsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <VisitStatusBadge visit={row} />,
+      render: (_, row) => <VisitStatusBadge visit={row} viewerHostId={viewerHostId} />,
     },
     {
       key: 'created_at',

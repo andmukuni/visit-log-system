@@ -20,4 +20,5 @@ export {
   VISIT_STATUS_ALIASES,
   resolveJourneyStatusKey,
   resolveJourneyLabel,
+  resolveJourneyStepLabel,
 } from '../../../shared/visitJourney.js';

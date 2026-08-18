@@ -7,11 +7,15 @@ export default function VisitStatusBadge({
   visit = null,
   status,
   hasCheckedIn,
+  viewerHostId,
   ...props
 }) {
   const rawStatus = status ?? visit?.status ?? visit?.visit_status;
   const checkedIn = hasCheckedIn ?? visitHasCheckedIn(visit);
-  const display = resolveVisitStatusDisplay(rawStatus, checkedIn);
+  const display = resolveVisitStatusDisplay(rawStatus, checkedIn, {
+    viewerHostId,
+    visitHostId: visit?.host_id,
+  });
 
   return (
     <StatusBadge

@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { ExternalLink, X } from 'lucide-react';
 import { VisitorDetailView } from '../visitors';
 import { executiveApi } from '../../utils/visitorApi';
+import { useViewerHostId } from '../../hooks/useViewerHostId';
 
 export default function ExecutiveVisitDetailPanel({ visit, open, onClose }) {
+  const viewerHostId = useViewerHostId();
   if (!open || !visit?.id) return null;
 
   return createPortal(
@@ -40,6 +42,7 @@ export default function ExecutiveVisitDetailPanel({ visit, open, onClose }) {
             fetchVisit={executiveApi.getVisit}
             layout="sidebar"
             className="h-full border-0 lg:w-full lg:max-w-none"
+            viewerHostId={viewerHostId}
           />
         </div>
 

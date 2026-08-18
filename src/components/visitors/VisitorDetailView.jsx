@@ -28,6 +28,7 @@ export default function VisitorDetailView({
   onClose,
   extraContent = null,
   className = '',
+  viewerHostId = null,
 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +74,12 @@ export default function VisitorDetailView({
     : null;
 
   const hero = visit ? (
-    <VisitorDetailHero visit={visit} footer={resolvedHeroFooter} compact={isSidebar} />
+    <VisitorDetailHero
+      visit={visit}
+      footer={resolvedHeroFooter}
+      compact={isSidebar}
+      viewerHostId={viewerHostId}
+    />
   ) : null;
 
   const activityPanel = (
@@ -87,6 +93,7 @@ export default function VisitorDetailView({
       sidebarExtra={sidebarExtra}
       layout={isSidebar ? 'stack' : 'grid'}
       header={hero}
+      viewerHostId={viewerHostId}
     />
   );
 

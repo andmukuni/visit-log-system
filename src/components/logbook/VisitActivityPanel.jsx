@@ -6,6 +6,7 @@ import {
   VISIT_EVENT_LABELS,
   VISIT_JOURNEY_STEPS,
   resolveJourneyStatusKey,
+  resolveJourneyStepLabel,
 } from './visitLogConstants';
 
 function DetailRow({ icon: Icon, label, value }) {
@@ -26,7 +27,7 @@ function resolveJourneyIndex(status, hasCheckedIn) {
   return idx >= 0 ? idx : 0;
 }
 
-function VisitJourney({ status, hasCheckedIn }) {
+function VisitJourney({ status, hasCheckedIn, viewerHostId, visitHostId }) {
   const terminal = ['cancelled', 'denied', 'expired'].includes(status)
     || (status === 'rejected' && !hasCheckedIn);
   const overdue = status === 'overdue';
@@ -78,7 +79,9 @@ function VisitJourney({ status, hasCheckedIn }) {
               )}
             </div>
             <div className={`pb-3 pt-0.5 ${active ? 'text-navy-900' : done ? 'text-gray-700' : 'text-gray-400'}`}>
-              <p className={`text-sm font-semibold ${active ? 'text-[#1a73e8]' : ''}`}>{step.label}</p>
+              <p className={`text-sm font-semibold ${active ? 'text-[#1a73e8]' : ''}`}>
+                {resolveJourneyStepLabel(step.key, { viewerHostId, visitHostId }) || step.label}
+              </p>
             </div>
           </li>
         );
@@ -98,6 +101,7 @@ export default function VisitActivityPanel({
   hideVisitorCard = false,
   sidebarExtra = null,
   layout = 'grid',
+  viewerHostId = null,
 }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +168,11 @@ export default function VisitActivityPanel({
         {!hideVisitorCard && (
         <Card title="Visitor">
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <VisitStatusBadge visit={visit} status={visit.status || summary?.status} />
+            <VisitStatusBadge
+              visit={visit}
+              status={visit.status || summary?.status}
+              viewerHostId={viewerHostId}
+            />
             {(visit.classification || summary?.classification) && (
               <VisitorTypeBadge classification={visit.classification || summary?.classification} size="xs" />
             )}
@@ -202,6 +210,8 @@ export default function VisitActivityPanel({
           <VisitJourney
             status={visit.status || summary?.status}
             hasCheckedIn={Boolean(visit.checked_in_at || visit.check_in_at || summary?.check_in_at)}
+            viewerHostId={viewerHostId}
+            visitHostId={visit.host_id || summary?.host_id}
           />
         </Card>
 

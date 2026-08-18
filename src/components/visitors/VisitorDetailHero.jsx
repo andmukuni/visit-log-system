@@ -25,7 +25,7 @@ function MetaBlock({ icon: Icon, label, children }) {
   );
 }
 
-export default function VisitorDetailHero({ visit, footer = null, compact = false }) {
+export default function VisitorDetailHero({ visit, footer = null, compact = false, viewerHostId = null }) {
   if (!visit) return null;
 
   const passCode = visit.pass_code || visit.reference_number || '—';
@@ -38,7 +38,10 @@ export default function VisitorDetailHero({ visit, footer = null, compact = fals
 
   const hasCheckedIn = Boolean(visit.checked_in_at || visit.check_in_at);
   const journeyKey = resolveJourneyStatusKey(visit.status, hasCheckedIn);
-  const journeyLabel = resolveJourneyLabel(visit.status, hasCheckedIn);
+  const journeyLabel = resolveJourneyLabel(visit.status, hasCheckedIn, {
+    viewerHostId,
+    visitHostId: visit.host_id,
+  });
 
   return (
     <section className={`overflow-hidden rounded-2xl border border-navy-100 bg-gradient-to-br from-white via-white to-cyan-50/40 shadow-sm ${compact ? '' : 'mb-6'}`}>

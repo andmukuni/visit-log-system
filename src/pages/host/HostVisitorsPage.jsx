@@ -4,9 +4,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, FormField, DataTable, VisitStatusBadge, Spinner, IconButton } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
+import { useViewerHostId } from '../../hooks/useViewerHostId';
 
 export default function HostVisitorsPage() {
   const navigate = useNavigate();
+  const viewerHostId = useViewerHostId();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -37,7 +39,7 @@ export default function HostVisitorsPage() {
     {
       key: 'status',
       label: 'Status',
-      render: (_, row) => <VisitStatusBadge visit={row} />,
+      render: (_, row) => <VisitStatusBadge visit={row} viewerHostId={viewerHostId} />,
     },
     {
       key: 'expected_at',

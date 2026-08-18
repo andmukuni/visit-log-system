@@ -4,6 +4,7 @@ import {
   VISIT_STATUS_ALIASES,
   resolveJourneyStatusKey,
   resolveJourneyLabel,
+  resolveInMeetingLabel,
 } from '../shared/visitJourney.js';
 
 describe('visit journey status mapping', () => {
@@ -13,6 +14,18 @@ describe('visit journey status mapping', () => {
     assert.equal(resolveJourneyLabel('waiting', true), 'Waiting for host');
     assert.equal(resolveJourneyStatusKey('in_meeting', true), 'in_meeting');
     assert.equal(resolveJourneyLabel('in_meeting', true), 'With host');
+    assert.equal(
+      resolveInMeetingLabel({ viewerHostId: 'host-1', visitHostId: 'host-1' }),
+      'Guest with you',
+    );
+    assert.equal(
+      resolveInMeetingLabel({ viewerHostId: 'host-1', visitHostId: 'host-2' }),
+      'With host',
+    );
+    assert.equal(
+      resolveJourneyLabel('in_meeting', true, { viewerHostId: 'host-1', visitHostId: 'host-1' }),
+      'Guest with you',
+    );
   });
 
   it('maps on-site queued guests to waiting and rejected guests back to reception', () => {

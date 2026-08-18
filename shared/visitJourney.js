@@ -41,17 +41,44 @@ export function resolveJourneyStatusKey(status, hasCheckedIn) {
   return VISIT_JOURNEY_STEPS.some((step) => step.key === normalized) ? normalized : null;
 }
 
+/**
+ * Label for in_meeting — host sees their guest as "Guest with you";
+ * everyone else sees the generic "With host".
+ */
+export function resolveInMeetingLabel({ viewerHostId, visitHostId } = {}) {
+  const viewer = viewerHostId != null ? String(viewerHostId) : '';
+  const assigned = visitHostId != null ? String(visitHostId) : '';
+  if (viewer && assigned && viewer === assigned) {
+    return 'Guest with you';
+  }
+  return 'With host';
+}
+
 /** Journey step label for a status key, or null if it has no journey equivalent. */
-export function resolveJourneyLabel(status, hasCheckedIn) {
+export function resolveJourneyLabel(status, hasCheckedIn, options = {}) {
   const key = resolveJourneyStatusKey(status, hasCheckedIn);
   if (!key) return null;
+  if (key === 'in_meeting') {
+    return resolveInMeetingLabel({
+      viewerHostId: options.viewerHostId,
+      visitHostId: options.visitHostId,
+    });
+  }
   return VISIT_JOURNEY_STEPS.find((step) => step.key === key)?.label || null;
 }
 
+/** Display label for a journey step key (e.g. progress tracker). */
+export function resolveJourneyStepLabel(stepKey, options = {}) {
+  if (stepKey === 'in_meeting') {
+    return resolveInMeetingLabel(options);
+  }
+  return VISIT_JOURNEY_STEPS.find((step) => step.key === stepKey)?.label || null;
+}
+
 /** Status badge props for list/table rows — aligns wording with journey + action stages. */
-export function resolveVisitStatusDisplay(status, hasCheckedIn = false) {
+export function resolveVisitStatusDisplay(status, hasCheckedIn = false, options = {}) {
   const journeyKey = resolveJourneyStatusKey(status, hasCheckedIn);
-  const journeyLabel = resolveJourneyLabel(status, hasCheckedIn);
+  const journeyLabel = resolveJourneyLabel(status, hasCheckedIn, options);
   if (journeyKey && journeyLabel) {
     return { status: journeyKey, label: journeyLabel };
   }

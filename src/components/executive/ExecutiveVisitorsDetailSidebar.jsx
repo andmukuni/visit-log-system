@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { VisitorDetailView } from '../visitors';
 import { executiveApi } from '../../utils/visitorApi';
+import { useViewerHostId } from '../../hooks/useViewerHostId';
 
 export function ExecutiveVisitorsDetailActions({ visit, className = '' }) {
   if (!visit) return null;
@@ -24,6 +25,7 @@ export default function ExecutiveVisitorsDetailSidebar({
   onClose,
   splitLayout = false,
 }) {
+  const viewerHostId = useViewerHostId();
   if (!visit?.id) return null;
 
   return (
@@ -33,6 +35,7 @@ export default function ExecutiveVisitorsDetailSidebar({
       layout="sidebar"
       onClose={onClose}
       className="lg:min-w-[280px] lg:max-w-[360px] lg:flex-1 lg:w-auto"
+      viewerHostId={viewerHostId}
       extraContent={(
         <ExecutiveVisitorsDetailActions
           visit={visit}
