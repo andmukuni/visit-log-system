@@ -13,6 +13,7 @@ import {
   ListOrdered,
   MapPin,
   RemoveFormatting,
+  TriangleAlert,
   Underline,
   Users,
   X,
@@ -153,6 +154,7 @@ export default function ExecutiveAppointmentModal({
 }) {
   const [activeTab, setActiveTab] = useState('details');
   const [openDatePicker, setOpenDatePicker] = useState(null);
+  const [scheduleError, setScheduleError] = useState('');
   const previousScheduleRef = useRef(null);
   const toast = useToast();
   const isPage = variant === 'page';
@@ -161,6 +163,7 @@ export default function ExecutiveAppointmentModal({
     if (!open) {
       setActiveTab('details');
       setOpenDatePicker(null);
+      setScheduleError('');
       previousScheduleRef.current = null;
     }
   }, [open]);
@@ -194,9 +197,14 @@ export default function ExecutiveAppointmentModal({
 
   const updateSchedule = (nextStart, nextEnd) => {
     if (isScheduleInPast(nextStart)) {
+      // A silent revert here reads as "the picker ignored what I chose" — the
+      // time field snaps back with no visible reason. Keep the toast, but also
+      // hold a message right at the field so it can't be missed.
+      setScheduleError(FUTURE_SCHEDULE_ERROR);
       toast.error(FUTURE_SCHEDULE_ERROR);
       return;
     }
+    setScheduleError('');
     onDraftChange?.(buildDraftScheduleUpdate(draft, nextStart, nextEnd));
   };
 
@@ -404,6 +412,13 @@ export default function ExecutiveAppointmentModal({
                     {timezoneLabel}
                   </div>
                 </div>
+
+                {scheduleError && (
+                  <div className="mt-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                    <TriangleAlert size={16} className="shrink-0" aria-hidden="true" />
+                    {scheduleError}
+                  </div>
+                )}
 
                 <div className="mt-3 flex flex-col gap-3 border-t border-navy-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
                   <label className="inline-flex items-center gap-2.5 text-sm font-medium text-navy-700">
