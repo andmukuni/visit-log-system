@@ -30,6 +30,18 @@ function createMysqlPool() {
 }
 
 function createPostgresPool() {
+  // node-postgres parses "timestamp without time zone" / "date" columns into JS
+  // Date objects by reading the raw wall-clock text as if it were local to this
+  // process. The whole app treats DATETIME/TIMESTAMP values as naive wall-clock
+  // strings (see mysql2's dateStrings:true above, and every getHours()/setHours()
+  // call in calendarUtils.js) — so if this server process's TZ isn't the same as
+  // the org's local time (e.g. a container defaulting to UTC), that Date object
+  // gets serialized back out shifted by the UTC offset. Returning raw text here
+  // instead keeps Postgres and MySQL behaving identically, independent of the
+  // server's own timezone.
+  pg.types.setTypeParser(1114, (value) => value); // timestamp
+  pg.types.setTypeParser(1082, (value) => value); // date
+
   const connectionString = String(process.env.DATABASE_URL || '').trim();
   const pool = new pg.Pool({
     connectionString,
