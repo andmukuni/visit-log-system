@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardList,
   CreditCard,
+  Crown,
   Footprints,
   Hash,
   IdCard,
@@ -38,6 +39,7 @@ import {
   NRC_PLACEHOLDER,
 } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+import ExecutiveVisitModal from '../reception/ExecutiveVisitModal';
 import GateCheckOutPanel from '../../pages/station/GateCheckOutPanel';
 import GateExpectedTodayPanel from '../../pages/station/GateExpectedTodayPanel';
 import { LOGO_PATH } from '../../../shared/branding.js';
@@ -88,6 +90,13 @@ const VEHICLE_STEPS = [
 
 const WALKIN_STEPS = [
   { key: 'visitor', label: 'Visitor & NRC' },
+  { key: 'identity', label: 'Company' },
+  { key: 'visit', label: 'Visit & confirm' },
+  { key: 'signature', label: 'Check-in signature' },
+];
+
+const EXECUTIVE_WALKIN_STEPS = [
+  { key: 'visitor', label: 'Visitor' },
   { key: 'identity', label: 'Company' },
   { key: 'visit', label: 'Visit & confirm' },
   { key: 'signature', label: 'Check-in signature' },
@@ -463,8 +472,11 @@ export default function GateEntryCheckInForm({
   const [checkInSignature, setCheckInSignature] = useState('');
   const [nrcLookup, setNrcLookup] = useState(emptyNrcLookup);
   const [dojahOverride, setDojahOverride] = useState(false);
+  const [executive, setExecutive] = useState(false);
+  const [executiveModalOpen, setExecutiveModalOpen] = useState(false);
 
-  const steps = mode === 'vehicle' ? VEHICLE_STEPS : WALKIN_STEPS;
+  const executiveEnabled = entryContext === 'reception';
+  const steps = mode === 'vehicle' ? VEHICLE_STEPS : executive ? EXECUTIVE_WALKIN_STEPS : WALKIN_STEPS;
   const dojahEnabled = Boolean(refData?.integrations?.dojah?.enabled && refData?.integrations?.dojah?.configured);
 
   const loadRef = useCallback(async () => {
@@ -494,6 +506,8 @@ export default function GateEntryCheckInForm({
     setCheckInSignature('');
     setNrcLookup(emptyNrcLookup());
     setDojahOverride(false);
+    setExecutive(false);
+    setExecutiveModalOpen(false);
   }, [mode]);
 
   useEffect(() => {
@@ -613,6 +627,13 @@ export default function GateEntryCheckInForm({
       return true;
     }
     if (step === 0) {
+      if (executive) {
+        if (!walkIn.fullName.trim()) {
+          toast.error('Visitor name is required.');
+          return false;
+        }
+        return true;
+      }
       if (walkIn.idType === 'nrc' && !walkIn.idNumber.trim()) {
         toast.error('NRC number is required.');
         return false;
@@ -656,7 +677,27 @@ export default function GateEntryCheckInForm({
     setCheckInSignature('');
     setNrcLookup(emptyNrcLookup());
     setDojahOverride(false);
+    setExecutive(false);
     setStep(0);
+  };
+
+  const handleExecutiveContinue = ({ fullName, company, phoneCountry, phone, purpose }) => {
+    setExecutive(true);
+    setWalkIn((v) => ({
+      ...v,
+      fullName,
+      company,
+      phoneCountry,
+      phone,
+      purpose,
+      idType: '',
+      idNumber: '',
+      tpin: '',
+    }));
+    setNrcLookup(emptyNrcLookup());
+    setDojahOverride(false);
+    setExecutiveModalOpen(false);
+    setStep(2);
   };
 
   const submitWalkIn = async (e) => {
@@ -883,12 +924,13 @@ export default function GateEntryCheckInForm({
                 <FieldLabel>ID type</FieldLabel>
                 <div className="grid grid-cols-2 gap-3">
                   {ID_TYPES.map(({ value, label, icon: Icon }) => {
-                    const active = walkIn.idType === value;
+                    const active = !executive && walkIn.idType === value;
                     return (
                       <button
                         key={value}
                         type="button"
                         onClick={() => {
+                          setExecutive(false);
                           setWalkIn((v) => ({ ...v, idType: value, idNumber: '', tpin: '' }));
                           setNrcLookup(emptyNrcLookup());
                           setDojahOverride(false);
@@ -904,9 +946,24 @@ export default function GateEntryCheckInForm({
                       </button>
                     );
                   })}
+                  {executiveEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => setExecutiveModalOpen(true)}
+                      className={`col-span-2 flex h-14 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-4 text-base font-semibold transition-all ${
+                        executive
+                          ? 'border-cyan-600 bg-cyan-50 text-cyan-800 ring-2 ring-cyan-600/15 shadow-sm'
+                          : 'border-navy-200 bg-white text-navy-600 hover:border-navy-300 hover:bg-navy-50'
+                      }`}
+                    >
+                      <Crown size={18} className="shrink-0" aria-hidden="true" />
+                      Executive visit
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
+              {!executive ? (
               <div>
                 <FieldLabel hint={walkIn.idType === 'nrc' ? `Enter 9 digits — formatted as ${NRC_PLACEHOLDER}` : undefined}>
                   {idNumberLabel}
@@ -985,6 +1042,7 @@ export default function GateEntryCheckInForm({
                   </div>
                 ) : null}
               </div>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>
@@ -1067,11 +1125,12 @@ export default function GateEntryCheckInForm({
           </FormSection>
 
           <ReviewCard title="Review entry">
+            <ReviewRow label="Visit type" value={executive ? 'Executive visit' : ''} />
             <ReviewRow label="Name" value={walkIn.fullName} />
             <ReviewRow label="Phone" value={formatPhoneDisplay(walkIn.phoneCountry, walkIn.phone)} />
             <ReviewRow label="NRC / ID" value={walkIn.idNumber} />
             <ReviewRow label="TPIN" value={walkIn.tpin} />
-            <ReviewRow label="ID type" value={walkIn.idType === 'nrc' ? 'NRC' : 'Passport'} />
+            <ReviewRow label="ID type" value={executive ? '' : walkIn.idType === 'nrc' ? 'NRC' : 'Passport'} />
             <ReviewRow label="Company" value={walkIn.company} />
             <ReviewRow label="Host" value={hostName(walkIn.hostId)} />
             <ReviewRow label="Purpose" value={walkIn.purpose} />
@@ -1129,6 +1188,16 @@ export default function GateEntryCheckInForm({
     </form>
   );
 
+  const executiveModal = executiveEnabled ? (
+    <ExecutiveVisitModal
+      isOpen={executiveModalOpen}
+      onClose={() => setExecutiveModalOpen(false)}
+      initialValues={walkIn}
+      purposeOptions={PURPOSE_OPTIONS}
+      onContinue={handleExecutiveContinue}
+    />
+  ) : null;
+
   if (layout === 'embedded') {
     return (
       <div className={`space-y-4 ${className}`}>
@@ -1149,6 +1218,7 @@ export default function GateEntryCheckInForm({
           </div>
           {formBody}
         </div>
+        {executiveModal}
       </div>
     );
   }
@@ -1214,6 +1284,7 @@ export default function GateEntryCheckInForm({
         </div>
       </div>
       </div>
+      {executiveModal}
     </div>
   );
 }
