@@ -137,10 +137,6 @@ export default function ExecutiveNewAppointmentPage() {
       toast.error('Mobile phone number is required.');
       return;
     }
-    if (!payload.idNumber?.trim()) {
-      toast.error('NRC is required.');
-      return;
-    }
     setSaving(true);
     try {
       await executiveApi.createAppointment(payload);

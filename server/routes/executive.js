@@ -457,8 +457,8 @@ export function createExecutiveRouter() {
         return res.status(400).json({ ok: false, message: 'A valid mobile phone number is required.' });
       }
       const nrc = normalizeNrc(idNumber);
-      if (!isCompleteNrc(nrc)) {
-        return res.status(400).json({ ok: false, message: 'A complete NRC is required (e.g. 123456/78/9).' });
+      if (nrc && !isCompleteNrc(nrc)) {
+        return res.status(400).json({ ok: false, message: 'Enter a complete NRC (e.g. 123456/78/9) or leave it blank.' });
       }
       if (!scheduledAt) {
         return res.status(400).json({ ok: false, message: 'Appointment time is required.' });

@@ -272,8 +272,8 @@ export default function ExecutiveAppointmentModal({
       return;
     }
     const nrc = formatNrcInput(form.idNumber);
-    if (!isCompleteNrc(nrc)) {
-      toast.error('Enter a complete NRC (e.g. 123456/78/9).');
+    if (nrc && !isCompleteNrc(nrc)) {
+      toast.error('Enter a complete NRC (e.g. 123456/78/9) or leave it blank.');
       return;
     }
     onSave({
@@ -609,7 +609,7 @@ export default function ExecutiveAppointmentModal({
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-navy-500">
-                      NRC <span className="text-red-500">*</span>
+                      NRC
                     </label>
                     <NavyInput
                       value={form.idNumber || ''}
@@ -620,7 +620,6 @@ export default function ExecutiveAppointmentModal({
                       placeholder={NRC_PLACEHOLDER}
                       maxLength={NRC_INPUT_MAX_LENGTH}
                       inputMode="numeric"
-                      required
                     />
                   </div>
                   <NavyInput

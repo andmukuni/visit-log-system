@@ -62,8 +62,8 @@ export default function HostInvitePage() {
       return;
     }
     const nrc = formatNrcInput(form.idNumber);
-    if (!isCompleteNrc(nrc)) {
-      toast.error('Enter a complete NRC (e.g. 123456/78/9).');
+    if (nrc && !isCompleteNrc(nrc)) {
+      toast.error('Enter a complete NRC (e.g. 123456/78/9) or leave it blank.');
       return;
     }
 
@@ -119,7 +119,6 @@ export default function HostInvitePage() {
               placeholder={NRC_PLACEHOLDER}
               maxLength={NRC_INPUT_MAX_LENGTH}
               inputMode="numeric"
-              required
             />
             <div className="md:col-span-2">
               <p className="mb-1.5 block text-sm font-medium text-navy-700">

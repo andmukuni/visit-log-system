@@ -639,21 +639,19 @@ export default function GateEntryCheckInForm({
         }
         return true;
       }
-      if (walkIn.idType === 'nrc' && !walkIn.idNumber.trim()) {
-        toast.error('NRC number is required.');
-        return false;
-      }
-      if (walkIn.idType === 'nrc' && walkIn.idNumber.trim() && !isCompleteNrc(walkIn.idNumber)) {
-        toast.error(`Enter a complete NRC (${NRC_PLACEHOLDER}).`);
-        return false;
-      }
-      if (walkIn.idType === 'nrc' && dojahEnabled && !dojahOverride && nrcLookup.status !== 'verified') {
-        if (nrcLookup.status === 'unavailable') {
-          toast.error('Confirm manual override — Dojah is unavailable.');
-        } else {
-          toast.error('Verify the NRC with Dojah before continuing.');
+      if (walkIn.idType === 'nrc' && walkIn.idNumber.trim()) {
+        if (!isCompleteNrc(walkIn.idNumber)) {
+          toast.error(`Enter a complete NRC (${NRC_PLACEHOLDER}).`);
+          return false;
         }
-        return false;
+        if (dojahEnabled && !dojahOverride && nrcLookup.status !== 'verified') {
+          if (nrcLookup.status === 'unavailable') {
+            toast.error('Confirm manual override — Dojah is unavailable.');
+          } else {
+            toast.error('Verify the NRC with Dojah before continuing.');
+          }
+          return false;
+        }
       }
       if (!walkIn.fullName.trim()) {
         toast.error('Full name is required.');
@@ -977,7 +975,10 @@ export default function GateEntryCheckInForm({
 
               {!executive ? (
               <div>
-                <FieldLabel hint={walkIn.idType === 'nrc' ? `Enter 9 digits — formatted as ${NRC_PLACEHOLDER}` : undefined}>
+                <FieldLabel
+                  optional
+                  hint={walkIn.idType === 'nrc' ? `Enter 9 digits — formatted as ${NRC_PLACEHOLDER}` : undefined}
+                >
                   {idNumberLabel}
                 </FieldLabel>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
