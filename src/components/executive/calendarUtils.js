@@ -540,12 +540,18 @@ export function shiftScheduleByStartDate(startAt, endAt, dateValue) {
   return { startAt: nextStart, endAt: nextEnd };
 }
 
+export const END_BEFORE_START_DATE_ERROR = 'End date must be on or after the start date.';
+
 export function setScheduleEndDate(startAt, endAt, dateValue) {
-  let nextEnd = applyDateToDateTime(endAt, dateValue);
-  if (nextEnd <= startAt) {
-    nextEnd = addMinutes(startAt, DEFAULT_EVENT_MINUTES);
+  const nextEnd = applyDateToDateTime(endAt, dateValue);
+  if (nextEnd > startAt) {
+    return { startAt, endAt: nextEnd, adjusted: false };
   }
-  return { startAt, endAt: nextEnd };
+  return {
+    startAt,
+    endAt: addMinutes(startAt, DEFAULT_EVENT_MINUTES),
+    adjusted: true,
+  };
 }
 
 export function setScheduleStartTime(startAt, endAt, timeValue) {

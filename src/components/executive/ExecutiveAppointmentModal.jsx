@@ -25,11 +25,11 @@ import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
 import {
   buildDraftScheduleUpdate,
   END_BEFORE_START_ERROR,
+  END_BEFORE_START_DATE_ERROR,
   FUTURE_SCHEDULE_ERROR,
   formatShortDate,
   formatTime12Compact,
   formatTimezoneShort,
-  isSameDay,
   isScheduleInPast,
   resolveExecutiveSiteId,
   resolveExecutiveSiteLabel,
@@ -207,6 +207,7 @@ export default function ExecutiveAppointmentModal({
 
   const handleEndDate = (value) => {
     const next = setScheduleEndDate(startAt, endAt, value);
+    if (next.adjusted) toast.error(END_BEFORE_START_DATE_ERROR);
     updateSchedule(next.startAt, next.endAt);
   };
 
@@ -239,7 +240,6 @@ export default function ExecutiveAppointmentModal({
     setForm((prev) => ({ ...prev, allDay: checked }));
   };
 
-  const sameDay = isSameDay(startAt, endAt);
   const timezoneLabel = formatTimezoneShort(startAt);
   const resolvedSiteId = resolveExecutiveSiteId(form.siteId, referenceData);
   const resolvedSiteLabel = resolveExecutiveSiteLabel(referenceData, resolvedSiteId) || 'Office location';
@@ -384,17 +384,15 @@ export default function ExecutiveAppointmentModal({
                             onChange={(event) => handleEndTime(event.target.value)}
                             ariaLabel="End time"
                           />
-                          {!sameDay && (
-                            <ExecutiveDatePicker
-                              label={formatShortDate(endAt)}
-                              value={toDateInputValue(endAt)}
-                              min={todayMinDate}
-                              isOpen={openDatePicker === 'end'}
-                              onOpenChange={(nextOpen) => setOpenDatePicker(nextOpen ? 'end' : null)}
-                              onChange={handleEndDate}
-                              ariaLabel="End date"
-                            />
-                          )}
+                          <ExecutiveDatePicker
+                            label={formatShortDate(endAt)}
+                            value={toDateInputValue(endAt)}
+                            min={toDateInputValue(startAt)}
+                            isOpen={openDatePicker === 'end'}
+                            onOpenChange={(nextOpen) => setOpenDatePicker(nextOpen ? 'end' : null)}
+                            onChange={handleEndDate}
+                            ariaLabel="End date"
+                          />
                         </div>
                       </div>
                     </>
