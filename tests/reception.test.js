@@ -144,6 +144,22 @@ describe('reception visit action labels', () => {
     assert.equal(isQueueToHostAction(queueAction), true);
     assert.equal(receptionActionHref(queueAction, 'vis-1'), null);
     assert.equal(getReceptionVisitAction('waiting').label, 'View host queue');
+    assert.equal(
+      getReceptionVisitAction({ visit_status: 'waiting', status: 'scheduled' }).label,
+      'View host queue',
+    );
+    assert.equal(
+      getReceptionVisitAction({ visit_status: 'reception_check_in', status: 'scheduled' }).label,
+      'Queue to host',
+    );
+    assert.equal(
+      getReceptionVisitAction({ visit_status: 'arrived_at_gate', status: 'scheduled' }).label,
+      'Receive at desk',
+    );
+    assert.equal(
+      getReceptionVisitAction({ visit_status: 'in_meeting', status: 'scheduled' }).show,
+      false,
+    );
     assert.equal(getReceptionVisitAction('in_meeting').show, false);
     assert.equal(getReceptionVisitAction('overdue').show, false);
     assert.equal(getReceptionVisitAction('completed').show, false);
@@ -177,12 +193,30 @@ describe('reception visit action labels', () => {
     assert.equal(isCheckoutEligible({ status: 'pending_approval' }), false);
     assert.equal(isCheckoutEligible({ status: 'pending_approval', checked_in_at: '2026-08-17T10:00:00Z' }), true);
     assert.equal(isCheckoutEligible('waiting'), true);
+    assert.equal(isCheckoutEligible({ visit_status: 'waiting', status: 'scheduled' }), true);
   });
 
   it('lets reception mark a waiting guest as with host', async () => {
     const { canMarkInMeeting } = await import('../shared/visitReceptionActions.js');
     assert.equal(canMarkInMeeting({ status: 'waiting' }), true);
     assert.equal(canMarkInMeeting({ status: 'reception_check_in' }), false);
+  });
+
+  it('lets reception reschedule on-site guests at the desk', async () => {
+    const { canRescheduleVisit } = await import('../shared/visitReceptionActions.js');
+    assert.equal(canRescheduleVisit({ status: 'reception_check_in', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(canRescheduleVisit({ status: 'waiting', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(canRescheduleVisit({ status: 'rejected', checked_in_at: '2026-08-17T10:00:00Z' }), true);
+    assert.equal(canRescheduleVisit({ status: 'reception_check_in' }), false);
+    assert.equal(canRescheduleVisit({ status: 'in_meeting', checked_in_at: '2026-08-17T10:00:00Z' }), false);
+  });
+
+  it('allows reception host queue permission on reschedule route', () => {
+    const perms = resolveVisitRoutePermissions({
+      path: '/api/admin/reception/visits/abc/reschedule',
+      method: 'PATCH',
+    });
+    assert.ok(perms.includes('reception.host.queue'));
   });
 });
 

@@ -1163,6 +1163,100 @@ export function createReceptionRouter() {
     eventType: 'in_meeting',
   }));
 
+  router.patch('/visits/:id/reschedule', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const visitId = req.params.id;
+      const { expectedAt, reason } = req.body || {};
+      if (!expectedAt) {
+        return res.status(400).json({ ok: false, message: 'New expected date/time is required.' });
+      }
+
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const visit = loaded.visit;
+      const { canRescheduleVisit } = await import('../../shared/visitReceptionActions.js');
+      if (!canRescheduleVisit(visit)) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Only on-site visitors at reception can be rescheduled.',
+        });
+      }
+
+      const parsedExpectedAt = new Date(expectedAt);
+      if (Number.isNaN(parsedExpectedAt.getTime())) {
+        return res.status(400).json({ ok: false, message: 'Invalid date/time.' });
+      }
+
+      const nextStatus = visit.status === 'approved' ? 'expected' : visit.status;
+      await pool.query(
+        'UPDATE visits SET expected_at = ?, status = ?, updated_at = NOW() WHERE id = ?',
+        [parsedExpectedAt.toISOString(), nextStatus, visitId],
+      );
+
+      const [[existingAppt]] = await pool.query(
+        'SELECT id FROM appointments WHERE visit_id = ? LIMIT 1',
+        [visitId],
+      );
+      if (existingAppt) {
+        await pool.query(
+          'UPDATE appointments SET scheduled_at = ?, updated_at = NOW() WHERE visit_id = ?',
+          [parsedExpectedAt.toISOString(), visitId],
+        );
+      } else if (visit.host_id) {
+        await createAppointmentForVisit(pool, {
+          organisationId: visit.organisation_id,
+          visitId,
+          hostId: visit.host_id,
+          scheduledAt: parsedExpectedAt,
+          title: visit.purpose || null,
+          createdBy: userId,
+        });
+      }
+
+      await writeVisitEvent(pool, {
+        visitId,
+        eventType: 'rescheduled',
+        actorUserId: userId,
+        reason: reason || null,
+        details: { expectedAt: parsedExpectedAt.toISOString() },
+      });
+
+      await writeAuditLog(pool, {
+        organisationId: visit.organisation_id,
+        actorUserId: userId,
+        action: 'visit.reschedule',
+        targetType: 'visit',
+        targetId: visitId,
+        details: { expectedAt: parsedExpectedAt.toISOString() },
+      });
+
+      await notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'rescheduled',
+        actorUserId: userId,
+        extra: { expected_at: parsedExpectedAt.toISOString() },
+      });
+
+      res.json({ ok: true, message: 'Visit rescheduled.' });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.post('/visits/:id/check-out', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;

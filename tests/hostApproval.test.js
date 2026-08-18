@@ -145,6 +145,67 @@ describe('host approval tokens and decisions', () => {
     assert.equal(loaded.payload.expired, true);
   });
 
+  it('exposes an active token payload for a reception-queued waiting guest', async () => {
+    const { visitId } = await insertPendingVisit('visit-waiting-token', {
+      checkedInAt: '2026-08-17T10:00:00Z',
+      expectedAt: null,
+    });
+    await pool.query(
+      `UPDATE visits SET status = 'waiting', updated_at = NOW() WHERE id = ?`,
+      [visitId],
+    );
+    const issued = await issueHostApprovalToken(pool, visitId);
+    const loaded = await loadHostApprovalByToken(pool, issued.token);
+    assert.equal(loaded.payload.status, 'waiting');
+    assert.equal(loaded.payload.active, true);
+    assert.equal(loaded.payload.already_decided, false);
+    assert.equal(loaded.payload.kind, 'guest');
+  });
+
+  it('public approve on a waiting reception guest moves them to in_meeting', async () => {
+    const { visitId } = await insertPendingVisit('visit-waiting-public-approve', {
+      checkedInAt: '2026-08-17T10:00:00Z',
+      expectedAt: null,
+    });
+    await pool.query(
+      `UPDATE visits SET status = 'waiting', updated_at = NOW() WHERE id = ?`,
+      [visitId],
+    );
+    const issued = await issueHostApprovalToken(pool, visitId);
+    const result = await decidePublicHostApproval(pool, {
+      token: issued.token,
+      decision: 'approved',
+      notify: false,
+    });
+    assert.equal(result.nextStatus, 'in_meeting');
+    const [[updated]] = await pool.query('SELECT status FROM visits WHERE id = ?', [visitId]);
+    assert.equal(updated.status, 'in_meeting');
+  });
+
+  it('treats an expired token on a waiting guest as inactive', async () => {
+    const { visitId } = await insertPendingVisit('visit-waiting-token-expired', {
+      checkedInAt: '2026-08-17T10:00:00Z',
+      expectedAt: null,
+    });
+    await pool.query(
+      `UPDATE visits SET status = 'waiting', updated_at = NOW() WHERE id = ?`,
+      [visitId],
+    );
+    const token = generateHostApprovalToken();
+    await pool.query(
+      `INSERT INTO visit_host_approval_tokens (id, visit_id, token_hash, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      ['hat-waiting-expired', visitId, hashHostApprovalToken(token), '2020-01-01 00:00:00'],
+    );
+    const loaded = await loadPublicHostApproval(pool, token);
+    assert.equal(loaded.payload.active, false);
+    assert.equal(loaded.payload.expired, true);
+    await assert.rejects(
+      () => decidePublicHostApproval(pool, { token, decision: 'approved', notify: false }),
+      (err) => err.status === 410,
+    );
+  });
+
   it('approves a booked appointment to expected', async () => {
     const { visitId } = await insertPendingVisit('visit-appt-approve');
     const [[visit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
@@ -192,6 +253,48 @@ describe('host approval tokens and decisions', () => {
       notify: false,
     });
     assert.equal(result.nextStatus, 'rejected');
+  });
+
+  it('returns an on-site waiting guest to reception when the host rejects', async () => {
+    const { visitId } = await insertPendingVisit('visit-waiting-reject', {
+      checkedInAt: '2026-08-17T10:00:00Z',
+      expectedAt: null,
+    });
+    await pool.query(
+      `UPDATE visits SET status = 'waiting', updated_at = NOW() WHERE id = ?`,
+      [visitId],
+    );
+    const [[visit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
+    const result = await applyHostRejection(pool, {
+      visit,
+      actorUserId: host.userId,
+      reason: 'In another meeting',
+      notify: false,
+    });
+    assert.equal(result.nextStatus, 'reception_check_in');
+    assert.equal(result.returnedToReception, true);
+    const [[updated]] = await pool.query('SELECT status FROM visits WHERE id = ?', [visitId]);
+    assert.equal(updated.status, 'reception_check_in');
+  });
+
+  it('public reject on a waiting guest returns them to reception', async () => {
+    const { visitId } = await insertPendingVisit('visit-waiting-public-reject', {
+      checkedInAt: '2026-08-17T10:00:00Z',
+      expectedAt: null,
+    });
+    await pool.query(
+      `UPDATE visits SET status = 'waiting', updated_at = NOW() WHERE id = ?`,
+      [visitId],
+    );
+    const issued = await issueHostApprovalToken(pool, visitId);
+    const result = await decidePublicHostApproval(pool, {
+      token: issued.token,
+      decision: 'rejected',
+      reason: 'Unavailable today',
+      notify: false,
+    });
+    assert.equal(result.nextStatus, 'reception_check_in');
+    assert.equal(result.returnedToReception, true);
   });
 
   it('public approve then replay returns already-decided', async () => {

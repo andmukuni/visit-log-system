@@ -9,10 +9,11 @@ import { markHostUnavailableForVisit, refreshHostAvailabilityAfterVisit } from '
 import { getAppBaseUrl } from './adapters/deliveryConfig.js';
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PENDING_HOST_APPROVAL_STATUSES = new Set(['pending_approval', 'waiting']);
 const DECIDED_STATUSES = new Set([
   'approved',
   'expected',
-  'waiting',
+  'in_meeting',
   'rejected',
   'cancelled',
   'denied',
@@ -74,8 +75,20 @@ export function isReceptionQueueVisit(visit) {
     || ['reception_check_in', 'checked_in'].includes(String(visit.status || ''));
 }
 
+/** On-site guests rejected by a host return to the reception desk for re-queue / reschedule. */
+export function shouldReturnOnSiteGuestToReception(visit) {
+  if (!visit?.checked_in_at) return false;
+  const status = String(visit.status || '');
+  if (status === 'waiting') return true;
+  return isReceptionQueueVisit(visit) && ['pending_approval', 'reception_check_in', 'checked_in'].includes(status);
+}
+
 export function isHostApprovalDecidedStatus(status) {
   return DECIDED_STATUSES.has(String(status || ''));
+}
+
+export function isPendingHostApprovalStatus(status) {
+  return PENDING_HOST_APPROVAL_STATUSES.has(String(status || ''));
 }
 
 export function visitApprovalKind(visit) {
@@ -90,7 +103,7 @@ export function approvalContextForVisit(visit) {
 
 function decisionFromStatus(status) {
   const value = String(status || '');
-  if (['approved', 'expected', 'waiting'].includes(value)) return 'approved';
+  if (['approved', 'expected', 'in_meeting'].includes(value)) return 'approved';
   if (value === 'rejected') return 'rejected';
   if (value === 'cancelled' || value === 'denied') return value;
   return null;
@@ -99,6 +112,7 @@ function decisionFromStatus(status) {
 export function toPublicHostApprovalPayload(row, { expired = false } = {}) {
   const status = String(row?.status || '');
   const alreadyDecided = isHostApprovalDecidedStatus(status);
+  const pendingApproval = isPendingHostApprovalStatus(status);
   return {
     visitor_name: row?.visitor_name || row?.full_name || '',
     company: row?.company || null,
@@ -110,8 +124,8 @@ export function toPublicHostApprovalPayload(row, { expired = false } = {}) {
     status,
     already_decided: alreadyDecided,
     decision: decisionFromStatus(status),
-    expired: Boolean(expired) && !alreadyDecided,
-    active: status === 'pending_approval' && !expired && !alreadyDecided,
+    expired: Boolean(expired) && pendingApproval,
+    active: pendingApproval && !expired,
   };
 }
 
@@ -290,12 +304,13 @@ export async function loadHostApprovalByToken(pool, rawToken) {
   if (!row) return null;
 
   const expired = tokenIsExpired(row.expires_at) || Boolean(row.used_at);
+  const pendingApproval = isPendingHostApprovalStatus(row.status);
   return {
     visit: row,
     tokenId: row.token_id,
-    expired: expired && !isHostApprovalDecidedStatus(row.status),
+    expired: expired && pendingApproval,
     payload: toPublicHostApprovalPayload(row, {
-      expired: expired && row.status === 'pending_approval',
+      expired: expired && pendingApproval,
     }),
   };
 }
@@ -468,7 +483,10 @@ export async function applyHostRejection(pool, {
     throw httpError(400, 'Rejection reason is required.');
   }
 
-  if (!canTransition(visit.status, 'rejected')) {
+  const returnToReception = shouldReturnOnSiteGuestToReception(visit);
+  const nextStatus = returnToReception ? 'reception_check_in' : 'rejected';
+
+  if (!canTransition(visit.status, nextStatus)) {
     if (isHostApprovalDecidedStatus(visit.status)) {
       throw httpError(409, 'This visit has already been decided.', {
         already_decided: true,
@@ -482,8 +500,8 @@ export async function applyHostRejection(pool, {
   const hostRow = host || await loadHostRow(pool, visit.host_id);
 
   await pool.query(
-    `UPDATE visits SET status = 'rejected', updated_at = NOW() WHERE id = ?`,
-    [visit.id],
+    `UPDATE visits SET status = ?, updated_at = NOW() WHERE id = ?`,
+    [nextStatus, visit.id],
   );
   await pool.query(
     `INSERT INTO visit_approvals (id, visit_id, approver_user_id, decision, reason)
@@ -495,7 +513,13 @@ export async function applyHostRejection(pool, {
     eventType: 'rejected',
     actorUserId,
     reason: trimmedReason,
-    details: { approverRole: 'host', source, hostId: hostRow?.id || visit.host_id },
+    details: {
+      approverRole: 'host',
+      source,
+      hostId: hostRow?.id || visit.host_id,
+      returnedToReception: returnToReception,
+      nextStatus,
+    },
   });
   await writeAuditLog(pool, {
     organisationId: visit.organisation_id,
@@ -522,7 +546,14 @@ export async function applyHostRejection(pool, {
     }
   }
 
-  return { nextStatus: 'rejected', eventType: 'rejected', message: 'Visit rejected.' };
+  return {
+    nextStatus,
+    eventType: 'rejected',
+    returnedToReception: returnToReception,
+    message: returnToReception
+      ? 'Guest returned to reception. Reception can re-queue or reschedule.'
+      : 'Visit rejected.',
+  };
 }
 
 export async function decidePublicHostApproval(pool, {
@@ -567,7 +598,7 @@ export async function decidePublicHostApproval(pool, {
     });
     return {
       ...result,
-      payload: toPublicHostApprovalPayload({ ...visit, status: 'rejected' }),
+      payload: toPublicHostApprovalPayload({ ...visit, status: result.nextStatus }),
     };
   }
 

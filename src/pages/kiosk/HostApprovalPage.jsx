@@ -112,9 +112,13 @@ export default function HostApprovalPage() {
     );
   }
 
+  const canDecide = visit.active !== false && !visit.already_decided && !completed;
+
   if (completed || visit.already_decided) {
     const decision = completed || visit.decision;
     const approved = decision === 'approved';
+    const isGuestApproval = visit.kind === 'guest';
+    const isGuestRejection = !approved && isGuestApproval;
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8">
         <div className={`max-w-md text-center rounded-2xl p-10 border ${
@@ -122,12 +126,28 @@ export default function HostApprovalPage() {
         }`}
         >
           <h1 className={`text-2xl font-bold mb-4 ${approved ? 'text-green-300' : 'text-red-300'}`}>
-            {approved ? 'Visitor approved' : 'Visitor rejected'}
+            {approved
+              ? (isGuestApproval ? 'Guest accepted' : 'Visitor approved')
+              : (isGuestRejection ? 'Guest returned to reception' : 'Visitor rejected')}
           </h1>
           <p className="text-white/80">
-            {visit.visitor_name || 'This visitor'} has been {decisionLabel(decision)}.
-            Reception has been notified.
+            {approved && isGuestApproval
+              ? `${visit.visitor_name || 'The guest'} is on their way to you. Reception has been notified.`
+              : isGuestRejection
+                ? `${visit.visitor_name || 'The guest'} is back at reception. Reception can re-queue or reschedule.`
+                : `${visit.visitor_name || 'This visitor'} has been ${decisionLabel(decision)}. Reception has been notified.`}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canDecide) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8 text-center">
+        <div>
+          <h1 className="text-xl font-bold mb-2">Approval link not active</h1>
+          <p className="text-white/60">Ask reception to send a new approval request.</p>
         </div>
       </div>
     );

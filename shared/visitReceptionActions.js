@@ -6,9 +6,20 @@ export function normalizeVisitStatus(raw) {
   return String(raw || '').toLowerCase().trim();
 }
 
+/** Visit lifecycle status — prefers `visit_status` over appointment `status`. */
+export function resolveVisitLifecycleStatus(rawStatus, visit = null) {
+  if (rawStatus && typeof rawStatus === 'object') {
+    return normalizeVisitStatus(rawStatus.visit_status || rawStatus.status);
+  }
+  if (visit && typeof visit === 'object') {
+    return normalizeVisitStatus(visit.visit_status || visit.status || rawStatus);
+  }
+  return normalizeVisitStatus(rawStatus);
+}
+
 /** Desk can queue a visitor who is checked in, or re-queue an on-site reject. */
 export function canQueueVisitToHost(visit) {
-  const status = normalizeVisitStatus(visit?.status ?? visit);
+  const status = resolveVisitLifecycleStatus(visit);
   if (['reception_check_in', 'checked_in'].includes(status)) return true;
   if (status === 'rejected' && visitHasCheckedIn(typeof visit === 'object' ? visit : null)) {
     return true;
@@ -18,7 +29,14 @@ export function canQueueVisitToHost(visit) {
 
 /** Reception can send a waiting guest to the host (in meeting). */
 export function canMarkInMeeting(visit) {
-  return normalizeVisitStatus(visit?.status ?? visit) === 'waiting';
+  return resolveVisitLifecycleStatus(visit) === 'waiting';
+}
+
+/** Reception can set a new expected time for on-site guests (e.g. after host reject). */
+export function canRescheduleVisit(visit) {
+  if (!visitHasCheckedIn(typeof visit === 'object' ? visit : null)) return false;
+  const status = resolveVisitLifecycleStatus(visit);
+  return ['reception_check_in', 'checked_in', 'waiting', 'rejected'].includes(status);
 }
 
 /**
@@ -35,9 +53,7 @@ export function canMarkInMeeting(visit) {
  * }}
  */
 export function getReceptionVisitAction(rawStatus, visit = null) {
-  const status = normalizeVisitStatus(
-    typeof rawStatus === 'object' ? rawStatus?.status : rawStatus,
-  );
+  const status = resolveVisitLifecycleStatus(rawStatus, visit);
   const visitRow = typeof rawStatus === 'object' ? rawStatus : visit;
 
   if (status === 'pending_approval' && visitHasCheckedIn(visitRow)) {
@@ -177,7 +193,7 @@ export function isQueueToHostAction(action) {
 
 /** Desk check-in button copy (gate panel / icon-only actions). */
 export function getReceptionCheckInActionLabel(rawStatus) {
-  const status = normalizeVisitStatus(rawStatus);
+  const status = resolveVisitLifecycleStatus(rawStatus);
   if (status === 'arrived_at_gate' || status === 'entered_premises') {
     return { label: 'Receive at desk', loadingLabel: 'Receiving…' };
   }

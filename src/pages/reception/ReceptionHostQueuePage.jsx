@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, UserCheck, UserPlus } from 'lucide-react';
+import { CalendarClock, Eye, UserCheck, UserPlus } from 'lucide-react';
 import {
   PageHeader,
   Card,
@@ -12,12 +12,13 @@ import {
   IconButton,
 } from '../../components/ui';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
+import RescheduleVisitModal from '../../components/reception/RescheduleVisitModal';
 import { formatDateTime } from '../../utils/helpers';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
 import { scopeReceptionReferenceData } from '../../utils/receptionZoneScope';
-import { canQueueVisitToHost, canMarkInMeeting } from '../../../shared/visitReceptionActions.js';
+import { canQueueVisitToHost, canMarkInMeeting, canRescheduleVisit } from '../../../shared/visitReceptionActions.js';
 
 function waitDuration(row) {
   const start = row.queued_at || row.checked_in_at || row.check_in_at || row.updated_at;
@@ -59,7 +60,9 @@ export default function ReceptionHostQueuePage() {
   const [offices, setOffices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [queueVisit, setQueueVisit] = useState(null);
+  const [rescheduleVisit, setRescheduleVisit] = useState(null);
   const [queuing, setQueuing] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
   const [meetingVisitId, setMeetingVisitId] = useState(null);
 
   const load = useCallback(async () => {
@@ -118,6 +121,21 @@ export default function ReceptionHostQueuePage() {
     }
   };
 
+  const handleRescheduleConfirm = async ({ expectedAt, reason }) => {
+    if (!rescheduleVisit?.id) return;
+    setRescheduling(true);
+    try {
+      await receptionApi.rescheduleVisit(rescheduleVisit.id, { expectedAt, reason });
+      toast.success(`${rescheduleVisit.full_name || 'Visitor'} rescheduled.`);
+      setRescheduleVisit(null);
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
   const columns = [
     { key: 'full_name', label: 'Visitor', type: 'avatar' },
     {
@@ -159,6 +177,16 @@ export default function ReceptionHostQueuePage() {
               size="sm"
               variant="ghost"
               onClick={() => setQueueVisit(row)}
+            />
+          ) : null}
+          {canRescheduleVisit(row) ? (
+            <IconButton
+              icon={CalendarClock}
+              label="Reschedule"
+              tooltip="Set a new expected time"
+              size="sm"
+              variant="ghost"
+              onClick={() => setRescheduleVisit(row)}
             />
           ) : null}
           {canMarkInMeeting(row) ? (
@@ -216,6 +244,13 @@ export default function ReceptionHostQueuePage() {
         offices={offices}
         submitting={queuing}
         onConfirm={handleQueueConfirm}
+      />
+      <RescheduleVisitModal
+        isOpen={Boolean(rescheduleVisit)}
+        onClose={() => !rescheduling && setRescheduleVisit(null)}
+        visit={rescheduleVisit}
+        submitting={rescheduling}
+        onConfirm={handleRescheduleConfirm}
       />
     </div>
   );

@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { LogIn, LogOut, Send, UserCheck, Users } from 'lucide-react';
+import { LogIn, LogOut, Send, UserCheck, Users, CalendarClock } from 'lucide-react';
 import { LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import ReceiveAtDeskModal from '../../components/reception/ReceiveAtDeskModal';
+import RescheduleVisitModal from '../../components/reception/RescheduleVisitModal';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
@@ -13,6 +14,7 @@ import {
   getReceptionVisitAction,
   canQueueVisitToHost,
   canMarkInMeeting,
+  canRescheduleVisit,
   isReceiveAtDeskAction,
   receptionActionButtonClass,
   receptionActionHref,
@@ -30,6 +32,7 @@ function ReceptionHeroActions({
   onQueueHost,
   onReceiveAtDesk,
   onMarkInMeeting,
+  onReschedule,
   onCheckOut,
   checkingOut,
   markingInMeeting,
@@ -37,11 +40,12 @@ function ReceptionHeroActions({
   const action = getReceptionVisitAction(visit);
   const canQueue = canQueueVisitToHost(visit);
   const canMeeting = canMarkInMeeting(visit);
+  const canReschedule = canRescheduleVisit(visit);
   const canCheckOut = isCheckoutEligible(visit);
   const isReceiveModal = isReceiveAtDeskAction(action);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
 
-  if (!action?.show && !canQueue && !canMeeting && !canCheckOut) return null;
+  if (!action?.show && !canQueue && !canMeeting && !canReschedule && !canCheckOut) return null;
 
   return (
     <>
@@ -77,6 +81,17 @@ function ReceptionHeroActions({
           onClick={onQueueHost}
         >
           Queue to host
+        </LoadingButton>
+      ) : null}
+      {canReschedule ? (
+        <LoadingButton
+          size="md"
+          variant="secondary"
+          icon={CalendarClock}
+          onClick={onReschedule}
+          className="border-navy-200"
+        >
+          Reschedule
         </LoadingButton>
       ) : null}
       {canMeeting ? (
@@ -121,6 +136,8 @@ export default function ReceptionVisitDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [checkingOut, setCheckingOut] = useState(false);
   const [markingInMeeting, setMarkingInMeeting] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
 
   const fetchVisit = useCallback(async (visitId) => {
     const [visitData, rawRef] = await Promise.all([
@@ -195,12 +212,28 @@ export default function ReceptionVisitDetailPage() {
     }
   };
 
+  const handleRescheduleConfirm = async ({ expectedAt, reason }) => {
+    if (!visitForModal?.id) return;
+    setRescheduling(true);
+    try {
+      await receptionApi.rescheduleVisit(visitForModal.id, { expectedAt, reason });
+      toast.success(`${visitForModal.full_name || visitForModal.visitor_name || 'Visitor'} rescheduled.`);
+      setRescheduleOpen(false);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err.message || 'Could not reschedule visit.');
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
   const renderHeroFooter = (visit) => (
     <ReceptionHeroActions
       visit={visit}
       onQueueHost={() => setQueueOpen(true)}
       onReceiveAtDesk={() => setReceiveOpen(true)}
       onMarkInMeeting={() => handleMarkInMeeting(visit)}
+      onReschedule={() => setRescheduleOpen(true)}
       onCheckOut={() => handleCheckOut(visit)}
       checkingOut={checkingOut}
       markingInMeeting={markingInMeeting}
@@ -244,6 +277,13 @@ export default function ReceptionVisitDetailPage() {
               offices={offices}
               submitting={queuing}
               onConfirm={handleQueueConfirm}
+            />
+            <RescheduleVisitModal
+              isOpen={rescheduleOpen}
+              onClose={() => !rescheduling && setRescheduleOpen(false)}
+              visit={visitForModal}
+              submitting={rescheduling}
+              onConfirm={handleRescheduleConfirm}
             />
           </>
         )}

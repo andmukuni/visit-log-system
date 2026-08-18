@@ -32,7 +32,7 @@ export function visitHasCheckedIn(visit) {
 
 function normalizeCheckoutStatus(statusOrVisit) {
   if (statusOrVisit && typeof statusOrVisit === 'object') {
-    return String(statusOrVisit.status || '').toLowerCase();
+    return String(statusOrVisit.visit_status || statusOrVisit.status || '').toLowerCase();
   }
   return String(statusOrVisit || '').toLowerCase();
 }

@@ -209,7 +209,9 @@ export function resolveRouteAdminPermission(req) {
   // station.* permissions no reception role holds — 403ing the visitor log,
   // visit detail and the entire queue-to-host desk workflow.
   if (path.includes('/reception/visits')) {
-    if (path.includes('/queue-host') || path.includes('/in-meeting')) return 'reception.host.queue';
+    if (path.includes('/queue-host') || path.includes('/in-meeting') || path.includes('/reschedule')) {
+      return 'reception.host.queue';
+    }
     if (path.includes('/request-approval')) return 'reception.approvals.track';
     if (path.includes('/check-out')) return 'reception.visitors.checkout';
     return 'reception.visitors.view';
@@ -334,7 +336,7 @@ export function resolveVisitRoutePermissions(req) {
   if (path.includes('/approve') || path.includes('/reject')) {
     return ['host.approvals', 'security.approvals', 'station.visitors.view'];
   }
-  if (path.includes('/waiting') || path.includes('/in-meeting')) {
+  if (path.includes('/waiting') || path.includes('/in-meeting') || path.includes('/reschedule')) {
     // Queueing to a host is reception's job, not the gate's.
     return ['reception.host.queue'];
   }

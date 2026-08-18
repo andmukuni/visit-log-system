@@ -17,8 +17,8 @@ describe('visit state transitions', () => {
     assert.equal(canTransition('expected', 'arrived_at_gate'), true);
   });
 
-  it('blocks pending_approval → reception_check_in', () => {
-    assert.equal(canTransition('pending_approval', 'reception_check_in'), false);
+  it('allows pending_approval → reception_check_in when a host rejects an on-site guest', () => {
+    assert.equal(canTransition('pending_approval', 'reception_check_in'), true);
   });
 
   it('blocks completed → any transition', () => {
@@ -36,6 +36,7 @@ describe('visit state transitions', () => {
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('waiting'));
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('in_meeting'));
     assert.ok(VISIT_TRANSITIONS.reception_check_in.includes('waiting'));
+    assert.ok(VISIT_TRANSITIONS.waiting.includes('reception_check_in'));
     assert.ok(VISIT_TRANSITIONS.rejected.includes('waiting'));
     assert.ok(VISIT_TRANSITIONS.rejected.includes('checked_out'));
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('checked_out'));
