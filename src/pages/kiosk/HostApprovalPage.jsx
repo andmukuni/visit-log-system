@@ -211,9 +211,9 @@ export default function HostApprovalPage() {
               loading={approving}
               onClick={approve}
               icon={Check}
-              variant="primary"
+              variant="reception"
               size="lg"
-              className="flex-1 bg-white text-gray-900 hover:bg-gray-100 border-white"
+              className="flex-1"
             >
               Approve
             </LoadingButton>
