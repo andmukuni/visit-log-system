@@ -1419,17 +1419,15 @@ export function createVisitsRouter() {
       const notifyVisitor = notifyVisitorRequested === undefined
         ? receptionZone.isReceptionist
         : parseAlertVisitorFlag(notifyVisitorRequested);
-      try {
-        await notifyVisitEvent(pool, {
-          visitId,
-          eventType: 'reception_check_in',
-          actorUserId: userId,
-          notifyVisitor,
-          notifyHost: receptionZone.isReceptionist,
-        });
-      } catch (notifyError) {
-        console.warn('[visit.checkin] notify failed:', notifyError.message);
-      }
+      // Fire-and-forget: SMS/email delivery shouldn't hold up the check-in
+      // response. Errors are logged, not surfaced — the visit is already saved.
+      notifyVisitEvent(pool, {
+        visitId,
+        eventType: 'reception_check_in',
+        actorUserId: userId,
+        notifyVisitor,
+        notifyHost: receptionZone.isReceptionist,
+      }).catch((notifyError) => console.warn('[visit.checkin] notify failed:', notifyError.message));
 
       res.json({ ok: true, message: 'Visitor checked in.' });
     } catch (error) {

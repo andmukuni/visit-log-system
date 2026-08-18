@@ -259,11 +259,10 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     });
   }
 
-  try {
-    await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor });
-  } catch {
-    // Non-blocking
-  }
+  // Fire-and-forget: SMS/email delivery shouldn't hold up the check-in
+  // response. Errors are logged, not surfaced — the visit is already saved.
+  notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor })
+    .catch((error) => console.warn('[reception_entry.walk_in] notify failed:', error.message));
 
   const [[checkedInVisit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
   await markHostUnavailableForVisit(pool, checkedInVisit);
@@ -483,11 +482,9 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
         [signatureResult.signature, visitId],
       );
       await writeVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, stationId: scope.station_id });
-      try {
-        await notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor });
-      } catch (error) {
-        console.warn('[reception_entry.vehicle] notify failed:', error.message);
-      }
+      // Fire-and-forget — see registerWalkInAtReceptionDesk above.
+      notifyVisitEvent(pool, { visitId, eventType: 'reception_check_in', actorUserId: userId, notifyVisitor })
+        .catch((error) => console.warn('[reception_entry.vehicle] notify failed:', error.message));
       const [[deskVisit]] = await pool.query('SELECT * FROM visits WHERE id = ?', [visitId]);
       await markHostUnavailableForVisit(pool, deskVisit);
     } else {
