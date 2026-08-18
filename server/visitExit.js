@@ -27,10 +27,11 @@ export async function finalizeVisitDeparture(pool, {
     "UPDATE visits SET status = 'completed', updated_at = NOW() WHERE id = ?",
     [visitId],
   );
-  await notifyVisitEvent(pool, {
+  // Fire-and-forget — the departure is already recorded.
+  notifyVisitEvent(pool, {
     visitId,
     eventType: 'left_premises',
     actorUserId,
     notifyVisitor,
-  });
+  }).catch((error) => console.warn('[visit.departure] notify failed:', error.message));
 }

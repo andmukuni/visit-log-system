@@ -566,11 +566,8 @@ export function createStationRouter() {
         });
       }
 
-      try {
-        await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
-      } catch (error) {
-        console.warn('[gate-entry/walk-in] notify failed:', error.message);
-      }
+      notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId })
+        .catch((error) => console.warn('[gate-entry/walk-in] notify failed:', error.message));
 
       const [[visit]] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS} FROM visits vis ${VISIT_JOINS} WHERE vis.id = ?`,
@@ -761,11 +758,8 @@ export function createStationRouter() {
             [signature, visitId],
           );
           await writeVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId, stationId: scope.station_id });
-          try {
-            await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
-          } catch (error) {
-            console.warn('[gate-entry/vehicle] notify failed:', error.message);
-          }
+          notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId })
+            .catch((error) => console.warn('[gate-entry/vehicle] notify failed:', error.message));
         } else {
           await pool.query(
             `UPDATE visits SET check_in_signature = COALESCE(check_in_signature, ?), updated_at = NOW() WHERE id = ?`,
@@ -1230,7 +1224,8 @@ export function createVisitsRouter() {
         targetId: visitId,
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId });
+      notifyVisitEvent(pool, { visitId, eventType: 'pre_registered', actorUserId: userId })
+        .catch((error) => console.warn('[visit.register] notify failed:', error.message));
 
       const [[visit]] = await pool.query(
         `SELECT ${VISIT_SELECT_FIELDS} FROM visits vis ${VISIT_JOINS} WHERE vis.id = ?`,
@@ -1288,7 +1283,8 @@ export function createVisitsRouter() {
         reason: reason || null,
       });
 
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'approved', actorUserId: userId });
+      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'approved', actorUserId: userId })
+        .catch((error) => console.warn('[visit.approve] notify failed:', error.message));
 
       res.json({ ok: true, message: 'Visit approved.' });
     } catch (error) {
@@ -1486,7 +1482,8 @@ export function createVisitsRouter() {
         targetId: visit.id,
       });
 
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out', actorUserId: userId });
+      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out', actorUserId: userId })
+        .catch((error) => console.warn('[visit.checkout] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
       await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
 
@@ -1596,7 +1593,8 @@ export function createVisitsRouter() {
       if (toStatus === 'in_meeting') {
         await markHostUnavailableForVisit(pool, visit);
       }
-      await notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId });
+      notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId })
+        .catch((error) => console.warn('[visit.transition] notify failed:', error.message));
 
       res.json({ ok: true, message: `Visit updated to ${toStatus}.` });
     } catch (error) {
@@ -1667,7 +1665,8 @@ export function createVisitsRouter() {
       }
       await exitVisitVehicles(pool, { visitId: visit.id });
       await writeVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId, reason: reason || null });
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId });
+      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId })
+        .catch((error) => console.warn('[visit.cancel] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
       res.json({ ok: true, message: 'Visit cancelled.' });
     } catch (error) {
@@ -1703,7 +1702,8 @@ export function createVisitsRouter() {
         reason: reason || null,
         details: { expectedAt },
       });
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'rescheduled', actorUserId: userId, extra: { expected_at: expectedAt } });
+      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'rescheduled', actorUserId: userId, extra: { expected_at: expectedAt } })
+        .catch((error) => console.warn('[visit.reschedule] notify failed:', error.message));
       res.json({ ok: true, message: 'Visit rescheduled.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
@@ -1921,7 +1921,8 @@ export function createVehiclesRouter() {
         if (visit && canTransition(visit.status, 'arrived_at_gate')) {
           await pool.query("UPDATE visits SET status = 'arrived_at_gate', updated_at = NOW() WHERE id = ?", [visitId]);
           await writeVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId, stationId: scope.station_id });
-          await notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId });
+          notifyVisitEvent(pool, { visitId, eventType: 'arrived_at_gate', actorUserId: userId })
+            .catch((error) => console.warn('[vehicle.gate_capture] notify failed:', error.message));
         }
       }
 

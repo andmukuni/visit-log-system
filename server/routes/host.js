@@ -490,17 +490,17 @@ export function createHostRouter() {
           actorUserId: userId,
           details: { status, source: 'host_invite', selfApproved: true, alreadyConfirmed: true },
         });
-        await notifyVisitEvent(pool, {
+        notifyVisitEvent(pool, {
           visitId,
           eventType: 'host_booking',
           actorUserId: userId,
-        });
+        }).catch((error) => console.warn('[host.invite] notify failed:', error.message));
       } else {
-        await notifyVisitEvent(pool, {
+        notifyVisitEvent(pool, {
           visitId,
           eventType: 'pre_registered',
           actorUserId: userId,
-        });
+        }).catch((error) => console.warn('[host.invite] notify failed:', error.message));
       }
 
       await writeAuditLog(pool, {

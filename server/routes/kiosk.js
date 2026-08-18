@@ -130,7 +130,8 @@ export function createKioskRouter() {
 
       if (visit.status === 'pre_registered') {
         await pool.query(`UPDATE visits SET status = 'pending_approval' WHERE id = ?`, [visit.id]);
-        await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'pending_approval' });
+        notifyVisitEvent(pool, { visitId: visit.id, eventType: 'pending_approval' })
+          .catch((error) => console.warn('[kiosk.invite_confirm] notify failed:', error.message));
       }
 
       res.json({ ok: true, data: { passCode: visit.pass_code, status: visit.status } });
@@ -218,12 +219,13 @@ export function createKioskRouter() {
       });
 
       // Self-service kiosk, not reception — stays silent like the gate.
-      await notifyVisitEvent(pool, {
+      // Fire-and-forget regardless — nothing here should hold up the response.
+      notifyVisitEvent(pool, {
         visitId: visit.id,
         eventType: 'checked_in',
         notifyVisitor: false,
         notifyHost: false,
-      });
+      }).catch((error) => console.warn('[kiosk.check_in] notify failed:', error.message));
       await markHostUnavailableForVisit(pool, visit);
 
       res.json({ ok: true, data: { passCode: visit.pass_code, badgeNumber: visit.badge_number } });
@@ -268,7 +270,8 @@ export function createKioskRouter() {
         details: { source: 'kiosk' },
       });
 
-      await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out' });
+      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out' })
+        .catch((error) => console.warn('[kiosk.check_out] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
       await finalizeVisitDeparture(pool, { visitId: visit.id, notifyVisitor: false });
 

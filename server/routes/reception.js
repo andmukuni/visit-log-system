@@ -810,7 +810,8 @@ export function createReceptionRouter() {
     if (toStatus === 'in_meeting') {
       await markHostUnavailableForVisit(pool, visit);
     }
-    await notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId });
+    notifyVisitEvent(pool, { visitId, eventType, actorUserId: userId })
+      .catch((error) => console.warn('[reception.transition] notify failed:', error.message));
 
     res.json({ ok: true, message: `Visit updated to ${toStatus}.` });
   }
@@ -1244,12 +1245,12 @@ export function createReceptionRouter() {
         details: { expectedAt: parsedExpectedAt.toISOString() },
       });
 
-      await notifyVisitEvent(pool, {
+      notifyVisitEvent(pool, {
         visitId,
         eventType: 'rescheduled',
         actorUserId: userId,
         extra: { expected_at: parsedExpectedAt.toISOString() },
-      });
+      }).catch((error) => console.warn('[reception.reschedule] notify failed:', error.message));
 
       res.json({ ok: true, message: 'Visit rescheduled.' });
     } catch (error) {
@@ -1311,7 +1312,8 @@ export function createReceptionRouter() {
         targetId: visitId,
       });
 
-      await notifyVisitEvent(pool, { visitId, eventType: 'checked_out', actorUserId: userId });
+      notifyVisitEvent(pool, { visitId, eventType: 'checked_out', actorUserId: userId })
+        .catch((error) => console.warn('[reception.checkout] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
 
       res.json({ ok: true, message: 'Visitor checked out.' });
@@ -1535,7 +1537,8 @@ export function createReceptionRouter() {
         hostContactDeliverable = approval.hostContactDeliverable;
         approvalUrl = approval.approvalUrl;
       } else {
-        await notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId });
+        notifyVisitEvent(pool, { visitId, eventType: initialStatus, actorUserId: userId })
+          .catch((error) => console.warn('[reception.register] notify failed:', error.message));
       }
 
       res.status(201).json({

@@ -233,30 +233,29 @@ export async function requestHostApproval(pool, {
   }
   const hostContactDeliverable = await hostHasDeliveryContact(pool, visit?.host_id);
 
-  let notified = false;
-  try {
-    if (notify) {
-      await notifyVisitEvent(pool, {
-        visitId,
-        eventType: 'pending_approval',
-        actorUserId: requestedByUserId,
-        extra: {
-          approval_url: issued.approvalUrl,
-          approval_context: approvalContextForVisit(visit),
-          request_kind: visitApprovalKind(visit),
-        },
-        notifyVisitor: false,
-        skipReceptionExpected: resend || isReceptionQueueVisit(visit),
-        notificationKeySuffix: resend ? `nudge:${crypto.randomBytes(4).toString('hex')}` : null,
-      });
-    }
-    notified = true;
-    if (resend) {
+  // Notification delivery is fire-and-forget — it shouldn't hold up the
+  // approval-request response. Token-invalidation on resend is a real data
+  // consistency operation and stays awaited, decoupled from notify failures.
+  if (notify) {
+    notifyVisitEvent(pool, {
+      visitId,
+      eventType: 'pending_approval',
+      actorUserId: requestedByUserId,
+      extra: {
+        approval_url: issued.approvalUrl,
+        approval_context: approvalContextForVisit(visit),
+        request_kind: visitApprovalKind(visit),
+      },
+      notifyVisitor: false,
+      skipReceptionExpected: resend || isReceptionQueueVisit(visit),
+      notificationKeySuffix: resend ? `nudge:${crypto.randomBytes(4).toString('hex')}` : null,
+    }).catch((error) => console.warn('[host.approval.request] notify failed:', error.message));
+  }
+  if (resend) {
+    try {
       await invalidateOtherHostApprovalTokens(pool, visitId, issued.id);
-    }
-  } catch (error) {
-    console.warn('[host.approval.request] notify failed:', error.message);
-    if (resend) {
+    } catch (error) {
+      console.warn('[host.approval.request] invalidate other tokens failed:', error.message);
       await pool.query(
         `UPDATE visit_host_approval_tokens SET used_at = NOW() WHERE id = ? AND used_at IS NULL`,
         [issued.id],
@@ -267,7 +266,7 @@ export async function requestHostApproval(pool, {
   return {
     approvalUrl: issued.approvalUrl,
     hostContactDeliverable,
-    notified: notify ? notified : false,
+    notified: notify,
   };
 }
 
@@ -447,16 +446,12 @@ export async function applyHostApproval(pool, {
   }
 
   if (notify) {
-    try {
-      await notifyVisitEvent(pool, {
-        visitId: visit.id,
-        eventType,
-        actorUserId,
-        notifyVisitor: false,
-      });
-    } catch (error) {
-      console.warn('[host.approve] notify failed:', error.message);
-    }
+    notifyVisitEvent(pool, {
+      visitId: visit.id,
+      eventType,
+      actorUserId,
+      notifyVisitor: false,
+    }).catch((error) => console.warn('[host.approve] notify failed:', error.message));
   }
 
   return {
@@ -534,16 +529,12 @@ export async function applyHostRejection(pool, {
   await refreshHostAvailabilityAfterVisit(pool, visit);
 
   if (notify) {
-    try {
-      await notifyVisitEvent(pool, {
-        visitId: visit.id,
-        eventType: 'rejected',
-        actorUserId,
-        notifyVisitor: false,
-      });
-    } catch (error) {
-      console.warn('[host.reject] notify failed:', error.message);
-    }
+    notifyVisitEvent(pool, {
+      visitId: visit.id,
+      eventType: 'rejected',
+      actorUserId,
+      notifyVisitor: false,
+    }).catch((error) => console.warn('[host.reject] notify failed:', error.message));
   }
 
   return {

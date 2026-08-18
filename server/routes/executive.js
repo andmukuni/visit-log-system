@@ -605,11 +605,11 @@ export function createExecutiveRouter() {
         actorUserId: userId,
         details: { status, source: 'executive_calendar', selfApproved: true, alreadyConfirmed: true },
       });
-      await notifyVisitEvent(pool, {
+      notifyVisitEvent(pool, {
         visitId,
         eventType: 'host_booking',
         actorUserId: userId,
-      });
+      }).catch((error) => console.warn('[executive.appointment] notify failed:', error.message));
 
       await writeAuditLog(pool, {
         organisationId: ctx.scope.organisation_id,
