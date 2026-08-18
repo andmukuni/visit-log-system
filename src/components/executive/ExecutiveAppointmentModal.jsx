@@ -310,7 +310,7 @@ export default function ExecutiveAppointmentModal({
         className={formClassName}
       >
         <div className="shrink-0 border-b border-navy-100 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
-          <div className="flex items-start gap-3 sm:gap-4">
+          <div className="mx-auto flex w-full max-w-5xl items-start gap-3 sm:gap-4">
             <button
               type="button"
               onClick={onClose}
@@ -348,8 +348,8 @@ export default function ExecutiveAppointmentModal({
               />
 
               <div className="mt-4 rounded-2xl border border-navy-100 bg-navy-50/70 p-3 sm:p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
-                  <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+                  <div className="min-w-0">
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
                       {form.allDay ? 'Date' : 'Starts'}
                     </p>
@@ -380,7 +380,7 @@ export default function ExecutiveAppointmentModal({
                       <div className="hidden pb-2 text-sm font-semibold text-navy-300 sm:block" aria-hidden="true">
                         →
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0">
                         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
                           Ends
                         </p>
@@ -407,7 +407,7 @@ export default function ExecutiveAppointmentModal({
                   )}
 
                   <div
-                    className="inline-flex h-10 shrink-0 items-center self-start rounded-xl border border-navy-200 bg-white px-3 text-xs font-semibold text-navy-500 sm:self-end"
+                    className="inline-flex h-10 shrink-0 items-center self-start rounded-xl border border-navy-200 bg-white px-3 text-xs font-semibold text-navy-500 sm:ml-auto sm:self-end"
                   >
                     {timezoneLabel}
                   </div>
