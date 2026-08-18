@@ -113,11 +113,11 @@ export const PORTAL_NAVIGATION = {
   ],
   reception: [
     { key: 'dashboard', name: 'Dashboard', to: '/reception', permission: 'reception.dashboard', end: true, section: 'primary' },
+    { key: 'visitor-logs', name: 'Visitor Logs', to: '/reception/visitors', permission: 'reception.visitors.view', section: 'primary', badgeKey: 'visitor_logs' },
     { key: 'calendar', name: 'Calendar', to: '/reception/calendar', permission: 'reception.calendar', section: 'primary', isPrimaryRoute: true },
     { key: 'check-in', name: 'Check-in Desk', to: '/reception/check-in', permission: 'reception.visitors.checkin', section: 'primary' },
     { key: 'approvals', name: 'Pending Approvals', to: '/reception/approvals', permission: 'reception.approvals.track', section: 'primary' },
     { key: 'host-queue', name: 'Host Queue', to: '/reception/host-queue', permission: 'reception.host.queue', section: 'primary' },
-    { key: 'visitor-logs', name: 'Visitor Logs', to: '/reception/visitors', permission: 'reception.visitors.view', section: 'primary', badgeKey: 'visitor_logs' },
     { key: 'badges', name: 'Badge Desk', to: '/reception/badges', permission: 'reception.badges', section: 'system' },
     { key: 'occupancy', name: 'On-site Visitors', to: '/reception/occupancy', permission: 'reception.occupancy', section: 'system' },
     { key: 'notifications', name: 'Notifications', to: '/reception/notifications', permission: 'reception.dashboard', section: 'system', badgeKey: 'notifications' },
