@@ -5197,15 +5197,27 @@ export function createOrgAdminRouter() {
         return res.status(403).json({ ok: false, message: 'Access denied for this visitor.' });
       }
 
-      const [[visitCount]] = await pool.query(
-        'SELECT COUNT(*) AS count FROM visits WHERE visitor_id = ?',
-        [visitorId],
-      );
-      if (Number(visitCount?.count || 0) > 0) {
-        return res.status(400).json({
-          ok: false,
-          message: 'This visitor has visit history and cannot be deleted. Visit records are preserved for compliance.',
-        });
+      const [visitRows] = await pool.query('SELECT id FROM visits WHERE visitor_id = ?', [visitorId]);
+      const visitIds = visitRows.map((row) => row.id);
+
+      // No FK constraints tie these tables to visits — deleting the visitor's
+      // visits first avoids leaving orphaned rows that queries can't reach
+      // (most visit queries INNER JOIN visitors, so orphans would just become
+      // invisible clutter rather than being preserved for anything).
+      if (visitIds.length) {
+        const placeholders = visitIds.map(() => '?').join(', ');
+        await pool.query(`DELETE FROM visit_events WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM visit_approvals WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM vehicles WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM badges WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM appointments WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM expected_vehicles WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM vehicle_entries WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM visit_host_approval_tokens WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM roll_call_entries WHERE visit_id IN (${placeholders})`, visitIds);
+        // Incidents are standalone security records — detach rather than delete.
+        await pool.query(`UPDATE incidents SET visit_id = NULL WHERE visit_id IN (${placeholders})`, visitIds);
+        await pool.query(`DELETE FROM visits WHERE id IN (${placeholders})`, visitIds);
       }
 
       await pool.query('DELETE FROM visitors WHERE id = ?', [visitorId]);
@@ -5216,7 +5228,12 @@ export function createOrgAdminRouter() {
         action: 'visitor.deleted',
         targetType: 'visitor',
         targetId: visitorId,
-        details: { full_name: existing.full_name, phone: existing.phone, email: existing.email },
+        details: {
+          full_name: existing.full_name,
+          phone: existing.phone,
+          email: existing.email,
+          visits_removed: visitIds.length,
+        },
       });
 
       res.json({ ok: true, message: 'Visitor deleted.' });

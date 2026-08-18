@@ -218,12 +218,7 @@ export default function AdminVisitorsPage() {
               iconSize={16}
               variant="ghost"
               className="text-rose-600 hover:bg-rose-50"
-              disabled={Number(row.visit_count || 0) > 0}
-              title={
-                Number(row.visit_count || 0) > 0
-                  ? 'Visitors with visit history cannot be deleted.'
-                  : 'Delete visitor'
-              }
+              title="Delete visitor"
               onClick={(e) => {
                 e.stopPropagation();
                 setDeleteTarget(row);
@@ -343,7 +338,11 @@ export default function AdminVisitorsPage() {
         title="Delete visitor?"
         message={
           deleteTarget
-            ? `Permanently remove ${deleteTarget.full_name || 'this visitor'}'s profile. This can't be undone.`
+            ? `Permanently remove ${deleteTarget.full_name || 'this visitor'}'s profile.${
+              Number(deleteTarget.visit_count || 0) > 0
+                ? ` This also deletes their ${deleteTarget.visit_count} visit record${deleteTarget.visit_count === 1 ? '' : 's'} (log book entries, badges, vehicles).`
+                : ''
+            } This can't be undone.`
             : 'Are you sure you want to proceed?'
         }
         confirmLabel="Delete"
