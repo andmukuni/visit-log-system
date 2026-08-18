@@ -1,10 +1,31 @@
-import { Eye } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, Card, FormField, DataTable, VisitStatusBadge, Spinner, IconButton } from '../../components/ui';
+import { useNavigate } from 'react-router-dom';
+import {
+  PageHeader,
+  Card,
+  FormField,
+  DataTable,
+  VisitStatusBadge,
+  Spinner,
+  FilterPills,
+  ActionToolbar,
+  RefreshAction,
+} from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
 import { useViewerHostId } from '../../hooks/useViewerHostId';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'All', dot: 'bg-navy-400' },
+  { value: 'pending_approval', label: 'Pending approval', dot: 'bg-yellow-500' },
+  { value: 'expected', label: 'Expected', dot: 'bg-sky-500' },
+  { value: 'approved', label: 'Approved', dot: 'bg-emerald-500' },
+  { value: 'reception_check_in', label: 'At reception', dot: 'bg-teal-500' },
+  { value: 'waiting', label: 'Waiting', dot: 'bg-sky-500' },
+  { value: 'in_meeting', label: 'With you', dot: 'bg-violet-500' },
+  { value: 'checked_out', label: 'Checked out', dot: 'bg-slate-400' },
+  { value: 'completed', label: 'Completed', dot: 'bg-gray-500' },
+];
 
 export default function HostVisitorsPage() {
   const navigate = useNavigate();
@@ -33,7 +54,7 @@ export default function HostVisitorsPage() {
   }, [load]);
 
   const columns = [
-    { key: 'full_name', label: 'Visitor' },
+    { key: 'full_name', label: 'Visitor', type: 'avatar' },
     { key: 'company', label: 'Company' },
     { key: 'category_name', label: 'Category' },
     {
@@ -48,47 +69,44 @@ export default function HostVisitorsPage() {
     },
     {
       key: 'created_at',
-      label: 'Created',
+      label: 'Registered',
       render: (_, row) => formatDateTime(row.created_at),
-    },
-    {
-      key: 'view',
-      label: '',
-      render: (_, row) => (
-        <Link to={`/host/visitors/${row.id}`} aria-label="View">
-          <IconButton icon={Eye} label="View" tooltip="View" variant="ghost" size="sm" />
-        </Link>
-      ),
     },
   ];
 
   return (
     <div>
       <PageHeader
-        title="My Visitors"
-        subtitle="Upcoming and historical visits addressed to you"
-        breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'My Visitors' }]}
+        title="Visitor Logs"
+        subtitle="Only visitors queued and assigned to you"
+        breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'Visitor Logs' }]}
+        actions={(
+          <ActionToolbar>
+            <RefreshAction onClick={load} loading={loading} />
+          </ActionToolbar>
+        )}
       />
 
-      <Card title="Filters" className="mb-6">
-        <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
-          <FormField label="Search" name="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, phone, company…" />
+      <Card className="mb-6">
+        <div className="space-y-4">
           <FormField
-            label="Status"
-            name="status"
-            type="select"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            options={[
-              { value: '', label: 'All' },
-              { value: 'pre_registered', label: 'Pre-registered' },
-              { value: 'pending_approval', label: 'Pending approval' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'checked_in', label: 'On site' },
-              { value: 'completed', label: 'Completed' },
-              { value: 'rejected', label: 'Rejected' },
-            ]}
+            label="Search"
+            name="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name, phone, pass code…"
           />
+          <div>
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-navy-500">Status</p>
+            <FilterPills
+              variant="segmented"
+              size="sm"
+              aria-label="Filter by visit status"
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={setStatus}
+            />
+          </div>
         </div>
       </Card>
 
@@ -99,8 +117,8 @@ export default function HostVisitorsPage() {
           <DataTable
             columns={columns}
             data={visits}
-            emptyTitle="No visitors yet"
-            emptyDescription="Invite a visitor to get started."
+            emptyTitle="No visitors assigned to you"
+            emptyDescription="Guests queued or invited to meet you will appear here."
             onRowClick={(row) => navigate(`/host/visitors/${row.id}`)}
           />
         </Card>

@@ -14,11 +14,11 @@ export default function HostVisitDetailPage() {
       viewerHostId={viewerHostId}
       breadcrumbs={[
         { label: 'Host', to: '/host' },
-        { label: 'My contacts', to: '/host/contacts' },
+        { label: 'Visitor logs', to: '/host/visitors' },
         { label: 'Details' },
       ]}
-      backTo="/host/contacts"
-      backLabel="Back to contacts"
+      backTo="/host/visitors"
+      backLabel="Back to visitor logs"
     />
   );
 }

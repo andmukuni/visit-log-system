@@ -73,6 +73,7 @@ const HostDashboardPage = lazy(() => import('./pages/host/HostDashboardPage'));
 const HostInvitePage = lazy(() => import('./pages/host/HostInvitePage'));
 const HostApprovalsPage = lazy(() => import('./pages/host/HostApprovalsPage'));
 const HostOnSitePage = lazy(() => import('./pages/host/HostOnSitePage'));
+const HostVisitorsPage = lazy(() => import('./pages/host/HostVisitorsPage'));
 const HostVisitDetailPage = lazy(() => import('./pages/host/HostVisitDetailPage'));
 
 const SecurityDashboardPage = lazy(() => import('./pages/security/SecurityDashboardPage'));
@@ -592,7 +593,7 @@ export const router = createBrowserRouter([
           { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
           { path: 'appointments/new', element: <ExecutiveNewAppointmentPage /> },
           { path: 'invite', element: <HostInvitePage /> },
-          { path: 'visitors', element: <Navigate to="/host/contacts" replace /> },
+          { path: 'visitors', element: <HostVisitorsPage /> },
           { path: 'visitors/:id', element: <HostVisitDetailPage /> },
           { path: 'register', element: <ExecutiveVisitorsPage /> },
           { path: 'register/:id', element: <ExecutiveVisitDetailPage /> },

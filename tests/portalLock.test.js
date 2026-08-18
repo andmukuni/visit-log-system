@@ -22,7 +22,7 @@ const NON_HOST_ROUTES = [
 ];
 
 const HOST_ROUTES = [
-  '/host', '/host/appointments', '/host/approvals', '/host/on-site',
+  '/host', '/host/appointments', '/host/approvals', '/host/visitors', '/host/on-site',
   '/host/contacts', '/host/visitors/visit-1', '/host/invite',
 ];
 
