@@ -519,6 +519,18 @@ export const notificationsApi = {
     method: 'PATCH',
     body: JSON.stringify({ preferences }),
   }),
+  getVapidPublicKey: async () => {
+    const data = await apiFetch('/admin/notifications/push/vapid-public-key');
+    return data?.publicKey || '';
+  },
+  subscribePush: (body) => apiFetch('/admin/notifications/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }),
+  unsubscribePush: (body) => apiFetch('/admin/notifications/push/subscribe', {
+    method: 'DELETE',
+    body: JSON.stringify(body),
+  }),
 };
 
 export const executiveApi = {

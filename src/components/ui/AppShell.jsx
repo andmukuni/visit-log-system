@@ -6,8 +6,14 @@ import Breadcrumbs from './Breadcrumbs';
 import AppSidebar from './AppSidebar';
 import PortalSwitcherMenu from './PortalSwitcherMenu';
 import NavbarNotificationsBell from './NavbarNotificationsBell';
+import PwaInstallBanner from '../pwa/PwaInstallBanner';
+import PwaPushPrompt, { shouldShowPushPrompt, writePromptState } from '../pwa/PwaPushPrompt';
 import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { subscribeToPushNotifications } from '../../pwa/pushNotifications';
+import { notificationsApi } from '../../utils/visitorApi';
+import { useToast } from '../../context/ToastContext';
 import { AdminOrganisationProvider } from '../../context/AdminOrganisationContext';
 import { AnalyticsPanelProvider, useAnalyticsPanel } from '../../context/AnalyticsPanelContext';
 import { PageHeaderProvider, usePageHeaderState } from '../../context/PageHeaderContext';
@@ -196,12 +202,18 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
 
 function ShellBody({ portalId, title }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pushOpen, setPushOpen] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
   const isKiosk = isGateEntryKiosk(location.pathname);
-  const { permissions, roleSlugs, hasPermission } = useAuth();
+  const { user, permissions, roleSlugs, hasPermission } = useAuth();
+  const isPublicRoute = location.pathname.startsWith('/visit/');
+  const pwaEnabled = Boolean(user?.id) && !isPublicRoute;
+  const pwa = usePwaInstall({ enabled: pwaEnabled });
   useEffect(() => {
     if (!permissions.length) return;
     if ((isExecutiveOnlyUser(permissions) || isHostOnlyUser(permissions)) && portalId === 'management') {
@@ -237,9 +249,68 @@ function ShellBody({ portalId, title }) {
     };
   }, [sidebarOpen]);
 
+  useEffect(() => {
+    if (!pwaEnabled) return;
+    pwa.resetDismissOnLogin();
+  }, [pwaEnabled, user?.id, pwa.resetDismissOnLogin]);
+
+  useEffect(() => {
+    if (!pwaEnabled || pwa.showBanner) {
+      setPushOpen(false);
+      return undefined;
+    }
+    if (!shouldShowPushPrompt()) return undefined;
+    const timer = window.setTimeout(() => setPushOpen(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [pwaEnabled, pwa.showBanner, location.pathname]);
+
+  const handleEnablePush = async () => {
+    setPushEnabling(true);
+    try {
+      const result = await subscribeToPushNotifications({
+        getVapidPublicKey: async () => ({ publicKey: await notificationsApi.getVapidPublicKey() }),
+        subscribePush: notificationsApi.subscribePush,
+      });
+      if (result.ok) {
+        writePromptState('subscribed');
+        toast.success('Desktop alerts enabled.');
+        setPushOpen(false);
+        return;
+      }
+      if (result.reason === 'denied') {
+        writePromptState('denied');
+        toast.error('Notification permission was blocked.');
+      } else if (result.reason === 'no_vapid_key') {
+        toast.error('Push alerts are not configured on this server yet.');
+      } else {
+        toast.error('Could not enable desktop alerts.');
+      }
+      setPushOpen(false);
+    } catch (err) {
+      toast.error(err.message || 'Could not enable desktop alerts.');
+    } finally {
+      setPushEnabling(false);
+    }
+  };
+
+  const handleDismissPush = () => {
+    writePromptState('dismissed');
+    setPushOpen(false);
+  };
+
   return (
     <SidebarProvider portalId={portalId}>
       <div className={`h-screen overflow-hidden bg-navy-50 portal-${portalId}`}>
+        {pwaEnabled && !isKiosk ? (
+          <PwaInstallBanner
+            visible={pwa.showBanner}
+            canInstall={pwa.canInstall}
+            showIosHint={pwa.showIosHint}
+            installing={pwa.installing}
+            onInstall={pwa.install}
+            onDismiss={pwa.dismiss}
+          />
+        ) : null}
         {!isKiosk && (
           <AppSidebar
             title={title}
@@ -271,6 +342,14 @@ function ShellBody({ portalId, title }) {
             )}
           </PageHeaderProvider>
         </AnalyticsPanelProvider>
+        {pwaEnabled ? (
+          <PwaPushPrompt
+            isOpen={pushOpen}
+            enabling={pushEnabling}
+            onEnable={handleEnablePush}
+            onDismiss={handleDismissPush}
+          />
+        ) : null}
       </div>
     </SidebarProvider>
   );

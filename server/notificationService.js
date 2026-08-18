@@ -307,7 +307,7 @@ export async function sendFromTemplate(pool, {
       continue;
     }
 
-    results.push(await sendNotification(pool, {
+    const sent = await sendNotification(pool, {
       organisationId,
       userId: tpl.channel === 'in_app' ? userId : null,
       notificationType: templateKey,
@@ -317,7 +317,25 @@ export async function sendFromTemplate(pool, {
       idempotencyKey: channelKey,
       metadata,
       recipient: channelRecipient,
-    }));
+    });
+    results.push(sent);
+
+    if (tpl.channel === 'in_app' && userId && sent.ok && !sent.skipped) {
+      try {
+        const { sendPushToUser } = await import('./pushSubscriptionService.js');
+        await sendPushToUser(pool, {
+          userId,
+          organisationId,
+          title,
+          body,
+          metadata: { ...(metadata || {}), notificationId: sent.id },
+          categoryKey,
+          orgSettings,
+        });
+      } catch (error) {
+        console.warn('[push] mirror in_app failed:', error.message);
+      }
+    }
   }
 
   return results;

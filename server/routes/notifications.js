@@ -93,6 +93,49 @@ export function createNotificationsRouter() {
     }
   });
 
+  router.get('/push/vapid-public-key', async (req, res) => {
+    try {
+      const { getVapidConfig } = await import('../pushSubscriptionService.js');
+      const config = getVapidConfig();
+      if (!config.configured) {
+        return res.status(503).json({ ok: false, message: 'Push notifications are not configured on this server.' });
+      }
+      res.json({ ok: true, data: { publicKey: config.publicKey } });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/push/subscribe', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const { endpoint, keys } = req.body || {};
+      const { savePushSubscription } = await import('../pushSubscriptionService.js');
+      const result = await savePushSubscription(pool, {
+        userId,
+        endpoint,
+        p256dh: keys?.p256dh,
+        auth: keys?.auth,
+        userAgent: String(req.headers['user-agent'] || '').slice(0, 512),
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      res.status(400).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.delete('/push/subscribe', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const endpoint = req.body?.endpoint;
+      const { removePushSubscription } = await import('../pushSubscriptionService.js');
+      await removePushSubscription(pool, { userId, endpoint });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/templates', async (req, res) => {
     try {
       const ctx = await requireUserScope(pool, req.adminClaims?.sub, req.adminClaims);

@@ -6,6 +6,7 @@ import { ensureVisitorSchema, seedVisitorData, seedOfficeHierarchy } from './vis
 import { runMigrations } from './migrations/index.js';
 import { ensurePasswordResetSchema } from './hostPortalService.js';
 import { ensureHostApprovalSchema } from './hostApprovalService.js';
+import { ensurePushSubscriptionSchema } from './pushSubscriptionService.js';
 import { ensureSecuritySchema, seedSecurityData } from './securitySchema.js';
 import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.js';
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
@@ -67,6 +68,7 @@ export async function bootstrapDatabase() {
   await runMigrations(pool);
   await ensurePasswordResetSchema(pool);
   await ensureHostApprovalSchema(pool);
+  await ensurePushSubscriptionSchema(pool);
   await ensureSecuritySchema();
   await ensureComplianceSchema();
   await ensurePlatformSchema();
