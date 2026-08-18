@@ -82,6 +82,30 @@ html[data-portal='reception'] .portal-reception main > div {
   max-width: none;
 }
 
+/* Reception tablet mode — touch-optimized: bigger tap targets, no iOS
+   input-zoom, sidebar runs as a hamburger overlay instead of staying docked
+   (see useIsTabletDevice / AppShell forceOverlay). */
+html[data-portal='reception'][data-device='tablet'] {
+  font-size: 16px;
+  --shell-content-padding-y: 1.5rem;
+}
+
+html[data-portal='reception'][data-device='tablet'] button,
+html[data-portal='reception'][data-device='tablet'] a[role='button'],
+html[data-portal='reception'][data-device='tablet'] input,
+html[data-portal='reception'][data-device='tablet'] select,
+html[data-portal='reception'][data-device='tablet'] textarea {
+  min-height: 44px;
+}
+
+html[data-portal='reception'][data-device='tablet'] button[aria-label] {
+  min-width: 44px;
+}
+
+html[data-portal='reception'][data-device='tablet'] [role='tab'] {
+  min-height: 48px;
+}
+
 html[data-portal='executive'] {
   --sidebar-width: 15.5rem;
   --header-height: 3.5rem;

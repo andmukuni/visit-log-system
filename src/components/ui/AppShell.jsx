@@ -11,6 +11,7 @@ import PwaPushPrompt, { shouldShowPushPrompt, writePromptState } from '../pwa/Pw
 import { ShellPageTitle } from './PageHeader';
 import { useAuth } from '../../context/AuthContext';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { useIsTabletDevice } from '../../hooks/useIsTabletDevice';
 import { subscribeToPushNotifications } from '../../pwa/pushNotifications';
 import { notificationsApi } from '../../utils/visitorApi';
 import { useToast } from '../../context/ToastContext';
@@ -61,7 +62,7 @@ function PortalOutlet() {
   );
 }
 
-function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk }) {
+function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKiosk, tabletMode }) {
   const location = useLocation();
   const mainRef = useRef(null);
   const { user, hasPermission } = useAuth();
@@ -91,13 +92,13 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
     <>
       {!isKiosk && sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-navy-950/60 backdrop-blur-sm md:hidden"
+          className={`fixed inset-0 z-40 bg-navy-950/60 backdrop-blur-sm ${tabletMode ? '' : 'md:hidden'}`}
           onClick={onCloseSidebar}
           aria-hidden="true"
         />
       )}
 
-      <div className={`flex h-screen min-h-0 flex-col overflow-hidden ${isKiosk ? '' : 'md:ml-[var(--sidebar-width)]'}`}>
+      <div className={`flex h-screen min-h-0 flex-col overflow-hidden ${isKiosk || tabletMode ? '' : 'md:ml-[var(--sidebar-width)]'}`}>
         <header className={`z-30 flex h-[var(--header-height)] shrink-0 items-center justify-between border-b bg-navy-50 ${
           isKiosk ? 'border-gray-200 bg-white px-4 sm:px-6' : `border-navy-100 ${compactChrome ? 'gap-2 px-3 sm:px-4' : 'gap-3 px-4 sm:px-6'}`
         }`}
@@ -132,7 +133,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             <button
               type="button"
               onClick={onOpenSidebar}
-              className={`md:hidden rounded-lg text-navy-500 transition-colors hover:bg-navy-100 hover:text-navy-700 ${
+              className={`${tabletMode ? '' : 'md:hidden'} rounded-lg text-navy-500 transition-colors hover:bg-navy-100 hover:text-navy-700 ${
                 compactChrome ? 'p-1.5' : 'p-2'
               }`}
               aria-label="Open menu"
@@ -210,6 +211,8 @@ function ShellBody({ portalId, title }) {
   const location = useLocation();
   const toast = useToast();
   const isKiosk = isGateEntryKiosk(location.pathname);
+  const isTabletDevice = useIsTabletDevice();
+  const tabletMode = portalId === 'reception' && isTabletDevice && !isKiosk;
   const { user, permissions, roleSlugs, hasPermission } = useAuth();
   const isPublicRoute = location.pathname.startsWith('/visit/');
   const pwaEnabled = Boolean(user?.id) && !isPublicRoute;
@@ -237,6 +240,17 @@ function ShellBody({ portalId, title }) {
       delete document.documentElement.dataset.portal;
     };
   }, [portalId]);
+
+  useEffect(() => {
+    if (tabletMode) {
+      document.documentElement.dataset.device = 'tablet';
+    } else {
+      delete document.documentElement.dataset.device;
+    }
+    return () => {
+      delete document.documentElement.dataset.device;
+    };
+  }, [tabletMode]);
 
   useEffect(() => {
     if (!sidebarOpen) {
@@ -316,6 +330,7 @@ function ShellBody({ portalId, title }) {
             title={title}
             sidebarOpen={sidebarOpen}
             onCloseSidebar={closeSidebar}
+            forceOverlay={tabletMode}
           />
         )}
 
@@ -329,6 +344,7 @@ function ShellBody({ portalId, title }) {
                   onOpenSidebar={openSidebar}
                   onCloseSidebar={closeSidebar}
                   isKiosk={isKiosk}
+                  tabletMode={tabletMode}
                 />
               </AdminOrganisationProvider>
             ) : (
@@ -338,6 +354,7 @@ function ShellBody({ portalId, title }) {
                 onOpenSidebar={openSidebar}
                 onCloseSidebar={closeSidebar}
                 isKiosk={isKiosk}
+                tabletMode={tabletMode}
               />
             )}
           </PageHeaderProvider>

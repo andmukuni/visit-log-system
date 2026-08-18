@@ -270,7 +270,7 @@ function SidebarScrollNav({ navRevision, children }) {
   );
 }
 
-function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
+function AppSidebar({ title, sidebarOpen, onCloseSidebar, forceOverlay = false }) {
   const {
     routePrefix,
     primary,
@@ -374,11 +374,12 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
   }, [executiveTheme, portalId, navRevision]);
 
   const portalLabel = PORTALS[portalId]?.label || title || APP_NAME;
+  const dockClass = forceOverlay ? '' : 'md:translate-x-0';
 
   return (
     <aside
-      className={`theme-fixed fixed inset-y-0 left-0 z-50 flex min-h-0 w-[var(--sidebar-width)] flex-col bg-navy-950 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      className={`theme-fixed fixed inset-y-0 left-0 z-50 flex min-h-0 w-[var(--sidebar-width)] flex-col bg-navy-950 transform transition-transform duration-300 ease-in-out ${dockClass} ${
+        sidebarOpen ? 'translate-x-0' : `-translate-x-full ${dockClass}`
       }`}
     >
       <div className={`flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-navy-800 ${
@@ -415,7 +416,7 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
         <button
           type="button"
           onClick={onCloseSidebar}
-          className={`md:hidden rounded-lg text-navy-400 transition-colors hover:bg-navy-800 hover:text-white ${
+          className={`${forceOverlay ? '' : 'md:hidden'} rounded-lg text-navy-400 transition-colors hover:bg-navy-800 hover:text-white ${
             executiveTheme ? 'p-1' : 'p-1.5'
           }`}
           aria-label="Close menu"
