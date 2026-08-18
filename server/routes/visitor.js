@@ -22,6 +22,7 @@ import {
 } from '../hostApprovalService.js';
 import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
 import { markOverdueVisits } from '../visitOverdue.js';
+import { applyVisitReceptionCheckIn } from '../visitCheckInService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, applyVisitListMasking, formatVisitResponse } from '../visitResponseService.js';
@@ -1316,7 +1317,6 @@ export function createVisitsRouter() {
   });
 
   router.post('/:id/check-in', async (req, res) => {
-    const conn = await pool.getConnection();
     try {
       const userId = req.adminClaims?.sub;
       const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
@@ -1382,62 +1382,20 @@ export function createVisitsRouter() {
         });
       }
 
-      await conn.beginTransaction();
-
-      const [[activeDuplicate]] = await conn.query(
-        `SELECT id FROM visits vis
-         WHERE vis.visitor_id = ? AND vis.id != ? AND ${visitOnSitePredicate('vis')}
-         LIMIT 1 FOR UPDATE`,
-        [visit.visitor_id, visitId],
-      );
-      if (activeDuplicate) {
-        await conn.rollback();
-        return res.status(400).json({ ok: false, message: 'Visitor already has an active check-in.' });
-      }
-
-      let assignedBadge = badgeNumber?.trim() || null;
-      if (assignedBadge) {
-        const [[badge]] = await conn.query(
-          `SELECT * FROM badges WHERE organisation_id = ? AND badge_number = ? AND status = 'available' LIMIT 1 FOR UPDATE`,
-          [visit.organisation_id, assignedBadge],
-        );
-        if (!badge) {
-          await conn.rollback();
-          return res.status(400).json({ ok: false, message: 'Badge not available.' });
-        }
-        await conn.query(
-          `UPDATE badges SET status = 'issued', visit_id = ?, issued_at = NOW() WHERE id = ?`,
-          [visitId, badge.id],
-        );
-      }
-
-      const stampedZoneId = visit.zone_id
-        || await resolveHostZoneId(conn, visit.host_id)
-        || receptionZone.zoneIds[0]
-        || null;
-
-      const nextBadgeNumber = assignedBadge || visit.badge_number || null;
-
-      await conn.query(
-        `UPDATE visits
-         SET status = 'reception_check_in',
-             checked_in_at = NOW(),
-             badge_number = ?,
-             station_id = COALESCE(?, station_id),
-             zone_id = COALESCE(zone_id, ?),
-             updated_at = NOW()
-         WHERE id = ?`,
-        [nextBadgeNumber, scope?.station_id ?? null, stampedZoneId, visitId],
-      );
-
-      await conn.commit();
+      const checkInResult = await applyVisitReceptionCheckIn(pool, {
+        visit,
+        visitId,
+        scope,
+        badgeNumber,
+        receptionZone,
+      });
 
       await writeVisitEvent(pool, {
         visitId,
         eventType: 'reception_check_in',
         actorUserId: userId,
         stationId: scope?.station_id ?? null,
-        details: { badgeNumber: assignedBadge },
+        details: { badgeNumber: checkInResult.assignedBadge },
       });
 
       await writeAuditLog(pool, {
@@ -1466,10 +1424,7 @@ export function createVisitsRouter() {
 
       res.json({ ok: true, message: 'Visitor checked in.' });
     } catch (error) {
-      try { await conn.rollback(); } catch { /* ignore */ }
-      res.status(500).json({ ok: false, message: error.message });
-    } finally {
-      conn.release();
+      res.status(error.status || 500).json({ ok: false, message: error.message });
     }
   });
 
