@@ -28,6 +28,8 @@ import PlatformHealthPanel from '../../components/platform/PlatformHealthPanel';
 import { useAuth } from '../../context/AuthContext';
 import { formatNrcInput, isCompleteNrc, NRC_INPUT_MAX_LENGTH, NRC_PLACEHOLDER, printNrcVerificationSlip } from '../../utils/helpers';
 import { settingsApi } from '../../utils/settingsApi';
+import { notificationsApi } from '../../utils/visitorApi';
+import { isPushSupported, subscribeToPushNotifications } from '../../pwa/pushNotifications';
 
 const BASE_TABS = [
   { value: 'general', label: 'General', icon: Settings },
@@ -261,6 +263,8 @@ export default function AdminSettingsPage() {
   const [testingSms, setTestingSms] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
   const [generatingPushKeys, setGeneratingPushKeys] = useState(false);
+  const [subscribingPush, setSubscribingPush] = useState(false);
+  const [browserPushSubscribed, setBrowserPushSubscribed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -319,6 +323,14 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!isPushSupported()) return;
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => setBrowserPushSubscribed(Boolean(subscription)))
+      .catch(() => {});
+  }, [tab]);
 
   useEffect(() => {
     const urlTab = searchParams.get('tab');
@@ -589,6 +601,34 @@ export default function AdminSettingsPage() {
       toast.success('Public key copied.');
     } catch {
       toast.error('Could not copy — select and copy manually.');
+    }
+  };
+
+  const enablePushOnThisBrowser = async () => {
+    setSubscribingPush(true);
+    try {
+      const result = await subscribeToPushNotifications({
+        getVapidPublicKey: async () => ({ publicKey: await notificationsApi.getVapidPublicKey() }),
+        subscribePush: notificationsApi.subscribePush,
+      });
+      if (result.ok) {
+        setBrowserPushSubscribed(true);
+        toast.success('Push enabled on this browser.');
+        return;
+      }
+      if (result.reason === 'denied') {
+        toast.error('Notifications are blocked for this site. Allow them in your browser’s site settings, then try again.');
+      } else if (result.reason === 'unsupported') {
+        toast.error('This browser does not support push notifications.');
+      } else if (result.reason === 'no_vapid_key') {
+        toast.error('Save VAPID keys above first, then enable push on this browser.');
+      } else {
+        toast.error('Could not enable push on this browser.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Could not enable push on this browser.');
+    } finally {
+      setSubscribingPush(false);
     }
   };
 
@@ -1312,9 +1352,28 @@ export default function AdminSettingsPage() {
 
               <SettingsFormBlock title="Send test push" subtitle="Delivers to your own signed-in browser subscription">
                 <div className="space-y-4">
+                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-navy-50/40 px-3 py-2.5 text-xs">
+                    {browserPushSubscribed ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                        <CheckCircle2 size={14} aria-hidden="true" />
+                        This browser is subscribed
+                      </span>
+                    ) : (
+                      <span className="text-navy-500">This browser is not subscribed yet.</span>
+                    )}
+                  </div>
+                  <LoadingButton
+                    type="button"
+                    loading={subscribingPush}
+                    onClick={enablePushOnThisBrowser}
+                    variant={browserPushSubscribed ? 'secondary' : 'primary'}
+                    className="w-full sm:w-auto"
+                  >
+                    {browserPushSubscribed ? 'Re-subscribe this browser' : 'Enable on this browser'}
+                  </LoadingButton>
                   <p className="text-xs text-navy-500">
-                    Enable notifications for this browser from the notifications bell first, then send a test push
-                    to confirm delivery end-to-end.
+                    Requires saved VAPID keys and browser notification permission. Then send a test push to confirm
+                    delivery end-to-end.
                   </p>
                   <LoadingButton type="button" loading={testingPush} onClick={runPushTest} className="w-full sm:w-auto">
                     Send test
