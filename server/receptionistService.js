@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { hashPassword } from './auth.js';
 import { loadZoneInOrg } from './orgStructureService.js';
-import { resolveHostPrimaryZoneId } from './hostPortalService.js';
+import { resolveHostPrimaryZoneId, resolveHostZoneIds } from './hostPortalService.js';
 
 const RECEPTION_ROLE_SLUG = 'main_reception';
 
@@ -272,15 +272,33 @@ export function visitZoneFilterClause(zoneIds, {
   };
 }
 
-/** Host list filter — resolved host zone (host.zone_id, else office zone). */
+/**
+ * Host list filter — resolved host zone. Prefers the multi-zone host_zones
+ * assignment (same resolution order as resolveHostZoneIds); a host with no
+ * active host_zones rows falls back to the legacy hosts.zone_id column, then
+ * the host's office zone. Only checking hosts.zone_id here was a real bug: a
+ * host assigned to several zones via the admin UI has hosts.zone_id synced to
+ * just the *first* of them (syncHostZones), so a receptionist scoped to one
+ * of the host's other zones would never see that host in reception lists.
+ */
 export function hostZoneFilterClause(zoneIds, officeAlias = 'ofc', hostAlias = 'h') {
   if (!Array.isArray(zoneIds) || !zoneIds.length) {
     return { sql: ' AND 1=0', params: [] };
   }
   const placeholders = zoneIds.map(() => '?').join(', ');
   return {
-    sql: ` AND COALESCE(NULLIF(${hostAlias}.zone_id, ''), ${officeAlias}.zone_id) IN (${placeholders})`,
-    params: [...zoneIds],
+    sql: ` AND (CASE
+      WHEN EXISTS (
+        SELECT 1 FROM host_zones hz
+        WHERE hz.host_id = ${hostAlias}.id AND COALESCE(hz.status, 'active') = 'active'
+      ) THEN EXISTS (
+        SELECT 1 FROM host_zones hz2
+        WHERE hz2.host_id = ${hostAlias}.id AND COALESCE(hz2.status, 'active') = 'active'
+          AND hz2.zone_id IN (${placeholders})
+      )
+      ELSE COALESCE(NULLIF(${hostAlias}.zone_id, ''), ${officeAlias}.zone_id) IN (${placeholders})
+    END)`,
+    params: [...zoneIds, ...zoneIds],
   };
 }
 
@@ -425,17 +443,18 @@ export async function assertTargetInReceptionZones(pool, {
 
   if (hostId) {
     const [[host]] = await pool.query(
-      `SELECT h.id, COALESCE(NULLIF(h.zone_id, ''), ofc.zone_id) AS zone_id
-       FROM hosts h
-       LEFT JOIN offices ofc ON ofc.id = h.office_id
-       WHERE h.id = ? AND h.organisation_id = ? AND h.status = 'active'
-       LIMIT 1`,
+      `SELECT id FROM hosts WHERE id = ? AND organisation_id = ? AND status = 'active' LIMIT 1`,
       [hostId, organisationId],
     );
     if (!host) {
       return { ok: false, status: 400, message: 'Selected host was not found.' };
     }
-    if (!host.zone_id || !zoneSet.has(String(host.zone_id))) {
+    // Same resolution order as hostZoneFilterClause/resolveHostZoneIds — a
+    // host on multiple zones must match on any of them, not just the legacy
+    // hosts.zone_id column (which only ever holds the first-assigned zone).
+    const hostZoneIds = await resolveHostZoneIds(pool, host.id);
+    const inZone = hostZoneIds.some((id) => zoneSet.has(String(id)));
+    if (!inZone) {
       return {
         ok: false,
         status: 403,

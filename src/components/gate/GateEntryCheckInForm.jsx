@@ -539,14 +539,11 @@ export default function GateEntryCheckInForm({
     setStep(0);
   }, [section]);
 
-  const zoneIds = Array.isArray(refData?.scope?.zone_ids)
-    ? refData.scope.zone_ids.map(String)
-    : [];
-  const hosts = useMemo(() => (refData?.hosts || []).filter((host) => {
-    if (entryContext !== 'reception' || zoneIds.length === 0) return true;
-    const hostZone = host?.zone_id != null ? String(host.zone_id) : '';
-    return hostZone && zoneIds.includes(hostZone);
-  }), [entryContext, refData?.hosts, zoneIds.join('|')]);
+  // Reception's reference-data endpoint already scopes hosts server-side
+  // (host_zones-aware, since a host can belong to several zones) — no
+  // client-side re-filter here, since a single zone_id field can't represent
+  // that without wrongly dropping multi-zone hosts.
+  const hosts = refData?.hosts || [];
   const hostName = (id) => hosts.find((h) => h.id === id)?.name || '';
   const allowedHostIds = useMemo(() => hosts.map((host) => String(host.id)).join('|'), [hosts]);
 

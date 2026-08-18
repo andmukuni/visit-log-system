@@ -19,6 +19,7 @@ import {
   PORTALS,
 } from '../shared/portalNavigation.js';
 import {
+  assertTargetInReceptionZones,
   hostZoneFilterClause,
   visitInZoneClause,
   visitZoneFilterClause,
@@ -237,8 +238,79 @@ describe('reception zone filters', () => {
     assert.match(visit.sql, /ofc\.zone_id/);
     assert.match(visit.sql, /vis_ofc\.zone_id/);
     assert.deepEqual(visit.params, zones);
+    assert.match(host.sql, /host_zones/);
     assert.match(host.sql, /COALESCE\(NULLIF\(h\.zone_id/);
-    assert.deepEqual(host.params, zones);
+    assert.deepEqual(host.params, [...zones, ...zones]);
+  });
+});
+
+describe('assertTargetInReceptionZones — multi-zone host', () => {
+  /** Dispatches by a distinctive substring, most specific pattern first. */
+  function mockPool(handlers) {
+    return {
+      query: async (sql) => {
+        for (const [pattern, response] of handlers) {
+          if (sql.includes(pattern)) return response;
+        }
+        throw new Error(`Unhandled query in test mock: ${sql}`);
+      },
+    };
+  }
+
+  it('allows a host whose only matching zone lives in host_zones, not the legacy hosts.zone_id column', async () => {
+    // Reproduces the reported bug: a host assigned to two zones via the admin
+    // UI keeps hosts.zone_id pointed at just the first of them (syncHostZones).
+    // A receptionist scoped to the *second* zone must still be able to select
+    // this host — previously assertTargetInReceptionZones only ever checked
+    // the legacy single-zone column and rejected them.
+    const pool = mockPool([
+      [
+        "AND status = 'active' LIMIT 1",
+        [[{ id: 'host-1' }]],
+      ],
+      [
+        'zone_id, office_id, user_id',
+        [[{ id: 'host-1', organisation_id: 'org-1', zone_id: 'zone-a', office_id: null, user_id: 'u1' }]],
+      ],
+      [
+        'FROM host_zones hz',
+        [[{ id: 'zone-b', name: 'Zone B' }]],
+      ],
+    ]);
+
+    const result = await assertTargetInReceptionZones(pool, {
+      hostId: 'host-1',
+      organisationId: 'org-1',
+      zoneIds: ['zone-b'],
+    });
+
+    assert.equal(result.ok, true);
+  });
+
+  it('still rejects a host with no zone overlap at all', async () => {
+    const pool = mockPool([
+      [
+        "AND status = 'active' LIMIT 1",
+        [[{ id: 'host-1' }]],
+      ],
+      [
+        'zone_id, office_id, user_id',
+        [[{ id: 'host-1', organisation_id: 'org-1', zone_id: 'zone-a', office_id: null, user_id: 'u1' }]],
+      ],
+      [
+        'FROM host_zones hz',
+        [[]],
+      ],
+    ]);
+
+    const result = await assertTargetInReceptionZones(pool, {
+      hostId: 'host-1',
+      organisationId: 'org-1',
+      zoneIds: ['zone-c'],
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 403);
   });
 });
 

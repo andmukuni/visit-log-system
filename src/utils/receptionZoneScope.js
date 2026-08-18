@@ -1,14 +1,3 @@
-/** Keep only hosts whose resolved zone is in the receptionist zone set. */
-export function filterHostsByReceptionZones(hosts = [], zoneIds = []) {
-  const zones = (zoneIds || []).map(String).filter(Boolean);
-  if (!zones.length) return hosts || [];
-  const allowed = new Set(zones);
-  return (hosts || []).filter((host) => {
-    const hostZone = host?.zone_id != null ? String(host.zone_id) : '';
-    return hostZone && allowed.has(hostZone);
-  });
-}
-
 /** Keep only offices in the receptionist zone set. */
 export function filterOfficesByReceptionZones(offices = [], zoneIds = []) {
   const zones = (zoneIds || []).map(String).filter(Boolean);
@@ -32,9 +21,13 @@ export function filterDepartmentsForReceptionZone(departments = [], hosts = [], 
   return (departments || []).filter((department) => departmentIds.has(String(department.id)));
 }
 
+// Hosts are already zone-scoped server-side (host_zones-aware — a host can be
+// assigned to several zones, so there's no single zone_id column here that a
+// client-side re-filter could check without wrongly dropping multi-zone
+// hosts). Only offices, which have exactly one zone, get a client-side pass.
 export function scopeReceptionReferenceData(ref = {}) {
   const zoneIds = Array.isArray(ref?.scope?.zone_ids) ? ref.scope.zone_ids : [];
-  const hosts = filterHostsByReceptionZones(ref.hosts || [], zoneIds);
+  const hosts = ref.hosts || [];
   const offices = filterOfficesByReceptionZones(ref.offices || [], zoneIds);
   const departments = filterDepartmentsForReceptionZone(ref.departments || [], hosts, offices);
   return {
