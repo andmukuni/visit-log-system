@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import ExecutiveQuickAddSchedule from './ExecutiveQuickAddSchedule';
 import ExecutiveContactAutocomplete from './ExecutiveContactAutocomplete';
-import { LoadingButton, AlertVisitorPrompt } from '../ui';
+import { LoadingButton } from '../ui';
 import { useToast } from '../../context/ToastContext';
 import {
   buildDraftScheduleUpdate,
@@ -57,8 +57,6 @@ export default function ExecutiveQuickAddPopover({
   const [visible, setVisible] = useState(false);
   const [activeTimePicker, setActiveTimePicker] = useState(null);
   const [viewportPosition, setViewportPosition] = useState(null);
-  const [pendingPayload, setPendingPayload] = useState(null);
-  const [alertChoice, setAlertChoice] = useState(null);
   const popoverRef = useRef(null);
   const openedSessionIdRef = useRef(null);
   const previousScheduleRef = useRef(null);
@@ -95,8 +93,6 @@ export default function ExecutiveQuickAddPopover({
       setVisible(false);
       setActiveTimePicker(null);
       setViewportPosition(null);
-      setPendingPayload(null);
-      setAlertChoice(null);
       openedSessionIdRef.current = null;
       return undefined;
     }
@@ -142,16 +138,11 @@ export default function ExecutiveQuickAddPopover({
     if (!draft) return undefined;
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
-      if (pendingPayload) return;
       onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [draft, onClose, pendingPayload]);
-
-  useEffect(() => {
-    if (!saving) setAlertChoice(null);
-  }, [saving]);
+  }, [draft, onClose]);
 
   const position = useMemo(
     () => computeQuickAddPopoverPosition(draft?.slotRect),
@@ -255,7 +246,7 @@ export default function ExecutiveQuickAddPopover({
       toast.error('Visitor name is required.');
       return;
     }
-    setPendingPayload({
+    onSave({
       title: form.title.trim(),
       visitorName: form.visitorName.trim(),
       company: form.company.trim(),
@@ -267,12 +258,6 @@ export default function ExecutiveQuickAddPopover({
       scheduledAt: toIsoLocalDateTime(startAt),
       allDay: form.allDay,
     });
-  };
-
-  const handleAlertChoice = (alertVisitor) => {
-    if (!pendingPayload || saving) return;
-    setAlertChoice(alertVisitor);
-    onSave({ ...pendingPayload, alertVisitor });
   };
 
   const renderedLeft = viewportPosition?.left ?? position.left;
@@ -432,7 +417,6 @@ export default function ExecutiveQuickAddPopover({
               loading={saving}
               loadingLabel="Saving"
               variant="primary"
-              disabled={Boolean(pendingPayload) && !saving}
               className="rounded-full bg-[#1a73e8] hover:bg-[#1765cc] px-6"
             >
               Save
@@ -440,18 +424,6 @@ export default function ExecutiveQuickAddPopover({
           </div>
         </form>
       </div>
-      <AlertVisitorPrompt
-        open={Boolean(pendingPayload)}
-        visitorName={pendingPayload?.visitorName || form.visitorName}
-        saving={saving}
-        savingChoice={alertChoice}
-        onCancel={() => {
-          if (saving) return;
-          setPendingPayload(null);
-          setAlertChoice(null);
-        }}
-        onChoose={handleAlertChoice}
-      />
     </>,
     document.body,
   );

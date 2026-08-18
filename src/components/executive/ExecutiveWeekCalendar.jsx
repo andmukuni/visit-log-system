@@ -494,11 +494,7 @@ export default function ExecutiveWeekCalendar({
     setSaving(true);
     try {
       await executiveApi.createAppointment(payload);
-      toast.success(
-        payload.alertVisitor
-          ? 'Appointment added to your schedule. Visitor will be notified by SMS.'
-          : 'Appointment added to your schedule.',
-      );
+      toast.success('Appointment added to your schedule.');
       setDraft(null);
       onRefresh?.();
     } catch (err) {

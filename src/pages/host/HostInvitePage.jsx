@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageHeader, Card, FormField, SaveAction, PhoneInput, AlertVisitorPrompt } from '../../components/ui';
+import { PageHeader, Card, FormField, SaveAction, PhoneInput } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { hostApi } from '../../utils/visitorApi';
 import {
@@ -31,8 +31,6 @@ export default function HostInvitePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm());
-  const [pendingInvite, setPendingInvite] = useState(null);
-  const [alertChoice, setAlertChoice] = useState(null);
 
   const loadRef = useCallback(async () => {
     try {
@@ -69,37 +67,25 @@ export default function HostInvitePage() {
       return;
     }
 
-    setPendingInvite({
-      ...form,
-      phone: buildFullPhone(form.phoneCountry || DEFAULT_PHONE_COUNTRY, form.phone),
-      idType: 'nrc',
-      idNumber: nrc,
-      expectedAt: form.expectedAt || null,
-    });
-  };
-
-  const submitInvite = async (alertVisitor) => {
-    if (!pendingInvite || submitting) return;
-    setAlertChoice(alertVisitor);
     setSubmitting(true);
     try {
       const visit = await hostApi.inviteVisitor({
-        ...pendingInvite,
-        alertVisitor,
+        ...form,
+        phone: buildFullPhone(form.phoneCountry || DEFAULT_PHONE_COUNTRY, form.phone),
+        idType: 'nrc',
+        idNumber: nrc,
+        expectedAt: form.expectedAt || null,
       });
       const inviteMsg = visit.inviteUrl
         ? ` Pass code: ${visit.pass_code}. Self-service link: ${window.location.origin}${visit.inviteUrl}`
         : ` Pass code: ${visit.pass_code}`;
       const savedLabel = visit.status === 'approved' || visit.status === 'expected'
-        ? (alertVisitor ? 'Invitation sent.' : 'Appointment saved. Visitor was not notified.')
+        ? 'Appointment saved.'
         : 'Invitation submitted for approval.';
       toast.success(savedLabel + inviteMsg);
       setForm(emptyForm(refData?.defaultSiteId || refData?.sites?.[0]?.id || ''));
-      setPendingInvite(null);
-      setAlertChoice(null);
     } catch (err) {
       toast.error(err.message);
-      setAlertChoice(null);
     } finally {
       setSubmitting(false);
     }
@@ -115,7 +101,7 @@ export default function HostInvitePage() {
     <div>
       <PageHeader
         title="Invite Visitor"
-        subtitle="Pre-register an expected guest. You choose whether to send them an SMS."
+        subtitle="Pre-register an expected guest. They'll be notified once reception checks them in."
         breadcrumbs={[{ label: 'Host', to: '/host' }, { label: 'Invite Visitor' }]}
       />
 
@@ -158,19 +144,6 @@ export default function HostInvitePage() {
           </form>
         )}
       </Card>
-
-      <AlertVisitorPrompt
-        open={Boolean(pendingInvite)}
-        visitorName={pendingInvite?.fullName || form.fullName}
-        saving={submitting}
-        savingChoice={alertChoice}
-        onCancel={() => {
-          if (submitting) return;
-          setPendingInvite(null);
-          setAlertChoice(null);
-        }}
-        onChoose={submitInvite}
-      />
     </div>
   );
 }

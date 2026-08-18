@@ -144,11 +144,7 @@ export default function ExecutiveNewAppointmentPage() {
     setSaving(true);
     try {
       await executiveApi.createAppointment(payload);
-      toast.success(
-        payload.alertVisitor
-          ? 'Appointment saved. Visitor will be notified by SMS.'
-          : 'Appointment saved.',
-      );
+      toast.success('Appointment saved.');
       navigate('/host/appointments');
     } catch (err) {
       toast.error(err?.message || 'Could not save appointment.');

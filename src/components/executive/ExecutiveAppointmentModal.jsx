@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { LoadingButton, PhoneInput, SegmentedControl, AlertVisitorPrompt } from '../ui';
+import { LoadingButton, PhoneInput, SegmentedControl } from '../ui';
 import { useToast } from '../../context/ToastContext';
 import ExecutiveDatePicker from './ExecutiveDatePicker';
 import ExecutiveFindTimePanel from './ExecutiveFindTimePanel';
@@ -153,8 +153,6 @@ export default function ExecutiveAppointmentModal({
 }) {
   const [activeTab, setActiveTab] = useState('details');
   const [openDatePicker, setOpenDatePicker] = useState(null);
-  const [pendingPayload, setPendingPayload] = useState(null);
-  const [alertChoice, setAlertChoice] = useState(null);
   const previousScheduleRef = useRef(null);
   const toast = useToast();
   const isPage = variant === 'page';
@@ -163,8 +161,6 @@ export default function ExecutiveAppointmentModal({
     if (!open) {
       setActiveTab('details');
       setOpenDatePicker(null);
-      setPendingPayload(null);
-      setAlertChoice(null);
       previousScheduleRef.current = null;
     }
   }, [open]);
@@ -177,7 +173,6 @@ export default function ExecutiveAppointmentModal({
 
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
-      if (pendingPayload) return;
       if (openDatePicker) {
         setOpenDatePicker(null);
         return;
@@ -190,11 +185,7 @@ export default function ExecutiveAppointmentModal({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onClose, isPage, openDatePicker, pendingPayload]);
-
-  useEffect(() => {
-    if (!saving) setAlertChoice(null);
-  }, [saving]);
+  }, [open, onClose, isPage, openDatePicker]);
 
   if (!open || !draft) return null;
 
@@ -285,7 +276,7 @@ export default function ExecutiveAppointmentModal({
       toast.error('Enter a complete NRC (e.g. 123456/78/9).');
       return;
     }
-    setPendingPayload({
+    onSave({
       title: form.title.trim(),
       visitorName: form.visitorName.trim(),
       company: form.company.trim(),
@@ -299,12 +290,6 @@ export default function ExecutiveAppointmentModal({
       scheduledAt: toIsoLocalDateTime(startAt),
       allDay: form.allDay,
     });
-  };
-
-  const handleAlertChoice = (alertVisitor) => {
-    if (!pendingPayload || saving) return;
-    setAlertChoice(alertVisitor);
-    onSave({ ...pendingPayload, alertVisitor });
   };
 
   const formClassName = isPage
@@ -456,7 +441,6 @@ export default function ExecutiveAppointmentModal({
               loading={saving}
               loadingLabel="Saving"
               variant="primary"
-              disabled={Boolean(pendingPayload) && !saving}
               className="mt-0.5 shrink-0 border-navy-800 bg-navy-800 px-5 hover:bg-navy-700"
             >
               Save
@@ -688,37 +672,18 @@ export default function ExecutiveAppointmentModal({
       </form>
   );
 
-  const alertPrompt = (
-    <AlertVisitorPrompt
-      open={Boolean(pendingPayload)}
-      visitorName={pendingPayload?.visitorName || form.visitorName}
-      saving={saving}
-      savingChoice={alertChoice}
-      onCancel={() => {
-        if (saving) return;
-        setPendingPayload(null);
-        setAlertChoice(null);
-      }}
-      onChoose={handleAlertChoice}
-    />
-  );
-
   if (isPage) {
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         {editor}
-        {alertPrompt}
       </div>
     );
   }
 
   return createPortal(
-    <>
-      <div className="fixed inset-0 z-[70] overflow-y-auto bg-navy-950/45 px-3 py-6 backdrop-blur-[2px] sm:px-6 sm:py-10 animate-in fade-in duration-200">
-        {editor}
-      </div>
-      {alertPrompt}
-    </>,
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-navy-950/45 px-3 py-6 backdrop-blur-[2px] sm:px-6 sm:py-10 animate-in fade-in duration-200">
+      {editor}
+    </div>,
     document.body,
   );
 }
