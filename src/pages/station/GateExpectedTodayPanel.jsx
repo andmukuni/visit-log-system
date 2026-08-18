@@ -71,8 +71,8 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
         title="Visitors today"
         subtitle={
           isVehicle
-            ? 'All expected vehicle guests today — VIP, VVIP, and general hosts'
-            : 'All expected walk-in guests today — VIP, VVIP, and general hosts'
+            ? 'All vehicle guests scheduled for today — every status'
+            : 'All walk-in guests scheduled for today — every status'
         }
         actions={(
           <LoadingButton
@@ -92,9 +92,9 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-navy-200 bg-navy-50/50 px-4 py-10 text-center">
             <CalendarClock className="mx-auto mb-2 text-navy-300" size={28} aria-hidden="true" />
-            <p className="text-sm font-medium text-navy-700">No expected {isVehicle ? 'vehicle' : 'walk-in'} guests today</p>
+            <p className="text-sm font-medium text-navy-700">No {isVehicle ? 'vehicle' : 'walk-in'} guests scheduled today</p>
             <p className="mt-1 text-xs text-navy-500">
-              Host appointments and approved visits for today will appear here.
+              Host appointments and visits for today will appear here at every stage.
             </p>
           </div>
         ) : (
@@ -130,7 +130,7 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
                   </div>
                   <div className="shrink-0 text-right sm:pl-4">
                     <p className="text-sm font-semibold text-cyan-800">{formatTime(when)}</p>
-                    <p className="text-[11px] text-navy-400">Expected</p>
+                    <p className="text-[11px] text-navy-400">Scheduled</p>
                     {row.pass_code ? (
                       <p className="mt-0.5 font-mono text-[11px] text-navy-500">{row.pass_code}</p>
                     ) : null}

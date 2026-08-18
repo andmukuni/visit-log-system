@@ -13,9 +13,9 @@ describe('visit lookup checkout purpose', () => {
 });
 
 describe('gate checkout action labels', () => {
-  it('labels confirm-exit separately from first checkout', () => {
+  it('uses a single checkout label for gate exit', () => {
     assert.equal(getGateCheckoutActionLabel('waiting').label, 'Check out');
-    assert.equal(getGateCheckoutActionLabel('checked_out').label, 'Confirm left premises');
+    assert.equal(getGateCheckoutActionLabel('checked_out').label, 'Check out');
   });
 });
 

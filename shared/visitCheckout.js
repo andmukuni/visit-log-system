@@ -66,12 +66,8 @@ export function isGateExitEligible(statusOrVisit, visit) {
   return isOnSiteExceptionStatus(status, resolveCheckoutVisit(statusOrVisit, visit));
 }
 
-/** Gate / station checkout button copy — differs for confirm-exit vs first checkout. */
+/** Gate / station checkout button copy. */
 export function getGateCheckoutActionLabel(statusOrVisit) {
-  const status = normalizeCheckoutStatus(statusOrVisit);
-  if (status === 'checked_out') {
-    return { label: 'Confirm left premises', loadingLabel: 'Confirming exit…' };
-  }
   return { label: 'Check out', loadingLabel: 'Checking out…' };
 }
 

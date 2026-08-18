@@ -815,6 +815,9 @@ const SECURITY_SCOPE_JOINS = `
   LEFT JOIN offices sec_ofc ON sec_ofc.id = COALESCE(vis.office_id, h.office_id)
 `;
 
+/** Visits dropped from gate "visitors today" — not scheduled guests. */
+const GATE_EXPECTED_EXCLUDED_STATUSES = ['cancelled', 'rejected', 'denied', 'expired'];
+
 async function resolveVisitsRouterAccess(req) {
   const userId = req.adminClaims?.sub;
   const viewer = await resolveViewerAccessContext(pool, { userId, claims: req.adminClaims || {} });
@@ -947,8 +950,10 @@ export function createVisitsRouter() {
       const access = await resolveVisitsRouterAccess(req);
       const range = String(req.query.range || 'week').toLowerCase();
       const params = [scope.organisation_id];
+      const excluded = GATE_EXPECTED_EXCLUDED_STATUSES.map(() => '?').join(', ');
       let where = `vis.organisation_id = ?
-        AND vis.status IN ('expected', 'approved', 'pre_registered')`;
+        AND vis.status NOT IN (${excluded})`;
+      params.push(...GATE_EXPECTED_EXCLUDED_STATUSES);
 
       if (scope.site_id) {
         where += ' AND vis.site_id = ?';
@@ -1436,6 +1441,15 @@ export function createVisitsRouter() {
       }
 
       const { visit, scope, userId } = loaded;
+      if (visit.status === 'completed' || visit.status === 'left_premises') {
+        return res.json({ ok: true, message: 'Visit is already completed.' });
+      }
+
+      if (visit.status === 'checked_out') {
+        await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
+        return res.json({ ok: true, message: 'Visitor marked as completed.' });
+      }
+
       if (!isGateCheckoutEligible(visit)) {
         return res.status(400).json({ ok: false, message: 'Visitor is not checked in.' });
       }
@@ -1472,8 +1486,9 @@ export function createVisitsRouter() {
 
       await notifyVisitEvent(pool, { visitId: visit.id, eventType: 'checked_out', actorUserId: userId });
       await refreshHostAvailabilityAfterVisit(pool, visit);
+      await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
 
-      res.json({ ok: true, message: 'Visitor checked out.' });
+      res.json({ ok: true, message: 'Visitor checked out and marked completed.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

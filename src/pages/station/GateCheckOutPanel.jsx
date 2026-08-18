@@ -100,16 +100,10 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
 
   const handleCheckOut = async (row) => {
     const visitId = row.id;
-    const alreadyCheckedOut = row.status === 'checked_out';
     setCheckingOut(visitId);
     try {
-      if (alreadyCheckedOut) {
-        await visitorApi.markLeftPremises(visitId);
-        toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} marked as left premises.`);
-      } else {
-        await visitorApi.checkOutVisit(visitId);
-        toast.success(`${isVehicle ? 'Vehicle' : 'Visitor'} checked out successfully.`);
-      }
+      await visitorApi.checkOutVisit(visitId);
+      toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} checked out.`);
       setVisits((prev) => prev.filter((v) => v.id !== visitId));
     } catch (err) {
       toast.error(err.message);
