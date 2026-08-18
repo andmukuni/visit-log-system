@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import ReceptionVisitRowActions from '../../components/reception/ReceptionVisitRowActions';
 import {
   PageHeader,
   Card,
@@ -9,7 +9,6 @@ import {
   VisitStatusBadge,
   Spinner,
   FilterPills,
-  IconButton,
   ActionToolbar,
   RefreshAction,
   AddAction,
@@ -21,7 +20,6 @@ import {
   filterVisitsByReceptionZones,
   scopeReceptionReferenceData,
 } from '../../utils/receptionZoneScope';
-import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All', dot: 'bg-navy-400' },
@@ -110,26 +108,11 @@ export default function ReceptionVisitorLogsPage() {
       label: '',
       align: 'right',
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-1">
-          {isCheckoutEligible(row) && (
-            <IconButton
-              icon={LogOut}
-              label="Check out"
-              tooltip="Check out"
-              size="sm"
-              variant="ghost"
-              loading={checkingOutId === row.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                handleCheckOut(row);
-              }}
-            />
-          )}
-          <Link to={`/reception/visitors/${row.id}`} aria-label={`View ${row.full_name}`}>
-            <IconButton icon={Eye} label="View" tooltip="View" size="sm" variant="ghost" />
-          </Link>
-        </div>
+        <ReceptionVisitRowActions
+          row={row}
+          onCheckOut={handleCheckOut}
+          checkingOut={checkingOutId === row.id}
+        />
       ),
     },
   ];

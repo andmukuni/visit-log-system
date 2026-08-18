@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarDays, Eye, LogIn, UserPlus, Users } from 'lucide-react';
+import { CalendarDays, LogIn, UserPlus, Users } from 'lucide-react';
 import {
   PageHeader,
   Spinner,
@@ -13,6 +13,7 @@ import {
 import GateCheckInPanel from '../station/GateCheckInPanel';
 import GateEntryCheckInForm from '../../components/gate/GateEntryCheckInForm';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
+import ReceptionVisitRowActions from '../../components/reception/ReceptionVisitRowActions';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
@@ -365,18 +366,10 @@ export default function ReceptionCheckInPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 onKeyDown={(e) => e.stopPropagation()}
                               >
-                                <Link
-                                  to={`/reception/visitors/${visitId}`}
-                                  aria-label={`View ${row.visitor_name || 'visitor'}`}
-                                >
-                                  <IconButton
-                                    icon={Eye}
-                                    label="View"
-                                    tooltip="View"
-                                    size="sm"
-                                    variant="ghost"
-                                  />
-                                </Link>
+                                <ReceptionVisitRowActions
+                                  row={row}
+                                  visitId={visitId}
+                                />
                               </div>
                             </li>
                           );
