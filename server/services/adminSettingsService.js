@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import pool from '../db.js';
 import { writeAuditLog } from '../auditService.js';
 import { APP_NAME, EMAIL_FROM_NAME_DEFAULT } from '../../shared/branding.js';
@@ -13,6 +14,7 @@ export const SETTING_KEYS = {
   GENERAL: 'general',
   DOJAH: 'dojah',
   SMS: 'sms',
+  PUSH: 'push',
 };
 
 export { VISITOR_NOTIFICATION_KEYS };
@@ -76,6 +78,13 @@ export const DEFAULT_SMS = {
   sender_id: '',
 };
 
+const DEFAULT_PUSH = {
+  enabled: false,
+  subject: 'mailto:noreply@visitors.local',
+  public_key: '',
+  private_key: '',
+};
+
 const DEFAULTS = {
   [SETTING_KEYS.NOTIFICATIONS]: DEFAULT_NOTIFICATIONS,
   [SETTING_KEYS.SMTP]: DEFAULT_SMTP,
@@ -83,6 +92,7 @@ const DEFAULTS = {
   [SETTING_KEYS.GENERAL]: DEFAULT_GENERAL,
   [SETTING_KEYS.DOJAH]: DEFAULT_DOJAH,
   [SETTING_KEYS.SMS]: DEFAULT_SMS,
+  [SETTING_KEYS.PUSH]: DEFAULT_PUSH,
 };
 
 function parseJson(value, fallback) {
@@ -308,6 +318,63 @@ function maskSmsForClient(stored, effective) {
   };
 }
 
+function envPushConfig() {
+  const publicKey = String(process.env.VAPID_PUBLIC_KEY || '').trim();
+  const privateKey = String(process.env.VAPID_PRIVATE_KEY || '').trim();
+  if (!publicKey || !privateKey) return null;
+  return {
+    enabled: true,
+    subject: String(process.env.VAPID_SUBJECT || DEFAULT_PUSH.subject).trim(),
+    public_key: publicKey,
+    private_key: privateKey,
+    source: 'env',
+  };
+}
+
+export async function getEffectivePushConfig() {
+  const stored = await getSetting(SETTING_KEYS.PUSH);
+  if (stored.enabled && stored.public_key && stored.private_key) {
+    return { ...stored, source: 'database' };
+  }
+  const envConfig = envPushConfig();
+  if (envConfig) return envConfig;
+  return { ...DEFAULT_PUSH, source: 'none' };
+}
+
+function maskPushForClient(stored, effective) {
+  return {
+    enabled: Boolean(stored.enabled),
+    subject: stored.subject || DEFAULT_PUSH.subject,
+    public_key: stored.public_key || '',
+    private_key_set: Boolean(stored.private_key),
+    configured: effective.source !== 'none' && Boolean(effective.public_key && effective.private_key),
+    source: effective.source,
+  };
+}
+
+// VAPID keys are a P-256 keypair: uncompressed 65-byte public point, 32-byte private scalar.
+function validateVapidKeyPair(publicKey, privateKey) {
+  const pub = Buffer.from(publicKey, 'base64url');
+  const priv = Buffer.from(privateKey, 'base64url');
+  if (pub.length !== 65 || pub[0] !== 4) {
+    throw new Error('VAPID public key must be 87–88 URL-safe base64 characters (65-byte uncompressed P-256 point).');
+  }
+  if (priv.length !== 32) {
+    throw new Error('VAPID private key must be 43 URL-safe base64 characters (32 bytes).');
+  }
+  let derived;
+  try {
+    const ecdh = crypto.createECDH('prime256v1');
+    ecdh.setPrivateKey(priv);
+    derived = ecdh.getPublicKey();
+  } catch {
+    throw new Error('VAPID private key is not a valid P-256 key.');
+  }
+  if (!derived.equals(pub)) {
+    throw new Error('VAPID public and private keys do not match. Paste both halves of the same pair, or generate a new one.');
+  }
+}
+
 async function findUserById(userId) {
   const [[row]] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
   return row || null;
@@ -328,19 +395,21 @@ export async function getAdminSettingsContext(claims) {
     throw err;
   }
 
-  const [notifications, security, general, smtpStored, dojahStored, smsStored] = await Promise.all([
+  const [notifications, security, general, smtpStored, dojahStored, smsStored, pushStored] = await Promise.all([
     getSetting(SETTING_KEYS.NOTIFICATIONS),
     getSetting(SETTING_KEYS.SECURITY),
     getSetting(SETTING_KEYS.GENERAL),
     getSetting(SETTING_KEYS.SMTP),
     getSetting(SETTING_KEYS.DOJAH),
     getSetting(SETTING_KEYS.SMS),
+    getSetting(SETTING_KEYS.PUSH),
   ]);
 
-  const [effectiveSmtp, effectiveDojah, effectiveSms] = await Promise.all([
+  const [effectiveSmtp, effectiveDojah, effectiveSms, effectivePush] = await Promise.all([
     getEffectiveSmtpConfig(),
     getEffectiveDojahConfig(),
     getEffectiveSmsConfig(),
+    getEffectivePushConfig(),
   ]);
 
   const [[deliveryStats]] = await pool.query(
@@ -359,6 +428,7 @@ export async function getAdminSettingsContext(claims) {
     smtp: maskSmtpForClient(smtpStored, effectiveSmtp),
     dojah: maskDojahForClient(dojahStored, effectiveDojah),
     sms: maskSmsForClient(smsStored, effectiveSms),
+    push: maskPushForClient(pushStored, effectivePush),
     stats: {
       email_pending: Number(deliveryStats?.pending || 0),
       email_sent: Number(deliveryStats?.delivered || 0),
@@ -542,6 +612,35 @@ export async function updateDojahSettings(claims, payload = {}) {
   await setSetting(SETTING_KEYS.DOJAH, next, claims?.sub);
   const effective = await getEffectiveDojahConfig();
   return maskDojahForClient(next, effective);
+}
+
+export async function updatePushSettings(claims, payload = {}) {
+  const current = await getSetting(SETTING_KEYS.PUSH);
+  const next = { ...current };
+
+  if (payload.enabled !== undefined) next.enabled = Boolean(payload.enabled);
+  if (payload.subject !== undefined) {
+    const subject = String(payload.subject || '').replace(/[<>\s]/g, '');
+    if (subject && !/^(mailto:[^@]+@.+|https:\/\/.+)$/i.test(subject)) {
+      throw new Error('VAPID subject must be a mailto: email address or an https:// URL.');
+    }
+    next.subject = subject || DEFAULT_PUSH.subject;
+  }
+  if (payload.public_key !== undefined) next.public_key = String(payload.public_key || '').trim();
+  if (payload.private_key !== undefined && String(payload.private_key).trim() !== '') {
+    next.private_key = String(payload.private_key).trim();
+  }
+
+  if (next.enabled && (!next.public_key || !next.private_key)) {
+    throw new Error('VAPID public and private keys are required when Web Push is enabled.');
+  }
+  if (next.public_key && next.private_key) {
+    validateVapidKeyPair(next.public_key, next.private_key);
+  }
+
+  await setSetting(SETTING_KEYS.PUSH, next, claims?.sub);
+  const effective = await getEffectivePushConfig();
+  return maskPushForClient(next, effective);
 }
 
 export async function updateSmtpSettings(claims, payload = {}) {

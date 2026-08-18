@@ -1,15 +1,16 @@
 import {
   getEffectiveSmtpConfig,
   getEffectiveSmsConfig,
+  resolveAppName,
   getGeneralSettings,
   isSmtpConfigured,
   isSmsConfigured,
-  resolveAppName,
   resolveSmtpPass,
 } from './adminSettingsService.js';
 import { sendOntechSms, normalizeZmPhone } from '../adapters/ontechSmsClient.js';
 import { resolveEmailFromName } from '../adapters/emailAdapter.js';
 import { APP_NAME } from '../../shared/branding.js';
+import pool from '../db.js';
 
 function formatSmtpError(error) {
   const code = error?.code || '';
@@ -146,4 +147,44 @@ export async function testSmsConnection({ phone, message } = {}) {
     provider: result.provider,
     messageId: result.messageId,
   };
+}
+
+export async function sendTestPush(claims) {
+  const userId = claims?.sub;
+  if (!userId) {
+    const err = new Error('Authentication required.');
+    err.status = 401;
+    throw err;
+  }
+
+  const { resolveVapidConfig, listSubscriptionsForUser, sendPushToUser } = await import('../pushSubscriptionService.js');
+  const config = await resolveVapidConfig();
+  if (!config.configured) {
+    const err = new Error('Web Push is not configured. Save VAPID keys or set VAPID_* environment variables.');
+    err.status = 400;
+    throw err;
+  }
+
+  const subscriptions = await listSubscriptionsForUser(pool, userId);
+  if (!subscriptions.length) {
+    const err = new Error('No push subscription found for your account. Enable notifications for this browser first.');
+    err.status = 400;
+    throw err;
+  }
+
+  const appName = await resolveAppName();
+  const result = await sendPushToUser(pool, {
+    userId,
+    title: `${appName} — test notification`,
+    body: 'Web Push delivery is working.',
+    metadata: {},
+  });
+
+  if (!result.ok) {
+    const err = new Error('Push test failed to deliver to any subscription.');
+    err.status = 400;
+    throw err;
+  }
+
+  return { message: `Test push sent to ${result.delivered} device${result.delivered === 1 ? '' : 's'}.` };
 }

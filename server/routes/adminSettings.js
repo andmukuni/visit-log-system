@@ -8,8 +8,9 @@ import {
   updateSmtpSettings,
   updateDojahSettings,
   updateSmsSettings,
+  updatePushSettings,
 } from '../services/adminSettingsService.js';
-import { sendTestEmail, testSmsConnection } from '../services/settingsTestService.js';
+import { sendTestEmail, testSmsConnection, sendTestPush } from '../services/settingsTestService.js';
 import { testDojahConnection } from '../services/dojahService.js';
 
 export function createAdminSettingsRouter() {
@@ -101,6 +102,34 @@ export function createAdminSettingsRouter() {
     try {
       const data = await updateSmsSettings(req.adminClaims, req.body || {});
       res.json({ ok: true, data });
+    } catch (error) {
+      res.status(error.status || 400).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.patch('/settings/push', async (req, res) => {
+    try {
+      const data = await updatePushSettings(req.adminClaims, req.body || {});
+      res.json({ ok: true, data });
+    } catch (error) {
+      res.status(error.status || 400).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/settings/push/generate', async (req, res) => {
+    try {
+      const webpush = (await import('web-push')).default;
+      const keys = webpush.generateVAPIDKeys();
+      res.json({ ok: true, data: { public_key: keys.publicKey, private_key: keys.privateKey } });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/settings/push/test', async (req, res) => {
+    try {
+      const result = await sendTestPush(req.adminClaims);
+      res.json({ ok: true, ...result });
     } catch (error) {
       res.status(error.status || 400).json({ ok: false, message: error.message });
     }

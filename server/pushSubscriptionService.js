@@ -1,7 +1,7 @@
 import webpush from 'web-push';
 import { generateId } from './visitorSchema.js';
 import { resolveNotificationDeepLink } from '../shared/notificationDeepLinks.js';
-import { getNotificationSettings } from './services/adminSettingsService.js';
+import { getNotificationSettings, getEffectivePushConfig } from './services/adminSettingsService.js';
 import { getAppBaseUrl } from './adapters/deliveryConfig.js';
 import { LOGO_PATH } from '../shared/branding.js';
 
@@ -13,8 +13,23 @@ export function getVapidConfig() {
   return { publicKey, privateKey, subject, configured };
 }
 
-export function ensureWebPushConfigured() {
-  const config = getVapidConfig();
+/** Effective VAPID config: System Settings (database) first, VAPID_* env vars as fallback. */
+export async function resolveVapidConfig() {
+  const effective = await getEffectivePushConfig();
+  const publicKey = String(effective.public_key || '').trim();
+  const privateKey = String(effective.private_key || '').trim();
+  const subject = String(effective.subject || 'mailto:noreply@visitors.local').trim();
+  return {
+    publicKey,
+    privateKey,
+    subject,
+    configured: effective.source !== 'none' && Boolean(publicKey && privateKey),
+    source: effective.source,
+  };
+}
+
+export async function ensureWebPushConfigured() {
+  const config = await resolveVapidConfig();
   if (!config.configured) return config;
   webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
   return config;
@@ -139,7 +154,7 @@ export async function sendPushToUser(pool, {
   categoryKey = null,
   orgSettings = null,
 }) {
-  const config = ensureWebPushConfigured();
+  const config = await ensureWebPushConfigured();
   if (!config.configured || !userId) {
     return { ok: false, skipped: true, reason: 'push_not_configured' };
   }

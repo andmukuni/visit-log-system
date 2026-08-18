@@ -95,8 +95,8 @@ export function createNotificationsRouter() {
 
   router.get('/push/vapid-public-key', async (req, res) => {
     try {
-      const { getVapidConfig } = await import('../pushSubscriptionService.js');
-      const config = getVapidConfig();
+      const { resolveVapidConfig } = await import('../pushSubscriptionService.js');
+      const config = await resolveVapidConfig();
       if (!config.configured) {
         return res.status(503).json({ ok: false, message: 'Push notifications are not configured on this server.' });
       }

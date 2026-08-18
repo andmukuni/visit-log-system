@@ -4,10 +4,13 @@ import {
   Activity,
   AlertCircle,
   Bell,
+  BellRing,
   CheckCircle2,
+  Copy,
   Mail,
   MessageSquare,
   Printer,
+  RefreshCw,
   ScanFace,
   Settings,
   Shield,
@@ -34,6 +37,7 @@ const BASE_TABS = [
   { value: 'smtp', label: 'SMTP', icon: Mail },
   { value: 'dojah', label: 'Dojah KYC', icon: ScanFace },
   { value: 'sms', label: 'SMS', icon: MessageSquare },
+  { value: 'push', label: 'Push', icon: BellRing },
 ];
 
 const HEALTH_TAB = { value: 'health', label: 'System Health', icon: Activity };
@@ -232,6 +236,7 @@ export default function AdminSettingsPage() {
   const [smtpForm, setSmtpForm] = useState({});
   const [dojahForm, setDojahForm] = useState({});
   const [smsForm, setSmsForm] = useState({});
+  const [pushForm, setPushForm] = useState({});
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
@@ -249,10 +254,13 @@ export default function AdminSettingsPage() {
   const [savingSmtp, setSavingSmtp] = useState(false);
   const [savingDojah, setSavingDojah] = useState(false);
   const [savingSms, setSavingSms] = useState(false);
+  const [savingPush, setSavingPush] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [testingDojah, setTestingDojah] = useState(false);
   const [testingSms, setTestingSms] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
+  const [generatingPushKeys, setGeneratingPushKeys] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -293,6 +301,12 @@ export default function AdminSettingsPage() {
         base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/smsservice',
         access_id: '',
         sender_id: data?.sms?.sender_id || '',
+      });
+      setPushForm({
+        enabled: data?.push?.enabled || false,
+        subject: data?.push?.subject || '',
+        public_key: data?.push?.public_key || '',
+        private_key: '',
       });
       setTestEmail(data?.user?.email || user?.email || '');
     } catch (err) {
@@ -532,6 +546,61 @@ export default function AdminSettingsPage() {
       toast.error(err.message || 'SMS test failed.');
     } finally {
       setTestingSms(false);
+    }
+  };
+
+  const savePush = async (event) => {
+    event.preventDefault();
+    setSavingPush(true);
+    try {
+      const payload = { ...pushForm };
+      if (!payload.private_key) delete payload.private_key;
+      await settingsApi.updatePush(payload);
+      toast.success('Push notification settings saved.');
+      setPushForm((prev) => ({ ...prev, private_key: '' }));
+      await load();
+    } catch (err) {
+      toast.error(err.message || 'Could not save push settings.');
+    } finally {
+      setSavingPush(false);
+    }
+  };
+
+  const generatePushKeys = async () => {
+    setGeneratingPushKeys(true);
+    try {
+      const keys = await settingsApi.generatePushKeys();
+      setPushForm((prev) => ({
+        ...prev,
+        public_key: keys.public_key,
+        private_key: keys.private_key,
+      }));
+      toast.success('New VAPID key pair generated. Review, then save to apply.');
+    } catch (err) {
+      toast.error(err.message || 'Could not generate VAPID keys.');
+    } finally {
+      setGeneratingPushKeys(false);
+    }
+  };
+
+  const copyPushPublicKey = async () => {
+    try {
+      await navigator.clipboard.writeText(pushForm.public_key || '');
+      toast.success('Public key copied.');
+    } catch {
+      toast.error('Could not copy — select and copy manually.');
+    }
+  };
+
+  const runPushTest = async () => {
+    setTestingPush(true);
+    try {
+      const json = await settingsApi.testPush();
+      toast.success(json.message || 'Test push sent.');
+    } catch (err) {
+      toast.error(err.message || 'Push test failed.');
+    } finally {
+      setTestingPush(false);
     }
   };
 
@@ -1155,6 +1224,99 @@ export default function AdminSettingsPage() {
                     placeholder="Visitors Log SMS test — connection successful."
                   />
                   <LoadingButton type="button" loading={testingSms} onClick={runSmsTest} className="w-full sm:w-auto">
+                    Send test
+                  </LoadingButton>
+                </div>
+              </SettingsFormBlock>
+            </div>
+          </div>
+        )}
+
+        {tab === 'push' && (
+          <div className="space-y-6">
+            <IntegrationStatusBanner
+              icon={BellRing}
+              title="Web Push"
+              description="Deliver browser and installed-app push notifications using VAPID keys."
+              configured={settings?.push?.configured}
+              enabled={pushForm.enabled}
+              source={settings?.push?.source}
+              envVars="VAPID_*"
+            />
+
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <SettingsFormBlock title="VAPID keys" subtitle="A P-256 key pair identifying this server to push services">
+                <form onSubmit={savePush} className="space-y-4">
+                  <ToggleRow
+                    label="Enable Web Push"
+                    description="Turn off to stop sending browser/app push notifications."
+                    checked={Boolean(pushForm.enabled)}
+                    onChange={(value) => setPushForm({ ...pushForm, enabled: value })}
+                  />
+                  <FormField
+                    label="Subject"
+                    name="subject"
+                    value={pushForm.subject}
+                    onChange={(e) => setPushForm({ ...pushForm, subject: e.target.value })}
+                    placeholder="mailto:systems.wonderfulgroup@gmail.com"
+                    helpText="A mailto: address or https:// URL push services can use to contact you."
+                  />
+                  <FormField
+                    label="Public key"
+                    name="public_key"
+                    value={pushForm.public_key}
+                    onChange={(e) => setPushForm({ ...pushForm, public_key: e.target.value })}
+                    helpText="Sent to browsers to authorize subscriptions."
+                  />
+                  <FormField
+                    label="Private key"
+                    name="private_key"
+                    type="password"
+                    value={pushForm.private_key}
+                    onChange={(e) => setPushForm({ ...pushForm, private_key: e.target.value })}
+                    placeholder={settings?.push?.private_key_set ? 'Leave blank to keep existing key' : ''}
+                    helpText="Kept server-side only. Never sent to browsers."
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={generatePushKeys}
+                        disabled={generatingPushKeys}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-800 transition-colors hover:border-gray-300 hover:bg-navy-50 disabled:opacity-60"
+                      >
+                        <RefreshCw size={16} aria-hidden="true" className={generatingPushKeys ? 'animate-spin' : ''} />
+                        Generate new pair
+                      </button>
+                      {pushForm.public_key ? (
+                        <button
+                          type="button"
+                          onClick={copyPushPublicKey}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-800 transition-colors hover:border-gray-300 hover:bg-navy-50"
+                        >
+                          <Copy size={16} aria-hidden="true" />
+                          Copy public key
+                        </button>
+                      ) : null}
+                    </div>
+                    <LoadingButton type="submit" loading={savingPush}>
+                      Save push settings
+                    </LoadingButton>
+                  </div>
+                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700 ring-1 ring-amber-600/20">
+                    Rotating keys (generating a new pair or pasting a different one) invalidates every existing
+                    subscription — users will need to re-enable notifications afterward.
+                  </p>
+                </form>
+              </SettingsFormBlock>
+
+              <SettingsFormBlock title="Send test push" subtitle="Delivers to your own signed-in browser subscription">
+                <div className="space-y-4">
+                  <p className="text-xs text-navy-500">
+                    Enable notifications for this browser from the notifications bell first, then send a test push
+                    to confirm delivery end-to-end.
+                  </p>
+                  <LoadingButton type="button" loading={testingPush} onClick={runPushTest} className="w-full sm:w-auto">
                     Send test
                   </LoadingButton>
                 </div>

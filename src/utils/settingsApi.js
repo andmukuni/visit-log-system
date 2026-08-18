@@ -97,6 +97,25 @@ export const settingsApi = {
     body: JSON.stringify(body),
   }),
 
+  updatePush: async (body) => {
+    const json = await settingsRequest('/admin/settings/push', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return json.data;
+  },
+
+  generatePushKeys: async () => {
+    const json = await settingsRequest('/admin/settings/push/generate', {
+      method: 'POST',
+    });
+    return json.data;
+  },
+
+  testPush: async () => settingsRequest('/admin/settings/push/test', {
+    method: 'POST',
+  }),
+
   changePassword: async (body) => settingsRequest('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify(body),
