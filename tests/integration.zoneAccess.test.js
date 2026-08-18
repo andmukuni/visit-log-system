@@ -174,6 +174,29 @@ describe('INTEGRATION: remote-database role -> zone resolution', () => {
     const ctx = await resolveReceptionZoneContext(pool, 'usr-rcp-multi');
     assert.deepEqual([...ctx.zoneIds].sort(), [FIXTURE.zones.dceo, FIXTURE.zones.area].sort());
   });
+
+  it('a login linked to two receptionist records (one per zone, pre-multi-zone workaround) unions both zones', async () => {
+    // Simulates an org that, before multi-zone assignment existed, covered a
+    // second zone by creating a second `receptionists` row against the same
+    // login instead of adding a second receptionist_zones row.
+    await pool.query(
+      `INSERT INTO receptionists (id, organisation_id, site_id, zone_id, user_id, name, email, status)
+       VALUES ('rcp-ceo-dup', ?, ?, ?, 'usr-rcp-ceo', 'Sarah Zulu', 'rcp-ceo-dup@example.com', 'active')`,
+      [FIXTURE.orgId, FIXTURE.siteId, FIXTURE.zones.area],
+    );
+    await pool.query(
+      `INSERT INTO receptionist_zones (receptionist_id, zone_id, organisation_id, status)
+       VALUES ('rcp-ceo-dup', ?, ?, 'active')`,
+      [FIXTURE.zones.area, FIXTURE.orgId],
+    );
+
+    const ctx = await resolveReceptionZoneContext(pool, 'usr-rcp-ceo');
+    assert.deepEqual(
+      [...ctx.zoneIds].sort(),
+      [FIXTURE.zones.ceo, FIXTURE.zones.area].sort(),
+      'zones from every active receptionist record tied to this login must be combined, not just one',
+    );
+  });
 });
 
 describe('INTEGRATION: reception visitor list authorisation (real SQL)', () => {

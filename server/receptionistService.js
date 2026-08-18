@@ -162,6 +162,13 @@ export async function loadReceptionistZones(pool, receptionistId) {
 
 /**
  * Resolve zone IDs for the logged-in receptionist (multi-zone + legacy zone_id).
+ *
+ * A login can be linked to more than one active `receptionists` row — e.g. a
+ * leftover from before multi-zone assignment existed, when covering two zones
+ * meant creating a second receptionist record against the same email/login.
+ * We union zones across every active record tied to this user rather than
+ * picking one arbitrarily, so a receptionist isn't silently scoped to just
+ * one of their zones depending on which duplicate record happens to load.
  * @returns {{ isReceptionist: boolean, receptionistId: string|null, zoneIds: string[] }}
  */
 export async function resolveReceptionZoneContext(pool, userId) {
@@ -170,19 +177,23 @@ export async function resolveReceptionZoneContext(pool, userId) {
     return { isReceptionist: false, receptionistId: null, zoneIds: [] };
   }
 
-  const [[receptionist]] = await pool.query(
+  const [receptionists] = await pool.query(
     `SELECT id, zone_id FROM receptionists
      WHERE user_id = ? AND status = 'active'
-     LIMIT 1`,
+     ORDER BY id`,
     [uid],
   );
-  if (!receptionist) {
+  if (!receptionists.length) {
     return { isReceptionist: false, receptionistId: null, zoneIds: [] };
   }
 
-  const assigned = await loadReceptionistZones(pool, receptionist.id);
-  let zoneIds = assigned.map((zone) => String(zone.id));
-  if (!zoneIds.length) {
+  const zoneIdSet = new Set();
+  for (const receptionist of receptionists) {
+    const assigned = await loadReceptionistZones(pool, receptionist.id);
+    if (assigned.length) {
+      for (const zone of assigned) zoneIdSet.add(String(zone.id));
+      continue;
+    }
     // Only fall back to the legacy single-zone column when the join table has
     // never been populated for this receptionist. If rows exist but are all
     // revoked/inactive, the correct answer is "no zones", not the old one.
@@ -191,14 +202,14 @@ export async function resolveReceptionZoneContext(pool, userId) {
       [receptionist.id],
     );
     if (!Number(rows?.count || 0) && receptionist.zone_id) {
-      zoneIds = [String(receptionist.zone_id)];
+      zoneIdSet.add(String(receptionist.zone_id));
     }
   }
 
   return {
     isReceptionist: true,
-    receptionistId: receptionist.id,
-    zoneIds,
+    receptionistId: receptionists[0].id,
+    zoneIds: [...zoneIdSet],
   };
 }
 
