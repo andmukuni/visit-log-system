@@ -216,6 +216,7 @@ export function resolveRouteAdminPermission(req) {
   }
 
   if (path.includes('/host/dashboard')) return 'host.dashboard';
+  if (path.includes('/host/nav-counts')) return 'host.visitors';
   if (path.includes('/host/reference-data') || path.includes('/host/invite')) return 'host.invite';
   if (path.includes('/host/approvals')) return 'host.approvals';
   if (path.includes('/host/on-site')) return 'host.onsite';

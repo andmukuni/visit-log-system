@@ -130,6 +130,23 @@ export function createHostRouter() {
     }
   });
 
+  router.get('/nav-counts', async (req, res) => {
+    try {
+      const ctx = await getHostContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const [[row]] = await pool.query(
+        `SELECT COUNT(*) AS count FROM visits vis
+         WHERE vis.organisation_id = ? AND ${hostVisitFilter('vis')}`,
+        [ctx.scope.organisation_id, ctx.host.id, req.adminClaims.sub],
+      );
+
+      res.json({ ok: true, data: { visitor_logs: Number(row?.count || 0) } });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/reference-data', async (req, res) => {
     try {
       const ctx = await getHostContext(req);

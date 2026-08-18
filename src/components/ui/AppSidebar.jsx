@@ -6,7 +6,7 @@ import { getKpiAccentBgClass } from './PortalKpiCard';
 import { PORTALS } from '../../../shared/portalNavigation.js';
 import { APP_NAME, LOGO_PATH } from '../../../shared/branding.js';
 import { useSidebarNav } from '../../context/SidebarContext';
-import { notificationsApi, receptionApi, visitorApi } from '../../utils/visitorApi';
+import { notificationsApi, receptionApi, visitorApi, hostApi } from '../../utils/visitorApi';
 
 const SidebarNavIcon = memo(function SidebarNavIcon({ iconKey, isActive, accentIndex = 0, executiveTheme = false }) {
   return (
@@ -313,6 +313,23 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
       }
     };
 
+    const loadHostBadges = async () => {
+      try {
+        const [notifications, navCounts] = await Promise.all([
+          notificationsApi.list(true).catch(() => []),
+          hostApi.getNavCounts().catch(() => ({})),
+        ]);
+        if (!cancelled) {
+          setBadgeCounts({
+            notifications: Array.isArray(notifications) ? notifications.length : 0,
+            visitor_logs: Number(navCounts?.visitor_logs ?? 0),
+          });
+        }
+      } catch {
+        if (!cancelled) setBadgeCounts({ notifications: 0, visitor_logs: 0 });
+      }
+    };
+
     const loadNotificationBadges = async () => {
       try {
         const rows = await notificationsApi.list(true);
@@ -333,6 +350,13 @@ function AppSidebar({ title, sidebarOpen, onCloseSidebar }) {
 
     if (portalId === 'reception') {
       void loadReceptionBadges();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (portalId === 'host') {
+      void loadHostBadges();
       return () => {
         cancelled = true;
       };

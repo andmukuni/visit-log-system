@@ -344,6 +344,7 @@ export const visitorApi = {
 
 export const hostApi = {
   getDashboard: () => apiFetch('/admin/host/dashboard'),
+  getNavCounts: () => apiFetch('/admin/host/nav-counts'),
   getReferenceData: () => apiFetch('/admin/host/reference-data'),
   getVisitors: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
