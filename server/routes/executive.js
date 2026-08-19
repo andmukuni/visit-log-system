@@ -106,7 +106,8 @@ export function createExecutiveRouter() {
         `SELECT a.id AS appointment_id, a.title, a.scheduled_at, a.status AS appointment_status,
                 vis.id AS visit_id, vis.status AS visit_status, vis.purpose,
                 v.full_name AS visitor_name, v.company, v.phone,
-                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name
+                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name,
+                COALESCE(a.duration_minutes, vc.default_duration_minutes, 60) AS duration_minutes
          FROM appointments a
          INNER JOIN visits vis ON vis.id = a.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
@@ -122,7 +123,8 @@ export function createExecutiveRouter() {
         `SELECT a.id AS appointment_id, a.title, a.scheduled_at, a.status AS appointment_status,
                 vis.id AS visit_id, vis.status AS visit_status, vis.purpose,
                 v.full_name AS visitor_name, v.company,
-                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name
+                COALESCE(vc.classification, 'standard') AS classification, vc.name AS category_name,
+                COALESCE(a.duration_minutes, vc.default_duration_minutes, 60) AS duration_minutes
          FROM appointments a
          INNER JOIN visits vis ON vis.id = a.visit_id
          INNER JOIN visitors v ON v.id = vis.visitor_id
@@ -221,7 +223,7 @@ export function createExecutiveRouter() {
                s.name AS site_name,
                COALESCE(vc.classification, 'standard') AS classification,
                vc.name AS category_name,
-               COALESCE(vc.default_duration_minutes, 60) AS duration_minutes
+               COALESCE(a.duration_minutes, vc.default_duration_minutes, 60) AS duration_minutes
         FROM appointments a
         INNER JOIN visits vis ON vis.id = a.visit_id
         INNER JOIN visitors v ON v.id = vis.visitor_id
@@ -444,6 +446,7 @@ export function createExecutiveRouter() {
         categoryId,
         purpose,
         scheduledAt,
+        durationMinutes,
         siteId,
         idType,
         idNumber,
@@ -583,6 +586,7 @@ export function createExecutiveRouter() {
         ],
       );
 
+      const parsedDuration = Number(durationMinutes);
       const appointmentId = await createAppointmentForVisit(pool, {
         organisationId: ctx.scope.organisation_id,
         visitId,
@@ -590,6 +594,7 @@ export function createExecutiveRouter() {
         scheduledAt,
         title: meetingTitle,
         createdBy: userId,
+        durationMinutes: Number.isFinite(parsedDuration) ? parsedDuration : null,
       });
 
       await writeVisitEvent(pool, {

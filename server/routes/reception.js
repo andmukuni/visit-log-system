@@ -103,7 +103,7 @@ export function calendarSelectSql(zoneMatchSql) {
          s.name AS site_name,
          COALESCE(vc.classification, 'standard') AS classification,
          vc.name AS category_name,
-         COALESCE(vc.default_duration_minutes, 60) AS duration_minutes,
+         COALESCE(a.duration_minutes, vc.default_duration_minutes, 60) AS duration_minutes,
          (SELECT GROUP_CONCAT(DISTINCT ev.plate_number)
           FROM expected_vehicles ev
           WHERE ev.visit_id = vis.id AND ev.status = 'expected') AS expected_plates,

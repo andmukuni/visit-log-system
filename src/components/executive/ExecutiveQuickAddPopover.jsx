@@ -26,6 +26,7 @@ import {
   setScheduleStartTime,
   shiftScheduleByStartDate,
   toAllDaySchedule,
+  scheduleDurationMinutes,
   toIsoLocalDateTime,
 } from './calendarUtils';
 
@@ -65,12 +66,16 @@ export default function ExecutiveQuickAddPopover({
 
   const openFullEditorPage = () => {
     const startAt = draft?.startAt instanceof Date
-      ? draft.startAt.toISOString()
+      ? toIsoLocalDateTime(draft.startAt)
       : (draft?.startAt || null);
+    const endAt = draft?.endAt instanceof Date
+      ? toIsoLocalDateTime(draft.endAt)
+      : (draft?.endAt || null);
     navigate('/host/appointments/new', {
       state: {
         from: '/host',
         startAt,
+        endAt,
         prefill: {
           title: form.title || draft?.title || '',
           visitorName: form.visitorName || '',
@@ -106,12 +111,16 @@ export default function ExecutiveQuickAddPopover({
       openedSessionIdRef.current = draft.sessionId;
       if (draft.openFullEditor) {
         const startAt = draft.startAt instanceof Date
-          ? draft.startAt.toISOString()
+          ? toIsoLocalDateTime(draft.startAt)
           : (draft.startAt || null);
+        const endAt = draft.endAt instanceof Date
+          ? toIsoLocalDateTime(draft.endAt)
+          : (draft.endAt || null);
         navigate('/host/appointments/new', {
           state: {
             from: '/host',
             startAt,
+            endAt,
             prefill: { title: draft.title || '' },
           },
         });
@@ -256,6 +265,7 @@ export default function ExecutiveQuickAddPopover({
       siteId: resolvedSiteId,
       categoryId: form.categoryId || undefined,
       scheduledAt: toIsoLocalDateTime(startAt),
+      durationMinutes: form.allDay ? 24 * 60 : scheduleDurationMinutes(startAt, endAt),
       allDay: form.allDay,
     });
   };

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   formatTimePickerLabel,
   isSameDay,
+  parseAppointmentDate,
   parseTimeInputValue,
   setScheduleEndTime,
   setScheduleStartTime,
+  toIsoLocalDateTime,
   toTimeInputFromParts,
 } from '../src/components/executive/calendarUtils.js';
 
@@ -93,6 +95,31 @@ test('setScheduleEndTime keeps an end that already sits on a later date', () => 
   assert.equal(next.adjusted, false);
   assert.equal(next.endAt.getDate(), 16);
   assert.equal(next.endAt.getHours(), 2);
+});
+
+test('setScheduleEndTime applies 13:55 to the start date when end leftover is next day', () => {
+  // Host sets 1:20pm–1:55pm after a default start+60 crossed midnight.
+  const startAt = new Date(2026, 7, 19, 13, 20, 0, 0);
+  const endAt = new Date(2026, 7, 20, 0, 20, 0, 0);
+
+  const next = setScheduleEndTime(startAt, endAt, '13:55');
+
+  assert.equal(next.adjusted, false);
+  assert.ok(isSameDay(next.startAt, next.endAt));
+  assert.equal(next.endAt.getDate(), 19);
+  assert.equal(next.endAt.getHours(), 13);
+  assert.equal(next.endAt.getMinutes(), 55);
+});
+
+test('parseAppointmentDate keeps naive wall-clock times on the picked day', () => {
+  const parsed = parseAppointmentDate('2026-08-19 13:20:00');
+  assert.ok(parsed);
+  assert.equal(parsed.getFullYear(), 2026);
+  assert.equal(parsed.getMonth(), 7);
+  assert.equal(parsed.getDate(), 19);
+  assert.equal(parsed.getHours(), 13);
+  assert.equal(parsed.getMinutes(), 20);
+  assert.equal(toIsoLocalDateTime(parsed), '2026-08-19T13:20:00');
 });
 
 test('setScheduleStartTime pushes the end forward when the start passes it', () => {

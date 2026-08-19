@@ -108,10 +108,12 @@ export default function ExecutiveAppointmentsPage() {
 
   const openReschedule = useCallback((appointment, schedule) => {
     const startAt = schedule?.start || appointment.scheduled_at || null;
+    const endAt = schedule?.end || null;
     navigate('/host/appointments/new', {
       state: {
         from: '/host/appointments',
         startAt,
+        endAt,
         prefill: {
           title: appointment.title || '',
           visitorName: appointment.visitor_name || '',

@@ -1,4 +1,4 @@
-import pool from './db.js';
+import pool, { getDbDriver } from './db.js';
 import { generateId } from './visitorSchema.js';
 import { writeAuditLog } from './auditService.js';
 import { maskNrc } from './visitorIdentity.js';
@@ -38,6 +38,15 @@ export async function ensureAccessSchema() {
       INDEX idx_appointments_scheduled (scheduled_at)
     )
   `);
+  try {
+    if (getDbDriver() === 'postgres') {
+      await pool.query('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER');
+    } else {
+      await pool.query('ALTER TABLE appointments ADD COLUMN duration_minutes INT NULL');
+    }
+  } catch {
+    // Column already exists on older MySQL deployments.
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visitor_contact_details (
@@ -230,11 +239,16 @@ export async function createAppointmentForVisit(poolConn, {
   scheduledAt,
   title,
   createdBy,
+  durationMinutes = null,
 }) {
   const id = generateId('appt');
+  const duration = Number(durationMinutes);
+  const resolvedDuration = Number.isFinite(duration) && duration > 0
+    ? Math.min(Math.round(duration), 7 * 24 * 60)
+    : null;
   await poolConn.query(
-    `INSERT INTO appointments (id, organisation_id, visit_id, host_id, title, scheduled_at, status, calendar_synced, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, 'scheduled', 1, ?)`,
+    `INSERT INTO appointments (id, organisation_id, visit_id, host_id, title, scheduled_at, duration_minutes, status, calendar_synced, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', 1, ?)`,
     [
       id,
       organisationId,
@@ -242,6 +256,7 @@ export async function createAppointmentForVisit(poolConn, {
       hostId || null,
       title || 'Visitor appointment',
       scheduledAt || null,
+      resolvedDuration,
       createdBy || null,
     ],
   );

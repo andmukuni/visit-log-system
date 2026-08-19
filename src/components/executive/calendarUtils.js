@@ -277,7 +277,30 @@ export function toDateInputValue(date) {
 
 export function parseAppointmentDate(value) {
   if (!value) return null;
-  const date = new Date(value);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+
+  // Naive wall-clock strings must stay on the calendar day the host picked.
+  // `new Date('2026-08-19 13:20:00')` is implementation-defined; with a trailing
+  // Z it becomes UTC and Zambia (CAT) reads the next local hour — or next day
+  // for evening slots.
+  const wall = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/);
+  if (wall) {
+    const date = new Date(
+      Number(wall[1]),
+      Number(wall[2]) - 1,
+      Number(wall[3]),
+      Number(wall[4]),
+      Number(wall[5]),
+      Number(wall[6] || 0),
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -354,8 +377,11 @@ function mergeOverlapClusters(items) {
 export function layoutDayEventCards(appointments, durationMinutes = DEFAULT_EVENT_MINUTES) {
   const items = appointments
     .map((appointment) => {
-      const range = eventTimeRange(appointment.scheduled_at, durationMinutes);
-      const layout = eventLayout(appointment.scheduled_at, durationMinutes);
+      const minutes = Number(appointment.duration_minutes) > 0
+        ? Number(appointment.duration_minutes)
+        : durationMinutes;
+      const range = eventTimeRange(appointment.scheduled_at, minutes);
+      const layout = eventLayout(appointment.scheduled_at, minutes);
       if (!range || !layout) return null;
       return {
         appointment,
@@ -523,6 +549,15 @@ export function scheduleDurationMs(startAt, endAt) {
   );
 }
 
+export function scheduleDurationMinutes(startAt, endAt) {
+  const start = startAt instanceof Date ? startAt : parseAppointmentDate(startAt);
+  const end = endAt instanceof Date ? endAt : parseAppointmentDate(endAt);
+  if (!start || !end) return DEFAULT_EVENT_MINUTES;
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (!Number.isFinite(minutes) || minutes <= 0) return DEFAULT_EVENT_MINUTES;
+  return Math.min(minutes, 7 * 24 * 60);
+}
+
 export function buildDraftScheduleUpdate(draft, startAt, endAt) {
   const day = startOfDay(startAt);
   return {
@@ -566,9 +601,19 @@ export function setScheduleStartTime(startAt, endAt, timeValue) {
 export const END_BEFORE_START_ERROR = 'End time must be after the start time.';
 
 export function setScheduleEndTime(startAt, endAt, timeValue) {
-  const nextEnd = applyTimeToDate(endAt, timeValue);
-  if (nextEnd > startAt) {
-    return { startAt, endAt: nextEnd, adjusted: false };
+  // Prefer the start's calendar day. applyTimeToDate(endAt) kept a next-day
+  // leftover (start+60 crossing midnight, or a late default slot) so setting
+  // 1:55pm after 1:20pm quietly moved the end date to tomorrow.
+  const sameDayEnd = applyTimeToDate(startAt, timeValue);
+  if (sameDayEnd > startAt) {
+    return { startAt, endAt: sameDayEnd, adjusted: false };
+  }
+
+  if (!isSameDay(startAt, endAt)) {
+    const nextEnd = applyTimeToDate(endAt, timeValue);
+    if (nextEnd > startAt) {
+      return { startAt, endAt: nextEnd, adjusted: false };
+    }
   }
 
   // Refuse an end at or before the start instead of rolling the appointment onto

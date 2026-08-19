@@ -84,7 +84,9 @@ export default function ExecutiveCalendarEventCard({
 }) {
   const theme = getEventCardTheme(appointment.classification, appointment.visit_status);
   const start = layout.date;
-  const end = addMinutes(start, DEFAULT_EVENT_MINUTES);
+  const end = addMinutes(start, Number(appointment.duration_minutes) > 0
+    ? Number(appointment.duration_minutes)
+    : DEFAULT_EVENT_MINUTES);
   const timeRange = formatTimeRange24(start, end);
   const shortTime = formatClockTime(start);
   const heightPct = parseFloat(String(layout.height).replace('%', ''));

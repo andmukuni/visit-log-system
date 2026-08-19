@@ -6,6 +6,7 @@ import {
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
   DEFAULT_EVENT_MINUTES,
+  parseAppointmentDate,
   startOfDay,
 } from '../../components/executive/calendarUtils';
 import { Spinner } from '../../components/ui';
@@ -28,14 +29,15 @@ const initialForm = () => ({
   notifyMinutes: 30,
 });
 
-function buildDefaultDraft(startAt = null) {
+function buildDefaultDraft(startAt = null, endAt = null) {
   const nowDate = new Date();
-  let start = startAt ? new Date(startAt) : new Date(nowDate);
+  const parsedStart = parseAppointmentDate(startAt);
+  let start = parsedStart ? new Date(parsedStart) : new Date(nowDate);
   if (Number.isNaN(start.getTime())) {
     start = new Date(nowDate);
   }
 
-  if (!startAt || Number.isNaN(new Date(startAt).getTime())) {
+  if (!parsedStart) {
     start.setMinutes(0, 0, 0);
     start.setHours(start.getHours() + 1);
     if (start.getHours() < CALENDAR_START_HOUR) {
@@ -48,7 +50,10 @@ function buildDefaultDraft(startAt = null) {
     }
   }
 
-  const end = addMinutes(start, DEFAULT_EVENT_MINUTES);
+  const parsedEnd = parseAppointmentDate(endAt);
+  const end = parsedEnd && parsedEnd.getTime() > start.getTime()
+    ? parsedEnd
+    : addMinutes(start, DEFAULT_EVENT_MINUTES);
   const day = startOfDay(start);
 
   return {
@@ -99,6 +104,7 @@ export default function ExecutiveNewAppointmentPage() {
 
         const prefill = location.state?.prefill || {};
         const startParam = searchParams.get('start') || location.state?.startAt || null;
+        const endParam = searchParams.get('end') || location.state?.endAt || null;
 
         setForm({
           ...initialForm(),
@@ -108,7 +114,7 @@ export default function ExecutiveNewAppointmentPage() {
             || refData?.sites?.[0]?.id
             || '',
         });
-        setDraft(buildDefaultDraft(startParam));
+        setDraft(buildDefaultDraft(startParam, endParam));
       } catch (err) {
         if (!cancelled) {
           toast.error(err?.message || 'Unable to open appointment editor.');

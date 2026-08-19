@@ -18,6 +18,7 @@ import { useToast } from '../../context/ToastContext';
 import {
   addDays,
   addMinutes,
+  parseAppointmentDate,
   CALENDAR_VIEW_OPTIONS,
   compareViewDensity,
   getPeriodDays,
@@ -558,10 +559,16 @@ export default function ExecutiveWeekCalendar({
       return;
     }
     if (!nextAppointment?.scheduled_at) return;
+    const duration = Number(nextAppointment.duration_minutes);
+    const start = parseAppointmentDate(nextAppointment.scheduled_at) || nextAppointment.scheduled_at;
+    const endAt = start instanceof Date && Number.isFinite(duration) && duration > 0
+      ? addMinutes(start, duration)
+      : null;
     navigate('/host/appointments/new', {
       state: {
         from: '/host',
-        startAt: nextAppointment.scheduled_at,
+        startAt: start,
+        endAt,
         prefill: {
           title: nextAppointment.title || '',
           visitorName: nextAppointment.visitor_name || '',

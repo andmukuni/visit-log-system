@@ -40,6 +40,7 @@ import {
   shiftScheduleByStartDate,
   toAllDaySchedule,
   toDateInputValue,
+  scheduleDurationMinutes,
   toIsoLocalDateTime,
   toTimeInputValue,
 } from './calendarUtils';
@@ -296,6 +297,7 @@ export default function ExecutiveAppointmentModal({
       siteId: resolvedSiteId,
       categoryId: form.categoryId || undefined,
       scheduledAt: toIsoLocalDateTime(startAt),
+      durationMinutes: form.allDay ? 24 * 60 : scheduleDurationMinutes(startAt, endAt),
       allDay: form.allDay,
     });
   };

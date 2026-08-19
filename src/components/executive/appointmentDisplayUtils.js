@@ -1,4 +1,4 @@
-import { addMinutes, DEFAULT_EVENT_MINUTES } from './calendarUtils';
+import { addMinutes, DEFAULT_EVENT_MINUTES, parseAppointmentDate } from './calendarUtils';
 
 const DISPLAY_STATUS = {
   confirmed: {
@@ -57,8 +57,8 @@ function padTime(value) {
 }
 
 export function formatAppointmentTimeRange(scheduledAt, durationMinutes = DEFAULT_EVENT_MINUTES) {
-  const start = new Date(scheduledAt);
-  if (Number.isNaN(start.getTime())) return { range: '—', dayLabel: '—' };
+  const start = parseAppointmentDate(scheduledAt);
+  if (!start) return { range: '—', dayLabel: '—' };
 
   const end = addMinutes(start, durationMinutes);
   const range = `${padTime(start.getHours())}:${padTime(start.getMinutes())} – ${padTime(end.getHours())}:${padTime(end.getMinutes())}`;
@@ -81,8 +81,8 @@ export function formatAppointmentTimeRange(scheduledAt, durationMinutes = DEFAUL
 }
 
 export function formatVisitExpectedDisplay(expectedAt) {
-  const start = new Date(expectedAt);
-  if (Number.isNaN(start.getTime())) return { range: '—', dayLabel: '—' };
+  const start = parseAppointmentDate(expectedAt);
+  if (!start) return { range: '—', dayLabel: '—' };
 
   const range = `${padTime(start.getHours())}:${padTime(start.getMinutes())}`;
   const today = new Date();
@@ -115,8 +115,8 @@ export function formatDurationLabel(minutes) {
 }
 
 export function formatDetailDateLabel(scheduledAt) {
-  const date = new Date(scheduledAt);
-  if (Number.isNaN(date.getTime())) return '—';
+  const date = parseAppointmentDate(scheduledAt);
+  if (!date) return '—';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

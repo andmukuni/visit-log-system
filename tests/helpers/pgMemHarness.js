@@ -68,7 +68,7 @@ const DDL = [
      appointment_id VARCHAR(90), invite_token VARCHAR(90), check_in_signature TEXT, confidential_notes TEXT,
      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE TABLE appointments (id VARCHAR(90) PRIMARY KEY, organisation_id VARCHAR(90), visit_id VARCHAR(90),
-     host_id VARCHAR(90), title VARCHAR(255), scheduled_at TIMESTAMP, status VARCHAR(30),
+     host_id VARCHAR(90), title VARCHAR(255), scheduled_at TIMESTAMP, duration_minutes INT, status VARCHAR(30),
      calendar_synced INT, created_by VARCHAR(90))`,
   `CREATE TABLE visit_events (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90), event_type VARCHAR(60),
      actor_user_id VARCHAR(90), station_id VARCHAR(90), details TEXT, reason TEXT,
