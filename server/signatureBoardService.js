@@ -12,8 +12,14 @@ boardEvents.setMaxListeners(0);
 
 const ACTIVE_STATUSES = ['pending', 'signed'];
 
+// Short and readable (10 hex chars) rather than a 48-char blob — still
+// random enough that it can't be guessed for this board's purpose (a lobby
+// sign-in link, not a security credential), but easy to read out or write
+// down.
+const SHORT_TOKEN_LENGTH = 10;
+
 export function generateBoardToken() {
-  return crypto.randomBytes(24).toString('hex');
+  return crypto.randomBytes(5).toString('hex');
 }
 
 export async function ensureSignatureBoardSchema(pool) {
@@ -75,7 +81,15 @@ export async function getOrCreateBoardForSite(pool, { organisationId, siteId }) 
     'SELECT * FROM signature_boards WHERE site_id = ? LIMIT 1',
     [siteId],
   );
-  if (existing) return existing;
+  if (existing) {
+    // Self-heal boards created before the token was shortened.
+    if (existing.token.length > SHORT_TOKEN_LENGTH) {
+      const shortened = generateBoardToken();
+      await pool.query('UPDATE signature_boards SET token = ? WHERE id = ?', [shortened, existing.id]);
+      return { ...existing, token: shortened };
+    }
+    return existing;
+  }
 
   const id = generateId('sigbrd');
   const token = generateBoardToken();
