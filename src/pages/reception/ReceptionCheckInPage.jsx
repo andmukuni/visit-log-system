@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarDays, LogIn, UserPlus, Users } from 'lucide-react';
+import { CalendarDays, Copy, ExternalLink, LogIn, QrCode, UserPlus, Users } from 'lucide-react';
 import {
   PageHeader,
   Spinner,
   LoadingButton,
   IconButton,
+  Modal,
   VisitStatusBadge,
   UnderlineTabs,
   TablePagination,
@@ -188,6 +189,34 @@ export default function ReceptionCheckInPage() {
     },
   ], [pendingCount, readyToQueue.length, expectedVisitors.length]);
 
+  const [boardModalOpen, setBoardModalOpen] = useState(false);
+  const [boardUrl, setBoardUrl] = useState('');
+  const [boardLoading, setBoardLoading] = useState(false);
+
+  const openSignatureBoardLink = async () => {
+    setBoardModalOpen(true);
+    if (boardUrl) return;
+    setBoardLoading(true);
+    try {
+      const data = await receptionApi.getSignatureBoard();
+      setBoardUrl(data.boardUrl);
+    } catch (err) {
+      toast.error(err.message);
+      setBoardModalOpen(false);
+    } finally {
+      setBoardLoading(false);
+    }
+  };
+
+  const copyBoardLink = async () => {
+    try {
+      await navigator.clipboard.writeText(boardUrl);
+      toast.success('Link copied.');
+    } catch {
+      toast.error('Could not copy — select and copy the link manually.');
+    }
+  };
+
   const receptionEntryApi = useMemo(() => ({
     getReferenceData: () => receptionApi.getReferenceData(),
     nrcLookup: (nrc) => receptionApi.checkInNrcLookup(nrc),
@@ -218,6 +247,16 @@ export default function ReceptionCheckInPage() {
         title="Check-in Desk"
         subtitle="Check in gate arrivals, register walk-ins at the desk, then queue them to the host"
         breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Check-in' }]}
+        actions={(
+          <LoadingButton
+            variant="secondary"
+            size="sm"
+            icon={QrCode}
+            onClick={openSignatureBoardLink}
+          >
+            Signature board link
+          </LoadingButton>
+        )}
       />
 
       {loading ? (
@@ -533,6 +572,40 @@ export default function ReceptionCheckInPage() {
         submitting={queuing}
         onConfirm={handleQueueConfirm}
       />
+
+      <Modal
+        isOpen={boardModalOpen}
+        onClose={() => setBoardModalOpen(false)}
+        title="Signature board link"
+        subtitle="Open this on a lobby tablet — visitors sign remote requests here"
+      >
+        {boardLoading ? (
+          <div className="flex justify-center py-6"><Spinner size={24} /></div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={boardUrl}
+                onFocus={(e) => e.target.select()}
+                className="w-full min-w-0 rounded-xl border border-navy-200 bg-navy-50/60 px-3 py-2 text-sm text-navy-700"
+              />
+              <IconButton icon={Copy} label="Copy link" tooltip="Copy link" variant="secondary" onClick={copyBoardLink} />
+              <IconButton
+                icon={ExternalLink}
+                label="Open board"
+                tooltip="Open board"
+                variant="secondary"
+                onClick={() => window.open(boardUrl, '_blank', 'noopener')}
+              />
+            </div>
+            <p className="text-xs text-navy-400">
+              This link is the same for every request at this site — set it up once on the device you want visitors
+              to sign on.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
