@@ -644,4 +644,7 @@ export const receptionApi = {
   }),
   checkOutVisit: (id) => apiFetch(`/admin/reception/visits/${id}/check-out`, { method: 'POST' }),
   requestApproval: (id) => apiFetch(`/admin/reception/visits/${id}/request-approval`, { method: 'POST' }),
+  getSignatureBoard: () => apiFetch('/admin/reception/signature-board'),
+  createSignatureRequest: (body) => apiFetch('/admin/reception/signature-requests', { method: 'POST', body: JSON.stringify(body) }),
+  cancelSignatureRequest: (id) => apiFetch(`/admin/reception/signature-requests/${id}/cancel`, { method: 'POST' }),
 };

@@ -12,6 +12,7 @@ import { ensureComplianceSchema, seedComplianceData } from './complianceSchema.j
 import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
 import { ensureAccessSchema, seedAccessData } from './accessSchema.js';
 import { ensureSettingsSchema, seedSettingsData } from './settingsSchema.js';
+import { ensureSignatureBoardSchema } from './signatureBoardService.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -74,6 +75,7 @@ export async function bootstrapDatabase() {
   await ensurePlatformSchema();
   await ensureAccessSchema();
   await ensureSettingsSchema();
+  await ensureSignatureBoardSchema(pool);
   await seedDefaultAdmin();
   await seedRbac(pool);
   await seedVisitorData();

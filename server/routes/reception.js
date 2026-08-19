@@ -1,6 +1,6 @@
 import express from 'express';
 import pool from '../db.js';
-import { getUserScope, requireUserScope, canTransition } from '../scopeService.js';
+import { getUserScope, requireUserScope, canTransition, resolveGateEntryPlacement } from '../scopeService.js';
 import { generatePassCode, writeVisitEvent, writeAuditLog } from '../auditService.js';
 import { notifyVisitEvent } from '../notificationService.js';
 import { requestHostApproval, isReceptionQueueVisit } from '../hostApprovalService.js';
@@ -16,6 +16,12 @@ import {
 } from '../receptionDeskEntry.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
 import { getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
+import {
+  getOrCreateBoardForSite,
+  createSignatureRequest,
+  cancelSignatureRequest,
+} from '../signatureBoardService.js';
+import { getAppBaseUrl } from '../adapters/deliveryConfig.js';
 import {
   buildWeeklyTrend,
   fetchSecurityEventsByType,
@@ -433,6 +439,79 @@ export function createReceptionRouter() {
         message: error.message,
         unavailable,
       });
+    }
+  });
+
+  router.get('/signature-board', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+
+      const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
+      if (!placement.ok) return res.status(placement.status).json({ ok: false, message: placement.message });
+
+      const board = await getOrCreateBoardForSite(pool, {
+        organisationId: placement.organisationId,
+        siteId: placement.siteId,
+      });
+      res.json({
+        ok: true,
+        data: {
+          token: board.token,
+          siteId: board.site_id,
+          boardUrl: `${getAppBaseUrl()}/signature-board/${board.token}`,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/signature-requests', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+
+      const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
+      if (!placement.ok) return res.status(placement.status).json({ ok: false, message: placement.message });
+
+      const result = await createSignatureRequest(pool, {
+        organisationId: placement.organisationId,
+        siteId: placement.siteId,
+        stationId: placement.stationId,
+        fullName: req.body?.fullName,
+        phone: req.body?.phone,
+        requestedBy: userId,
+      });
+      if (!result.ok) return res.status(result.status).json({ ok: false, message: result.message });
+
+      res.status(201).json({ ok: true, data: result.data });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/signature-requests/:id/cancel', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+
+      const placement = await resolveGateEntryPlacement(pool, scopeResult.scope);
+      if (!placement.ok) return res.status(placement.status).json({ ok: false, message: placement.message });
+
+      const result = await cancelSignatureRequest(pool, {
+        siteId: placement.siteId,
+        requestId: req.params.id,
+        actorUserId: userId,
+      });
+      if (!result.ok) return res.status(result.status).json({ ok: false, message: result.message });
+
+      res.json({ ok: true, data: result.data });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
     }
   });
 

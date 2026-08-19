@@ -14,7 +14,7 @@ import {
 } from './receptionistService.js';
 import { markHostUnavailableForVisit } from './hostAvailability.js';
 
-function validateSignature(checkInSignature) {
+export function validateSignature(checkInSignature) {
   const signature = String(checkInSignature || '').trim();
   if (!signature.startsWith('data:image/')) {
     return { ok: false, status: 400, message: 'Check-in signature is required.' };

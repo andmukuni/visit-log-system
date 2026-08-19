@@ -127,6 +127,7 @@ const KioskCheckInPage = lazy(() => import('./pages/kiosk/KioskCheckInPage'));
 const KioskCheckOutPage = lazy(() => import('./pages/kiosk/KioskCheckOutPage'));
 const VisitInvitePage = lazy(() => import('./pages/kiosk/VisitInvitePage'));
 const HostApprovalPage = lazy(() => import('./pages/kiosk/HostApprovalPage'));
+const SignBoardPage = lazy(() => import('./pages/signboard/SignBoardPage'));
 
 function LazyAdminOrgPage({ page }) {
   return (
@@ -333,6 +334,7 @@ export const router = createBrowserRouter([
       },
       { path: 'visit/invite/:token', element: <VisitInvitePage /> },
       { path: 'visit/host-approval/:token', element: <HostApprovalPage /> },
+      { path: 'signature-board/:token', element: <SignBoardPage /> },
 
       {
         path: 'reception',

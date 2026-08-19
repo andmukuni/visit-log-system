@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -39,6 +39,7 @@ import {
   NRC_PLACEHOLDER,
 } from '../../utils/helpers';
 import { visitorApi } from '../../utils/visitorApi';
+import { signBoardApi } from '../../utils/signBoardApi';
 import ExecutiveVisitModal from '../reception/ExecutiveVisitModal';
 import GateCheckOutPanel from '../../pages/station/GateCheckOutPanel';
 import GateExpectedTodayPanel from '../../pages/station/GateExpectedTodayPanel';
@@ -343,7 +344,21 @@ function ReviewRow({ label, value }) {
   );
 }
 
-function CheckInSignatureStep({ subjectName, signatureLabel, signature, onSignatureChange, signatureHint }) {
+function CheckInSignatureStep({
+  subjectName,
+  signatureLabel,
+  signature,
+  onSignatureChange,
+  signatureHint,
+  remoteEnabled,
+  signatureMode,
+  requestStatus,
+  phone,
+  onRequestSignature,
+  onCancelRemote,
+}) {
+  const ghostBtnClass = 'text-sm font-medium text-navy-500 hover:text-navy-700';
+
   return (
     <FormSection
       title="Check-in signature"
@@ -357,12 +372,75 @@ function CheckInSignatureStep({ subjectName, signatureLabel, signature, onSignat
           {signatureHint || 'This signature confirms check-in at the gate.'}
         </p>
       </div>
-      <SignaturePad
-        value={signature}
-        onChange={onSignatureChange}
-        label={`${signatureLabel} signature`}
-        hint="Sign with finger or stylus — required to complete check-in"
-      />
+
+      {remoteEnabled && signatureMode === 'remote' ? (
+        <div className="rounded-2xl border-2 border-dashed border-navy-200 bg-white px-6 py-8 text-center">
+          {requestStatus === 'signed' ? (
+            <div className="flex flex-col items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                <CheckCircle2 size={24} aria-hidden="true" />
+              </span>
+              <p className="text-sm font-semibold text-navy-900">Visitor signed</p>
+              {signature ? (
+                <img
+                  src={signature}
+                  alt="Visitor signature"
+                  className="h-16 w-auto max-w-[220px] rounded border border-navy-100 bg-white object-contain"
+                />
+              ) : null}
+            </div>
+          ) : requestStatus === 'error' ? (
+            <div className="flex flex-col items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600 ring-1 ring-red-100">
+                <AlertTriangle size={24} aria-hidden="true" />
+              </span>
+              <p className="text-sm font-semibold text-navy-900">Could not send the signature request</p>
+              <div className="flex items-center gap-4">
+                <button type="button" className={ghostBtnClass} onClick={onCancelRemote}>
+                  Sign here instead
+                </button>
+                <LoadingButton
+                  type="button"
+                  size="sm"
+                  icon={ShieldCheck}
+                  onClick={() => onRequestSignature({ fullName: subjectName, phone })}
+                >
+                  Retry
+                </LoadingButton>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <Spinner size={28} />
+              <p className="text-sm font-semibold text-navy-900">
+                Waiting for {subjectName || 'the visitor'} to sign…
+              </p>
+              <p className="text-xs text-navy-400">This updates automatically once submitted remotely.</p>
+              <button type="button" className={ghostBtnClass} onClick={onCancelRemote}>
+                Cancel — sign here instead
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <SignaturePad
+            value={signature}
+            onChange={onSignatureChange}
+            label={`${signatureLabel} signature`}
+            hint="Sign with finger or stylus — required to complete check-in"
+          />
+          {remoteEnabled ? (
+            <button
+              type="button"
+              onClick={() => onRequestSignature({ fullName: subjectName, phone })}
+              className="mt-3 text-sm font-medium text-cyan-700 hover:text-cyan-800"
+            >
+              Send a signature request instead
+            </button>
+          ) : null}
+        </>
+      )}
     </FormSection>
   );
 }
@@ -475,13 +553,100 @@ export default function GateEntryCheckInForm({
   const [executive, setExecutive] = useState(false);
   const [executiveModalOpen, setExecutiveModalOpen] = useState(false);
   const [notifyVisitor, setNotifyVisitor] = useState(true);
+  const [signatureMode, setSignatureMode] = useState('local');
+  const [signatureRequest, setSignatureRequest] = useState(null);
+  const [signatureRequestStatus, setSignatureRequestStatus] = useState('idle');
+  const [boardToken, setBoardToken] = useState(null);
+  const eventSourceRef = useRef(null);
+  const pendingRequestIdRef = useRef(null);
 
   const executiveEnabled = entryContext === 'reception';
   // Gate walk-ins land on 'arrived_at_gate', which never messages the guest —
   // the notify choice only makes sense (and is only shown) at reception.
   const notifyChoiceEnabled = entryContext === 'reception';
+  // Remote signature requests are a reception-desk feature — gate/station
+  // keeps signing locally only, same gating idiom as the two flags above.
+  const remoteSignatureEnabled = entryContext === 'reception' && typeof api.createSignatureRequest === 'function';
   const steps = mode === 'vehicle' ? VEHICLE_STEPS : executive ? EXECUTIVE_WALKIN_STEPS : WALKIN_STEPS;
   const dojahEnabled = Boolean(refData?.integrations?.dojah?.enabled && refData?.integrations?.dojah?.configured);
+
+  const teardownSignatureStream = () => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+  };
+
+  // Fire-and-forget, same convention as the notifyVisitEvent(...).catch(...)
+  // calls elsewhere — a stale "pending" row on the public board is a UX
+  // nuisance, not something worth blocking the receptionist over.
+  const cancelPendingSignatureRequest = () => {
+    const pendingId = pendingRequestIdRef.current;
+    teardownSignatureStream();
+    pendingRequestIdRef.current = null;
+    if (pendingId) {
+      api.cancelSignatureRequest?.(pendingId).catch(() => {});
+    }
+  };
+
+  const resetSignatureRequestState = () => {
+    cancelPendingSignatureRequest();
+    setSignatureMode('local');
+    setSignatureRequest(null);
+    setSignatureRequestStatus('idle');
+  };
+
+  const requestRemoteSignature = async ({ fullName, phone }) => {
+    setSignatureMode('remote');
+    setSignatureRequestStatus('creating');
+    try {
+      let token = boardToken;
+      if (!token) {
+        const board = await api.getSignatureBoard();
+        token = board.token;
+        setBoardToken(token);
+      }
+      const request = await api.createSignatureRequest({ fullName, phone });
+      setSignatureRequest(request);
+      setSignatureRequestStatus('waiting');
+    } catch (err) {
+      setSignatureRequestStatus('error');
+      toast.error(err.message || 'Could not send signature request.');
+    }
+  };
+
+  // Kept in sync so the unmount-cleanup effect below can see the latest
+  // pending id without depending on state that would re-trigger it.
+  useEffect(() => {
+    pendingRequestIdRef.current = signatureRequestStatus === 'waiting' ? (signatureRequest?.id || null) : null;
+  }, [signatureRequest, signatureRequestStatus]);
+
+  useEffect(() => {
+    if (signatureRequestStatus !== 'waiting' || !signatureRequest?.id || !boardToken) return undefined;
+
+    const source = new EventSource(signBoardApi.streamUrl(boardToken));
+    eventSourceRef.current = source;
+
+    const handleUpdate = (e) => {
+      const row = JSON.parse(e.data);
+      if (row.id !== signatureRequest.id || row.status !== 'signed') return;
+      setCheckInSignature(row.signature_data || '');
+      setSignatureRequestStatus('signed');
+    };
+    source.addEventListener('request.updated', handleUpdate);
+
+    return () => {
+      source.removeEventListener('request.updated', handleUpdate);
+      source.close();
+      if (eventSourceRef.current === source) eventSourceRef.current = null;
+    };
+  }, [signatureRequest?.id, boardToken, signatureRequestStatus]);
+
+  // Reception unmounts this whole form when switching away from the
+  // "Register & check in" tab — the far more common abandonment path than
+  // literal browser navigation — so this has to be a real unmount effect,
+  // not folded into the mode-change effect below.
+  useEffect(() => () => {
+    cancelPendingSignatureRequest();
+  }, []);
 
   const loadRef = useCallback(async () => {
     try {
@@ -513,6 +678,7 @@ export default function GateEntryCheckInForm({
     setExecutive(false);
     setExecutiveModalOpen(false);
     setNotifyVisitor(true);
+    resetSignatureRequestState();
   }, [mode]);
 
   useEffect(() => {
@@ -676,6 +842,7 @@ export default function GateEntryCheckInForm({
     setExecutive(false);
     setNotifyVisitor(true);
     setStep(0);
+    resetSignatureRequestState();
   };
 
   const handleExecutiveContinue = ({ fullName, company, phoneCountry, phone, purpose }) => {
@@ -899,6 +1066,12 @@ export default function GateEntryCheckInForm({
         signature={checkInSignature}
         onSignatureChange={setCheckInSignature}
         signatureHint={copy.signatureHint}
+        remoteEnabled={remoteSignatureEnabled}
+        signatureMode={signatureMode}
+        requestStatus={signatureRequestStatus}
+        phone={formatPhoneDisplay(vehicle.phoneCountry, vehicle.phone)}
+        onRequestSignature={requestRemoteSignature}
+        onCancelRemote={resetSignatureRequestState}
       />
     );
   };
@@ -1156,6 +1329,12 @@ export default function GateEntryCheckInForm({
         signature={checkInSignature}
         onSignatureChange={setCheckInSignature}
         signatureHint={copy.signatureHint}
+        remoteEnabled={remoteSignatureEnabled}
+        signatureMode={signatureMode}
+        requestStatus={signatureRequestStatus}
+        phone={formatPhoneDisplay(walkIn.phoneCountry, walkIn.phone)}
+        onRequestSignature={requestRemoteSignature}
+        onCancelRemote={resetSignatureRequestState}
       />
     );
   };

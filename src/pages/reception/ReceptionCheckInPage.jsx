@@ -194,6 +194,9 @@ export default function ReceptionCheckInPage() {
     searchVehicleByPlate: (plate) => visitorApi.searchVehicleByPlate(plate),
     submitWalkIn: (body) => receptionApi.checkInWalkIn(body),
     submitVehicle: (body) => receptionApi.checkInVehicle(body),
+    getSignatureBoard: () => receptionApi.getSignatureBoard(),
+    createSignatureRequest: (body) => receptionApi.createSignatureRequest(body),
+    cancelSignatureRequest: (id) => receptionApi.cancelSignatureRequest(id),
   }), []);
 
   const handleDeskEntrySuccess = ({ kind, visit, result }) => {
