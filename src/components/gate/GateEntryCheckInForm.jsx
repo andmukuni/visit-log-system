@@ -642,11 +642,7 @@ export default function GateEntryCheckInForm({
           return false;
         }
         if (dojahEnabled && !dojahOverride && nrcLookup.status !== 'verified') {
-          if (nrcLookup.status === 'unavailable') {
-            toast.error('Confirm manual override — Dojah is unavailable.');
-          } else {
-            toast.error('Verify the NRC with Dojah before continuing.');
-          }
+          toast.error('Verify the NRC, or check "Continue without verifying" to enter details manually.');
           return false;
         }
       }
@@ -1014,41 +1010,41 @@ export default function GateEntryCheckInForm({
                   ) : null}
                 </div>
                 {walkIn.idType === 'nrc' && dojahEnabled && nrcLookup.status !== 'verified' && nrcLookup.status !== 'loading' ? (
-                  <div className="mt-3">
+                  <div className="mt-3 space-y-3">
                     {nrcLookup.status === 'failed' ? (
                       <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-600/10">
                         {nrcLookup.message}
                       </p>
                     ) : null}
                     {nrcLookup.status === 'unavailable' ? (
-                      <div className="space-y-3">
-                        <p className="inline-flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-600/10">
-                          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-                          <span>{nrcLookup.message}</span>
-                        </p>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={dojahOverride}
-                            onChange={(e) => setDojahOverride(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
-                          />
-                          <span>
-                            <span className="block text-sm font-medium text-amber-950">
-                              Continue without Dojah verification
-                            </span>
-                            <span className="mt-0.5 block text-xs text-amber-800/80">
-                              Manual entry — guard confirms identity on site. This is logged in the audit trail.
-                            </span>
-                          </span>
-                        </label>
-                      </div>
+                      <p className="inline-flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-600/10">
+                        <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                        <span>{nrcLookup.message}</span>
+                      </p>
                     ) : null}
                     {nrcLookup.status === 'idle' ? (
                       <p className="text-xs text-navy-400">
-                        Enter the full NRC, then tap Verify to load name and TPIN from the registry.
+                        Verification is optional — tap Verify to auto-fill name and TPIN from the registry, or
+                        continue without verifying and enter the details manually.
                       </p>
                     ) : null}
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-navy-200 bg-navy-50/60 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={dojahOverride}
+                        onChange={(e) => setDojahOverride(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-navy-300 text-cyan-700 focus:ring-cyan-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-navy-900">
+                          Continue without verifying
+                        </span>
+                        <span className="mt-0.5 block text-xs text-navy-500">
+                          Enter the visitor's details manually — guard/reception confirms identity on site. This is
+                          logged in the audit trail.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 ) : null}
               </div>
