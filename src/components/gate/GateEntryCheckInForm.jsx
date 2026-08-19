@@ -24,7 +24,7 @@ import {
   Users,
   Bike,
 } from 'lucide-react';
-import { LoadingButton, NotifyVisitorField, PhoneInput, SegmentedControl, Spinner } from '../../components/ui';
+import { LoadingButton, NotifyVisitorField, PhoneInput, SearchableSelect, SegmentedControl, Spinner } from '../../components/ui';
 import CameraCapture from '../../components/ui/CameraCapture';
 import SignaturePad from '../../components/ui/SignaturePad';
 import { useToast } from '../../context/ToastContext';
@@ -221,29 +221,23 @@ function PageLogoWatermark() {
 }
 
 function HostSelect({ value, onChange, hosts, emptyHint = 'No hosts available' }) {
+  const options = (hosts || []).map((host) => ({ value: host.id, label: host.name }));
+  const empty = options.length === 0;
+
   return (
     <div>
-      <div className="relative">
-        <User size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" aria-hidden="true" />
-        <select
-          value={value}
-          onChange={(e) => {
-            e.stopPropagation();
-            onChange(e);
-          }}
-          className={`${INPUT_MD} appearance-none`}
-          required
-          disabled={hosts.length === 0}
-        >
-          <option value="">
-            {hosts.length === 0 ? emptyHint : 'Person visiting…'}
-          </option>
-          {hosts.map((host) => (
-            <option key={host.id} value={host.id}>{host.name}</option>
-          ))}
-        </select>
-      </div>
-      {hosts.length === 0 ? (
+      <SearchableSelect
+        name="hostId"
+        value={value}
+        onChange={onChange}
+        options={options}
+        required
+        disabled={empty}
+        placeholder={empty ? emptyHint : 'Search person visiting…'}
+        emptyMessage="No matching hosts"
+        className="py-3 text-base"
+      />
+      {empty ? (
         <p className="mt-1.5 text-xs text-navy-500">
           Only hosts in your assigned zone can be selected. Ask an admin to assign hosts to your zone.
         </p>

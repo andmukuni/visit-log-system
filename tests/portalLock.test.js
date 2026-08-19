@@ -49,9 +49,9 @@ describe('HOST LOCK — a host may not leave the host portal', () => {
   });
 
   it('does not trap a host on public/auth paths', () => {
-    for (const route of ['/', '/login', '/admin/login', '/reset-password', '/kiosk', '/visit/invite/abc', '/visit/host-approval/abc']) {
+    for (const route of ['/', '/login', '/admin/login', '/reset-password', '/kiosk', '/visit/invite/abc', '/visit/host-approval/abc', '/signature-board/abc123']) {
       assert.equal(resolvePortalLockRedirect(route, hostPerms, hostRoles), null,
-        `${route} must stay reachable (login/kiosk/invite would otherwise be unusable)`);
+        `${route} must stay reachable (login/kiosk/invite/signature-board would otherwise be unusable)`);
     }
   });
 
@@ -83,6 +83,7 @@ describe('RECEPTION LOCK — the mirror rule still holds', () => {
       assert.ok(home && home.startsWith('/reception'), `${slug} should be sent back to reception, got ${home}`);
       assert.ok(resolvePortalLockRedirect('/admin', p, [slug]).startsWith('/reception'));
       assert.equal(resolvePortalLockRedirect('/reception/check-in', p, [slug]), null);
+      assert.equal(resolvePortalLockRedirect('/signature-board/abc123', p, [slug]), null);
     });
   }
 

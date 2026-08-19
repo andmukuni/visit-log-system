@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,6 +22,10 @@ import { visitorApi } from '../../utils/visitorApi';
 const emptyForm = () => ({
   officeNumber: '',
   name: '',
+  departmentId: '',
+  siteId: '',
+  buildingId: '',
+  zoneId: '',
   status: 'active',
 });
 
@@ -43,6 +47,10 @@ export default function AdminOfficeDetailPage() {
   const toast = useToast();
 
   const [office, setOffice] = useState(null);
+  const [departments, setDepartments] = useState([]);
+  const [sites, setSites] = useState([]);
+  const [buildings, setBuildings] = useState([]);
+  const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -52,7 +60,18 @@ export default function AdminOfficeDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      setOffice(await visitorApi.getOffice(id));
+      const [row, deptRows, siteRows, buildingRows, zoneRows] = await Promise.all([
+        visitorApi.getOffice(id),
+        visitorApi.getDepartments(),
+        visitorApi.getSites(),
+        visitorApi.getBuildings(),
+        visitorApi.getZones(),
+      ]);
+      setOffice(row || null);
+      setDepartments(Array.isArray(deptRows) ? deptRows : []);
+      setSites(Array.isArray(siteRows) ? siteRows : []);
+      setBuildings(Array.isArray(buildingRows) ? buildingRows : []);
+      setZones(Array.isArray(zoneRows) ? zoneRows : []);
     } catch (err) {
       setOffice(null);
       toast.error(err?.message || 'Unable to load office.');
@@ -65,11 +84,51 @@ export default function AdminOfficeDetailPage() {
     void load();
   }, [load]);
 
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ value: d.id, label: d.code ? `${d.name} (${d.code})` : d.name })),
+    [departments],
+  );
+
+  const siteOptions = useMemo(
+    () => sites
+      .filter((s) => s.status !== 'inactive' || s.id === form.siteId)
+      .map((s) => ({ value: s.id, label: s.name })),
+    [sites, form.siteId],
+  );
+
+  const buildingOptions = useMemo(() => {
+    const list = form.siteId
+      ? buildings.filter((b) => b.site_id === form.siteId)
+      : buildings;
+    return list.map((b) => ({
+      value: b.id,
+      label: b.site_name ? `${b.name} · ${b.site_name}` : b.name,
+    }));
+  }, [buildings, form.siteId]);
+
+  const zoneOptions = useMemo(() => {
+    const list = form.buildingId
+      ? zones.filter((z) => z.building_id === form.buildingId)
+      : form.siteId
+        ? zones.filter((z) => z.site_id === form.siteId || buildings.some((b) => b.id === z.building_id && b.site_id === form.siteId))
+        : zones;
+    return list.map((z) => ({
+      value: z.id,
+      label: z.access_level ? `${z.name} · ${z.access_level}` : z.name,
+    }));
+  }, [zones, buildings, form.buildingId, form.siteId]);
+
   const openEdit = () => {
     if (!office) return;
+    const building = buildings.find((b) => b.id === office.building_id);
+    const zone = zones.find((z) => z.id === office.zone_id);
     setForm({
       officeNumber: office.office_number || '',
       name: office.name || '',
+      departmentId: office.department_id || '',
+      siteId: office.site_id || building?.site_id || zone?.site_id || '',
+      buildingId: office.building_id || zone?.building_id || '',
+      zoneId: office.zone_id || '',
       status: office.status || 'active',
     });
     setModalOpen(true);
@@ -78,14 +137,22 @@ export default function AdminOfficeDetailPage() {
   const handleSave = async () => {
     if (!office?.id) return;
     if (!form.officeNumber.trim()) {
-      toast.error('Office number is required.');
+      toast.error('Office label is required.');
+      return;
+    }
+    if (!form.departmentId || !form.buildingId || !form.zoneId) {
+      toast.error('Department, building, and zone are required.');
       return;
     }
     setSaving(true);
     try {
+      const label = form.officeNumber.trim();
       await visitorApi.updateOffice(office.id, {
-        officeNumber: form.officeNumber.trim(),
-        name: form.name.trim() || form.officeNumber.trim(),
+        officeNumber: label,
+        name: form.name.trim() || label,
+        departmentId: form.departmentId,
+        buildingId: form.buildingId,
+        zoneId: form.zoneId,
         status: form.status,
       });
       toast.success('Office updated.');
@@ -207,7 +274,7 @@ export default function AdminOfficeDetailPage() {
         isOpen={modalOpen}
         onClose={() => !saving && setModalOpen(false)}
         title="Edit Office"
-        subtitle="Update office label and status. Change placement from the offices list."
+        subtitle="Office → Zone + Building + Department (site from building)"
         size="md"
         footer={(
           <div className="flex justify-end gap-2">
@@ -227,12 +294,81 @@ export default function AdminOfficeDetailPage() {
       >
         <div className="space-y-3">
           <FormField
-            label="Office number"
+            label="Department"
+            name="departmentId"
+            type="searchable-select"
+            required
+            value={form.departmentId}
+            onChange={(e) => setForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+            options={departmentOptions}
+            placeholder="Search department…"
+          />
+          <FormField
+            label="Site / Branch"
+            name="siteId"
+            type="searchable-select"
+            required
+            value={form.siteId}
+            onChange={(e) => {
+              const siteId = e.target.value;
+              const nextBuilding = buildings.find((b) => b.site_id === siteId);
+              const nextZone = zones.find((z) => z.building_id === nextBuilding?.id);
+              setForm((prev) => ({
+                ...prev,
+                siteId,
+                buildingId: nextBuilding?.id || '',
+                zoneId: nextZone?.id || '',
+              }));
+            }}
+            options={siteOptions}
+            placeholder="Search site…"
+            helpText="Used to filter buildings and zones."
+          />
+          <FormField
+            label="Building"
+            name="buildingId"
+            type="searchable-select"
+            required
+            value={form.buildingId}
+            onChange={(e) => {
+              const buildingId = e.target.value;
+              const nextZone = zones.find((z) => z.building_id === buildingId);
+              setForm((prev) => ({
+                ...prev,
+                buildingId,
+                zoneId: nextZone?.id || '',
+              }));
+            }}
+            options={buildingOptions}
+            placeholder="Search building…"
+          />
+          <FormField
+            label="Zone"
+            name="zoneId"
+            type="searchable-select"
+            required
+            value={form.zoneId}
+            onChange={(e) => {
+              const zoneId = e.target.value;
+              const zone = zones.find((z) => z.id === zoneId);
+              setForm((prev) => ({
+                ...prev,
+                zoneId,
+                buildingId: zone?.building_id || prev.buildingId,
+                siteId: zone?.site_id || prev.siteId,
+              }));
+            }}
+            options={zoneOptions}
+            placeholder="Search zone…"
+            helpText="Required. Office belongs to this zone inside the building."
+          />
+          <FormField
+            label="Office label"
             name="officeNumber"
             required
             value={form.officeNumber}
             onChange={(e) => setForm((prev) => ({ ...prev, officeNumber: e.target.value }))}
-            placeholder="A-101"
+            placeholder="IT Dep Group office 6"
           />
           <FormField
             label="Name"
@@ -240,6 +376,7 @@ export default function AdminOfficeDetailPage() {
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="Executive suite"
+            helpText="Optional display name. Defaults to the office label if left blank."
           />
           <FormField
             label="Status"

@@ -191,15 +191,26 @@ export default function ReceptionCheckInPage() {
 
   const [boardModalOpen, setBoardModalOpen] = useState(false);
   const [boardUrl, setBoardUrl] = useState('');
+  const [boardToken, setBoardToken] = useState('');
   const [boardLoading, setBoardLoading] = useState(false);
+
+  const openBoardTab = (token) => {
+    if (!token) return;
+    window.open(`/signature-board/${token}`, '_blank', 'noopener');
+  };
 
   const openSignatureBoardLink = async () => {
     setBoardModalOpen(true);
-    if (boardUrl) return;
+    if (boardToken) {
+      openBoardTab(boardToken);
+      return;
+    }
     setBoardLoading(true);
     try {
       const data = await receptionApi.getSignatureBoard();
       setBoardUrl(data.boardUrl);
+      setBoardToken(data.token);
+      openBoardTab(data.token);
     } catch (err) {
       toast.error(err.message);
       setBoardModalOpen(false);
@@ -596,7 +607,7 @@ export default function ReceptionCheckInPage() {
                 label="Open board"
                 tooltip="Open board"
                 variant="secondary"
-                onClick={() => window.open(boardUrl, '_blank', 'noopener')}
+                onClick={() => openBoardTab(boardToken)}
               />
             </div>
             <p className="text-xs text-navy-400">

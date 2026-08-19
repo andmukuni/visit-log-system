@@ -157,8 +157,13 @@ describe('portal login routing', () => {
     assert.equal(isPortalLockExemptPath('/login'), true);
     assert.equal(isPortalLockExemptPath('/visit/invite/abc'), true);
     assert.equal(isPortalLockExemptPath('/visit/host-approval/abc'), true);
+    assert.equal(isPortalLockExemptPath('/signature-board/abc123'), true);
     assert.equal(isPortalLockExemptPath('/host'), false);
     assert.equal(isPortalLockExemptPath('/reception/calendar'), false);
+    assert.equal(
+      resolvePortalLockRedirect('/signature-board/abc123', receptionPerms, ['main_reception']),
+      null,
+    );
   });
 
   it('keeps host accounts on /host even when they also have reception permissions', () => {

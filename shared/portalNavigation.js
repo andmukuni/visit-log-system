@@ -240,7 +240,9 @@ export function isPortalLockExemptPath(pathname = '') {
     || path.startsWith('/visit/invite')
     || path.startsWith('/visit/host-approval')
     || path === '/kiosk'
-    || path.startsWith('/kiosk/');
+    || path.startsWith('/kiosk/')
+    || path === '/signature-board'
+    || path.startsWith('/signature-board/');
 }
 
 /** Host / employee calendar users — cannot switch into reception. */
