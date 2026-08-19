@@ -23,6 +23,11 @@ export default function SignaturePad({
   label = 'Sign here',
   hint = 'Use your finger or stylus to sign',
   className = '',
+  minHeight = 200,
+  maxHeight = 280,
+  aspect = 0.35,
+  showGuide = false,
+  paper = false,
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -49,7 +54,7 @@ export default function SignaturePad({
     dprRef.current = dpr;
 
     const width = container.clientWidth;
-    const height = Math.max(200, Math.min(280, Math.round(width * 0.35)));
+    const height = Math.max(minHeight, Math.min(maxHeight, Math.round(width * aspect)));
     const snapshot = hasStrokesRef.current ? canvas.toDataURL('image/png') : '';
 
     canvas.width = Math.floor(width * dpr);
@@ -67,7 +72,7 @@ export default function SignaturePad({
       };
       image.src = snapshot;
     }
-  }, [setupContext]);
+  }, [setupContext, minHeight, maxHeight, aspect]);
 
   useEffect(() => {
     resizeCanvas();
@@ -170,11 +175,11 @@ export default function SignaturePad({
       </div>
       <div
         ref={containerRef}
-        className="overflow-hidden rounded-2xl border-2 border-dashed border-navy-200 bg-white shadow-inner"
+        className={`relative overflow-hidden rounded-2xl border-2 border-dashed border-navy-200 shadow-inner ${paper ? 'bg-[#fbfaf6]' : 'bg-white'}`}
       >
         <canvas
           ref={canvasRef}
-          className="block w-full touch-none cursor-crosshair bg-white"
+          className={`block w-full touch-none cursor-crosshair ${paper ? 'bg-transparent' : 'bg-white'}`}
           aria-label={label}
           onPointerDown={startDraw}
           onPointerMove={draw}
@@ -182,6 +187,12 @@ export default function SignaturePad({
           onPointerLeave={endDraw}
           onPointerCancel={endDraw}
         />
+        {showGuide ? (
+          <div className="pointer-events-none absolute inset-x-8 bottom-8">
+            <div className="border-b border-navy-300/70" />
+            <p className="mt-1.5 text-[11px] tracking-wide text-navy-300">Sign above the line</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
