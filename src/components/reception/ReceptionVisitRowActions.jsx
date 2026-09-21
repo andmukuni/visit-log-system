@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, LogIn, LogOut, Send, Users } from 'lucide-react';
+import { Eye, LogIn, LogOut, Send, Users, XCircle } from 'lucide-react';
 import ReceiveAtDeskModal from './ReceiveAtDeskModal';
 import QueueToHostModal from './QueueToHostModal';
-import { IconButton, LoadingButton } from '../ui';
+import { ConfirmDialog, IconButton, LoadingButton } from '../ui';
 import { useToast } from '../../context/ToastContext';
 import { receptionApi, visitorApi } from '../../utils/visitorApi';
 import { toastHostApprovalRequested } from '../../utils/hostApprovalToast';
@@ -12,10 +12,13 @@ import {
   getReceptionVisitAction,
   isQueueToHostAction,
   isReceiveAtDeskAction,
+  isCheckoutAction,
+  isConfirmLeftAction,
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
-import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
+import { isCheckoutEligible, isConfirmLeftEligible } from '../../../shared/visitCheckout.js';
+import { isCancelEligible } from '../../../shared/visitCancel.js';
 
 const RECEPTION_ACTION_ICONS = {
   'check-in': LogIn,
@@ -27,7 +30,7 @@ export default function ReceptionVisitRowActions({
   row,
   visitId: visitIdProp,
   onCheckOut,
-  checkingOut = false,
+  checkingOut: checkingOutProp = false,
   showView = true,
   detailPathPrefix = '/reception/visitors',
   onRefresh,
@@ -37,6 +40,12 @@ export default function ReceptionVisitRowActions({
   const [queueOpen, setQueueOpen] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const [queuing, setQueuing] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmLeftOpen, setConfirmLeftOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [confirmingLeft, setConfirmingLeft] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [hosts, setHosts] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [offices, setOffices] = useState([]);
@@ -49,7 +58,11 @@ export default function ReceptionVisitRowActions({
   const isReceiveModal = isReceiveAtDeskAction(action);
   const isQueueModal = isQueueToHostAction(action);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
-  const canCheckOut = !isRestricted && Boolean(onCheckOut) && isCheckoutEligible(row);
+  const isPrimaryCheckout = isCheckoutAction(action);
+  const isPrimaryConfirmLeft = isConfirmLeftAction(action);
+  const canCheckOut = !isRestricted && isCheckoutEligible(row);
+  const canConfirmLeft = !isRestricted && isConfirmLeftEligible(row);
+  const canCancel = !isRestricted && isCancelEligible(row);
   const visitorName = row?.full_name || row?.visitor_name || 'visitor';
 
   const ensureQueueReferenceData = useCallback(async () => {
@@ -89,6 +102,55 @@ export default function ReceptionVisitRowActions({
       toast.error(err?.message || 'Could not queue visitor to host.');
     } finally {
       setQueuing(false);
+    }
+  };
+
+  const handleCheckOut = async () => {
+    if (!visitId) return;
+    setCheckingOut(true);
+    try {
+      if (onCheckOut) {
+        await onCheckOut(row);
+      } else {
+        const result = await receptionApi.checkOutVisit(visitId);
+        toast.success(result?.message || `${visitorName} checked out.`);
+        await onRefresh?.();
+      }
+      setCheckoutOpen(false);
+    } catch (err) {
+      toast.error(err?.message || 'Could not check out visitor.');
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  const handleConfirmLeft = async () => {
+    if (!visitId) return;
+    setConfirmingLeft(true);
+    try {
+      await receptionApi.markLeftPremises(visitId);
+      toast.success(`${visitorName} has left the premises.`);
+      setConfirmLeftOpen(false);
+      await onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not confirm departure.');
+    } finally {
+      setConfirmingLeft(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!visitId) return;
+    setCancelling(true);
+    try {
+      await receptionApi.cancelVisit(visitId);
+      toast.success(`${visitorName} cancelled.`);
+      setCancelOpen(false);
+      await onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || 'Could not cancel visit.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -165,6 +227,27 @@ export default function ReceptionVisitRowActions({
       );
     }
 
+    if (isPrimaryCheckout || isPrimaryConfirmLeft) {
+      return (
+        <LoadingButton
+          size="sm"
+          variant="reception"
+          icon={LogOut}
+          iconSize={14}
+          aria-label={`${action.label} ${visitorName}`}
+          loading={isPrimaryCheckout ? (checkingOut || checkingOutProp) : confirmingLeft}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (isPrimaryCheckout) setCheckoutOpen(true);
+            else setConfirmLeftOpen(true);
+          }}
+        >
+          {action.label}
+        </LoadingButton>
+      );
+    }
+
     if (!actionHref) return null;
 
     return (
@@ -183,7 +266,7 @@ export default function ReceptionVisitRowActions({
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
       {renderPrimaryAction()}
-      {canCheckOut ? (
+      {canCheckOut && !isPrimaryCheckout ? (
         <IconButton
           icon={LogOut}
           label="Check out"
@@ -194,10 +277,69 @@ export default function ReceptionVisitRowActions({
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
-            onCheckOut(row);
+            setCheckoutOpen(true);
           }}
         />
       ) : null}
+      {canConfirmLeft && !isPrimaryConfirmLeft ? (
+        <IconButton
+          icon={LogOut}
+          label="Confirm left"
+          tooltip="Confirm left"
+          size="sm"
+          variant="ghost"
+          loading={confirmingLeft}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setConfirmLeftOpen(true);
+          }}
+        />
+      ) : null}
+      {canCancel ? (
+        <IconButton
+          icon={XCircle}
+          label="Cancel visit"
+          tooltip="Cancel visit"
+          size="sm"
+          variant="ghost"
+          loading={cancelling}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setCancelOpen(true);
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        isOpen={checkoutOpen}
+        onClose={() => !checkingOut && setCheckoutOpen(false)}
+        onConfirm={handleCheckOut}
+        title="Check out this visitor?"
+        message="Confirm the visitor is leaving and collect any issued badge."
+        confirmLabel="Check out"
+        variant="primary"
+        loading={checkingOut}
+      />
+      <ConfirmDialog
+        isOpen={confirmLeftOpen}
+        onClose={() => !confirmingLeft && setConfirmLeftOpen(false)}
+        onConfirm={handleConfirmLeft}
+        title="Confirm they have left?"
+        message="This will close the visit and mark the visitor as off site."
+        confirmLabel="Confirm left"
+        variant="primary"
+        loading={confirmingLeft}
+      />
+      <ConfirmDialog
+        isOpen={cancelOpen}
+        onClose={() => !cancelling && setCancelOpen(false)}
+        onConfirm={handleCancel}
+        title="Cancel this visit?"
+        message="The visitor will be notified if they have a booking. This cannot be undone."
+        confirmLabel="Cancel visit"
+        loading={cancelling}
+      />
       {showView && visitId ? (
         <Link
           to={`${detailPathPrefix}/${visitId}`}

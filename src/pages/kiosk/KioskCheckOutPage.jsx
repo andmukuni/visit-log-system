@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Check, ArrowLeft } from 'lucide-react';
 import { LoadingButton, IconButton } from '../../components/ui';
@@ -26,11 +26,21 @@ export default function KioskCheckOutPage() {
     }
   };
 
+  useEffect(() => {
+    if (!done) return undefined;
+    const timer = window.setTimeout(() => {
+      setDone(false);
+      navigate('/kiosk');
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [done, navigate]);
+
   if (done) {
     return (
       <div className="text-center bg-white/5 rounded-2xl p-10 border border-cyan-500/30">
         <h2 className="text-2xl font-bold text-cyan-300 mb-4">Thank you</h2>
         <p className="text-white/80">You have been checked out safely.</p>
+        <p className="text-white/50 text-sm mt-2">This screen clears automatically.</p>
         <div className="mt-8 flex justify-center">
           <IconButton
             icon={Check}

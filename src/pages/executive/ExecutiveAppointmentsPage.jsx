@@ -184,6 +184,7 @@ export default function ExecutiveAppointmentsPage() {
                 splitLayout
                 onClose={() => setSelected(null)}
                 onReschedule={openReschedule}
+                onCancelled={() => { void load(); }}
               />
             </div>
           )}
@@ -204,6 +205,7 @@ export default function ExecutiveAppointmentsPage() {
               <ExecutiveAppointmentsDetailActions
                 appointment={selected}
                 onReschedule={openReschedule}
+                onCancelled={() => { void load(); }}
                 className="w-full"
               />
             </div>

@@ -214,7 +214,8 @@ export function resolveRouteAdminPermission(req) {
       return 'reception.host.queue';
     }
     if (path.includes('/request-approval')) return 'reception.approvals.track';
-    if (path.includes('/check-out')) return 'reception.visitors.checkout';
+    if (path.includes('/check-out') || path.includes('/left-premises')) return 'reception.visitors.checkout';
+    if (path.includes('/cancel')) return 'reception.visitors.register';
     return 'reception.visitors.view';
   }
 
@@ -333,6 +334,9 @@ export function resolveVisitRoutePermissions(req) {
   }
   if (path.includes('/check-out') || path.includes('/left-premises')) {
     return ['station.visitors.checkout'];
+  }
+  if (path.includes('/cancel')) {
+    return ['station.visitors.register', 'reception.visitors.register', 'host.invite'];
   }
   if (path.includes('/approve') || path.includes('/reject')) {
     return ['host.approvals', 'security.approvals', 'station.visitors.view'];

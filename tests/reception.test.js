@@ -117,7 +117,7 @@ describe('host occupied lifecycle', () => {
     assert.equal(canTransition('checked_in', 'waiting'), true);
     assert.equal(canTransition('pending_approval', 'in_meeting'), true);
     assert.equal(canTransition('waiting', 'in_meeting'), true);
-    assert.equal(canTransition('expected', 'waiting'), false);
+    assert.equal(canTransition('expected', 'waiting'), true);
     assert.equal(canTransition('rejected', 'waiting'), true);
     assert.equal(canTransition('rejected', 'checked_out'), true);
   });
@@ -162,7 +162,10 @@ describe('reception visit action labels', () => {
       false,
     );
     assert.equal(getReceptionVisitAction('in_meeting').show, false);
-    assert.equal(getReceptionVisitAction('overdue').show, false);
+    assert.equal(getReceptionVisitAction('overdue').show, true);
+    assert.equal(getReceptionVisitAction('overdue').actionKind, 'checkout');
+    assert.equal(getReceptionVisitAction('checked_out').show, true);
+    assert.equal(getReceptionVisitAction('checked_out').actionKind, 'confirm-left');
     assert.equal(getReceptionVisitAction('completed').show, false);
     assert.equal(
       getReceptionVisitAction({ status: 'pending_approval', checked_in_at: '2026-08-17T10:00:00Z' }).label,

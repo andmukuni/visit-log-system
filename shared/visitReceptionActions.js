@@ -150,11 +150,25 @@ export function getReceptionVisitAction(rawStatus, visit = null) {
     case 'overdue':
       return {
         stage: 'host',
-        label: 'Overdue',
+        label: 'Check out',
+        loadingLabel: 'Checking out…',
         href: null,
-        show: false,
+        actionKind: 'checkout',
+        show: true,
+        tone: 'cyan',
+        icon: 'check-in',
       };
     case 'checked_out':
+      return {
+        stage: 'done',
+        label: 'Confirm left',
+        loadingLabel: 'Confirming…',
+        href: null,
+        actionKind: 'confirm-left',
+        show: true,
+        tone: 'cyan',
+        icon: 'check-in',
+      };
     case 'left_premises':
     case 'completed':
     case 'rejected':
@@ -189,6 +203,14 @@ export function isReceiveAtDeskAction(action) {
 /** Whether the primary reception action opens the queue-to-host modal. */
 export function isQueueToHostAction(action) {
   return action?.actionKind === 'queue-modal';
+}
+
+export function isCheckoutAction(action) {
+  return action?.actionKind === 'checkout';
+}
+
+export function isConfirmLeftAction(action) {
+  return action?.actionKind === 'confirm-left';
 }
 
 /** Desk check-in button copy (gate panel / icon-only actions). */

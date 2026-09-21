@@ -12,8 +12,10 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { Spinner, VisitorTypeBadge } from '../ui';
-import { executiveApi } from '../../utils/visitorApi';
+import { ConfirmDialog, Spinner, VisitorTypeBadge } from '../ui';
+import { executiveApi, hostApi } from '../../utils/visitorApi';
+import { isCancelEligible } from '../../../shared/visitCancel.js';
+import { useToast } from '../../context/ToastContext';
 import {
   formatAppointmentTimeRange,
   formatDetailDateLabel,
@@ -50,14 +52,38 @@ function DetailSection({ title, children }) {
 export function ExecutiveAppointmentsDetailActions({
   appointment,
   onReschedule,
+  onCancelled,
   className = '',
 }) {
+  const toast = useToast();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
   if (!appointment) return null;
 
   const { start, end } = formatAppointmentTimeRange(
     appointment.scheduled_at,
     appointment.duration_minutes,
   );
+  const canCancel = isCancelEligible({
+    status: appointment.visit_status || appointment.status,
+    checked_in_at: appointment.checked_in_at,
+  });
+
+  const handleCancel = async () => {
+    if (!appointment.visit_id) return;
+    setCancelling(true);
+    try {
+      await hostApi.cancelVisit(appointment.visit_id);
+      toast.success('Appointment cancelled.');
+      setCancelOpen(false);
+      onCancelled?.(appointment);
+    } catch (err) {
+      toast.error(err.message || 'Could not cancel appointment.');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className={`flex shrink-0 gap-2 px-4 py-2 sm:gap-3 sm:px-5 sm:py-2.5 ${className}`}>
@@ -69,6 +95,25 @@ export function ExecutiveAppointmentsDetailActions({
         <CalendarCheck size={16} aria-hidden="true" />
         Reschedule
       </button>
+      {canCancel ? (
+        <button
+          type="button"
+          onClick={() => setCancelOpen(true)}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
+        >
+          <X size={16} aria-hidden="true" />
+          Cancel
+        </button>
+      ) : null}
+      <ConfirmDialog
+        isOpen={cancelOpen}
+        onClose={() => !cancelling && setCancelOpen(false)}
+        onConfirm={handleCancel}
+        title="Cancel this appointment?"
+        message="The visitor will be notified if they have a booking. This cannot be undone."
+        confirmLabel="Cancel appointment"
+        loading={cancelling}
+      />
       {appointment.visit_id ? (
         <Link
           to={`/host/register/${appointment.visit_id}`}
@@ -95,6 +140,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
   appointment,
   onClose,
   onReschedule,
+  onCancelled,
   splitLayout = false,
 }) {
   const [data, setData] = useState(null);
@@ -221,6 +267,7 @@ export default function ExecutiveAppointmentsDetailSidebar({
       <ExecutiveAppointmentsDetailActions
         appointment={appointment}
         onReschedule={onReschedule}
+        onCancelled={onCancelled}
         className={`border-t border-gray-200 ${splitLayout ? 'lg:hidden' : ''}`}
       />
     </aside>

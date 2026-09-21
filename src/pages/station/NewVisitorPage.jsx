@@ -43,6 +43,10 @@ export default function NewVisitorPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.hostId) {
+      toast.error('Select the host this visitor is seeing.');
+      return;
+    }
     setSubmitting(true);
     try {
       const visit = await visitorApi.registerVisit(form);
@@ -76,7 +80,7 @@ export default function NewVisitorPage() {
             <FormField label="Email" name="email" type="email" value={form.email} onChange={update('email')} />
             <FormField label="Organisation / Company" name="company" value={form.company} onChange={update('company')} />
             <FormField label="Visitor category" name="categoryId" type="select" value={form.categoryId} onChange={update('categoryId')} options={categoryOptions} />
-            <FormField label="Host / Person visiting" name="hostId" type="select" value={form.hostId} onChange={update('hostId')} options={hostOptions} />
+            <FormField label="Host / Person visiting" name="hostId" type="select" value={form.hostId} onChange={update('hostId')} options={hostOptions} required />
             <FormField label="Purpose of visit" name="purpose" textarea value={form.purpose} onChange={update('purpose')} rows={3} />
             <div className="md:col-span-2">
               <ActionToolbar>

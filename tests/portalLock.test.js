@@ -135,6 +135,9 @@ describe('BACKEND — route permissions match the portal each role is locked to'
     ['/admin/reception/visits/abc/queue-host', 'POST'],
     ['/admin/reception/visits/abc/in-meeting', 'POST'],
     ['/admin/reception/visits/abc/request-approval', 'POST'],
+    ['/admin/reception/visits/abc/check-out', 'POST'],
+    ['/admin/reception/visits/abc/left-premises', 'POST'],
+    ['/admin/reception/visits/abc/cancel', 'POST'],
   ];
 
   it('every reception route is reachable by every reception role', () => {

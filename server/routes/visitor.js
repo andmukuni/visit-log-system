@@ -21,6 +21,7 @@ import {
   applyHostRejection,
 } from '../hostApprovalService.js';
 import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
+import { applyVisitCancel, VisitCancelError } from '../visitCancel.js';
 import { markOverdueVisits } from '../visitOverdue.js';
 import { applyVisitReceptionCheckIn } from '../visitCheckInService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
@@ -669,7 +670,7 @@ export function createStationRouter() {
         const passCode = generatePassCode();
         await pool.query(
           `INSERT INTO visits (id, organisation_id, site_id, station_id, visitor_id, host_id, purpose, status, pass_code, check_in_signature, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'expected', ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'arrived_at_gate', ?, ?, ?)`,
           [
             visitId,
             organisationId,
@@ -1650,27 +1651,15 @@ export function createVisitsRouter() {
         return res.status(loaded.status).json({ ok: false, message: loaded.message });
       }
 
-      const { visit, userId } = loaded;
-      if (!canTransition(visit.status, 'cancelled')) {
-        return res.status(400).json({ ok: false, message: 'Visit cannot be cancelled in its current state.' });
-      }
-
-      await pool.query("UPDATE visits SET status = 'cancelled', updated_at = NOW() WHERE id = ?", [visit.id]);
-      if (visit.badge_number) {
-        await pool.query(
-          `UPDATE badges SET status = 'available', visit_id = NULL, returned_at = NOW()
-           WHERE organisation_id = ? AND badge_number = ?`,
-          [visit.organisation_id, visit.badge_number],
-        );
-      }
-      await exitVisitVehicles(pool, { visitId: visit.id });
-      await writeVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId, reason: reason || null });
-      notifyVisitEvent(pool, { visitId: visit.id, eventType: 'cancelled', actorUserId: userId })
-        .catch((error) => console.warn('[visit.cancel] notify failed:', error.message));
-      await refreshHostAvailabilityAfterVisit(pool, visit);
-      res.json({ ok: true, message: 'Visit cancelled.' });
+      const result = await applyVisitCancel(pool, {
+        visit: loaded.visit,
+        actorUserId: loaded.userId,
+        reason: reason || null,
+      });
+      res.json(result);
     } catch (error) {
-      res.status(500).json({ ok: false, message: error.message });
+      const status = error instanceof VisitCancelError ? error.status : 500;
+      res.status(status).json({ ok: false, message: error.message });
     }
   });
 

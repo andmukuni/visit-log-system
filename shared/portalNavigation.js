@@ -134,6 +134,7 @@ export const PORTAL_NAVIGATION = {
   // Host + former executive calendar merged into one employee portal.
   host: [
     { key: 'dashboard', name: 'Calendar', to: '/host', permissions: ['executive.dashboard', 'host.dashboard'], end: true, section: 'primary', isPrimaryRoute: true },
+    { key: 'invite', name: 'Invite Visitor', to: '/host/invite', permission: 'host.invite', section: 'primary' },
     { key: 'visitor-logs', name: 'Visitor Logs', to: '/host/visitors', permission: 'host.visitors', section: 'primary', badgeKey: 'visitor_logs' },
     { key: 'appointments', name: 'Appointments', to: '/host/appointments', permission: 'executive.calendar', section: 'primary' },
     { key: 'approvals', name: 'Approval Requests', to: '/host/approvals', permission: 'host.approvals', section: 'primary' },

@@ -786,6 +786,14 @@ export default function GateEntryCheckInForm({
         toast.error('Plate number is required.');
         return false;
       }
+      if (step === 2 && !String(vehicle.hostId || '').trim()) {
+        toast.error('Select the person they are visiting.');
+        return false;
+      }
+      if (step === 3 && !checkInSignature.trim()) {
+        toast.error('Please sign to confirm check-in.');
+        return false;
+      }
       return true;
     }
     if (step === 0) {
@@ -811,6 +819,13 @@ export default function GateEntryCheckInForm({
         return false;
       }
       return true;
+    }
+    if (step === 2) {
+      const hostId = mode === 'vehicle' ? vehicle.hostId : walkIn.hostId;
+      if (!String(hostId || '').trim()) {
+        toast.error('Select the person they are visiting.');
+        return false;
+      }
     }
     if (step === 3 && !checkInSignature.trim()) {
       toast.error('Please sign to confirm check-in.');
@@ -861,6 +876,10 @@ export default function GateEntryCheckInForm({
   const submitWalkIn = async (e) => {
     e?.preventDefault?.();
     if (!validateStep()) return;
+    if (!String(walkIn.hostId || '').trim()) {
+      toast.error('Select the person they are visiting.');
+      return;
+    }
     setSubmitting(true);
     try {
       const visit = await api.submitWalkIn({
@@ -893,6 +912,10 @@ export default function GateEntryCheckInForm({
     if (!validateStep()) return;
     if (!vehicle.plateNumber.trim()) {
       toast.error('Plate number is required.');
+      return;
+    }
+    if (!String(vehicle.hostId || '').trim()) {
+      toast.error('Select the person they are visiting.');
       return;
     }
     setSubmitting(true);

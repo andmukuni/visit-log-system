@@ -21,6 +21,7 @@ import { normalizeHostAvailability } from '../hostAvailability.js';
 import { resolveHostZoneId } from '../receptionistService.js';
 import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 import { applyHostApproval, applyHostRejection } from '../hostApprovalService.js';
+import { applyVisitCancel, VisitCancelError } from '../visitCancel.js';
 
 function normalizeNrc(value) {
   const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
@@ -557,6 +558,33 @@ export function createHostRouter() {
       res.json({ ok: true, message: result.message });
     } catch (error) {
       res.status(error.status || 500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/visits/:id/cancel', async (req, res) => {
+    try {
+      const ctx = await getHostContext(req);
+      if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
+
+      const userId = req.adminClaims.sub;
+      const { reason } = req.body || {};
+      const loaded = await loadVisitForHost(pool, req.params.id, {
+        host: ctx.host,
+        userId,
+        elevated: ctx.elevated,
+        scope: ctx.scope,
+      });
+      if (!loaded.ok) return res.status(loaded.status).json({ ok: false, message: loaded.message });
+
+      const result = await applyVisitCancel(pool, {
+        visit: loaded.visit,
+        actorUserId: userId,
+        reason: reason || null,
+      });
+      res.json(result);
+    } catch (error) {
+      const status = error instanceof VisitCancelError ? error.status : 500;
+      res.status(status).json({ ok: false, message: error.message });
     }
   });
 

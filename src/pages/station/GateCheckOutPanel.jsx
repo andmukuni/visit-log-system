@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Car, Footprints, LogOut, Search, User } from 'lucide-react';
-import { LoadingButton, VisitStatusBadge } from '../../components/ui';
+import { ConfirmDialog, LoadingButton, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { getGateCheckoutActionLabel, isGateExitEligible } from '../../../shared/visitCheckout.js';
 import { formatNrcInput, isCompleteNrc, visitorDisplayName } from '../../utils/helpers';
@@ -58,6 +58,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(null);
+  const [confirmRow, setConfirmRow] = useState(null);
 
   const loadOnSite = useCallback(async () => {
     setLoading(true);
@@ -102,9 +103,15 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
     const visitId = row.id;
     setCheckingOut(visitId);
     try {
-      await visitorApi.checkOutVisit(visitId);
-      toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} checked out.`);
+      if (String(row.status || '').toLowerCase() === 'checked_out') {
+        await visitorApi.markLeftPremises(visitId);
+        toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} left the premises.`);
+      } else {
+        await visitorApi.checkOutVisit(visitId);
+        toast.success(`${visitorDisplayName(row, isVehicle ? 'Vehicle' : 'Visitor')} checked out.`);
+      }
       setVisits((prev) => prev.filter((v) => v.id !== visitId));
+      setConfirmRow(null);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -189,7 +196,7 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
                       icon={LogOut}
                       iconOnly
                       size="lg"
-                      onClick={() => handleCheckOut(row)}
+                      onClick={() => setConfirmRow(row)}
                       className="bg-navy-800 hover:bg-navy-700 border-navy-800"
                     />
                   </div>
@@ -201,6 +208,20 @@ export default function GateCheckOutPanel({ mode = 'walk-in' }) {
           </div>
         )}
       </FormSection>
+      <ConfirmDialog
+        isOpen={Boolean(confirmRow)}
+        onClose={() => !checkingOut && setConfirmRow(null)}
+        onConfirm={() => confirmRow && handleCheckOut(confirmRow)}
+        title={String(confirmRow?.status || '').toLowerCase() === 'checked_out'
+          ? 'Confirm they have left?'
+          : 'Check out this visitor?'}
+        message={String(confirmRow?.status || '').toLowerCase() === 'checked_out'
+          ? 'This will close the visit and mark the visitor as off site.'
+          : 'Confirm the visitor is leaving and collect any issued badge.'}
+        confirmLabel={String(confirmRow?.status || '').toLowerCase() === 'checked_out' ? 'Confirm left' : 'Check out'}
+        variant="primary"
+        loading={Boolean(checkingOut)}
+      />
     </div>
   );
 }

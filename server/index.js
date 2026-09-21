@@ -39,6 +39,7 @@ import pool from './db.js';
 import { waitForDatabase } from './waitForDatabase.js';
 import { retryFailedDeliveries, notifyPreArrivalReminders } from './notificationService.js';
 import { markOverdueVisits } from './visitOverdue.js';
+import { markExpiredVisits } from './visitExpire.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
 
@@ -274,6 +275,7 @@ async function main() {
   startNotificationRetryWorker();
   startPreArrivalReminderWorker();
   startOverdueVisitWorker();
+  startExpiredVisitWorker();
   await startHttpServer();
 }
 
@@ -321,6 +323,22 @@ function startOverdueVisitWorker() {
     }
   };
   setTimeout(tick, 8_000);
+  setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
+}
+
+function startExpiredVisitWorker() {
+  const intervalMs = Number(process.env.EXPIRED_VISIT_INTERVAL_MS || 60_000);
+  const tick = async () => {
+    try {
+      const result = await markExpiredVisits(pool);
+      if (result.expired > 0) {
+        console.log(`[visits] Marked ${result.expired} visit(s) expired`);
+      }
+    } catch (error) {
+      console.error('[visits] Expire worker error:', error.message);
+    }
+  };
+  setTimeout(tick, 12_000);
   setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
 }
 

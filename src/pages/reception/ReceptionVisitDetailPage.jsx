@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { LogIn, LogOut, Send, UserCheck, Users, CalendarClock } from 'lucide-react';
-import { LoadingButton } from '../../components/ui';
+import { LogIn, LogOut, Send, UserCheck, Users, CalendarClock, XCircle } from 'lucide-react';
+import { ConfirmDialog, LoadingButton } from '../../components/ui';
 import { VisitorDetailView } from '../../components/visitors';
 import QueueToHostModal from '../../components/reception/QueueToHostModal';
 import ReceiveAtDeskModal from '../../components/reception/ReceiveAtDeskModal';
@@ -16,10 +16,13 @@ import {
   canMarkInMeeting,
   canRescheduleVisit,
   isReceiveAtDeskAction,
+  isCheckoutAction,
+  isConfirmLeftAction,
   receptionActionButtonClass,
   receptionActionHref,
 } from '../../../shared/visitReceptionActions.js';
-import { isCheckoutEligible } from '../../../shared/visitCheckout.js';
+import { isCheckoutEligible, isConfirmLeftEligible } from '../../../shared/visitCheckout.js';
+import { isCancelEligible } from '../../../shared/visitCancel.js';
 
 const RECEPTION_ACTION_ICONS = {
   'check-in': LogIn,
@@ -34,7 +37,10 @@ function ReceptionHeroActions({
   onMarkInMeeting,
   onReschedule,
   onCheckOut,
+  onConfirmLeft,
+  onCancel,
   checkingOut,
+  confirmingLeft,
   markingInMeeting,
 }) {
   const action = getReceptionVisitAction(visit);
@@ -42,10 +48,14 @@ function ReceptionHeroActions({
   const canMeeting = canMarkInMeeting(visit);
   const canReschedule = canRescheduleVisit(visit);
   const canCheckOut = isCheckoutEligible(visit);
+  const canConfirmLeft = isConfirmLeftEligible(visit);
+  const canCancel = isCancelEligible(visit);
   const isReceiveModal = isReceiveAtDeskAction(action);
+  const isPrimaryCheckout = isCheckoutAction(action);
+  const isPrimaryConfirmLeft = isConfirmLeftAction(action);
   const ActionIcon = RECEPTION_ACTION_ICONS[action?.icon] || LogIn;
 
-  if (!action?.show && !canQueue && !canMeeting && !canReschedule && !canCheckOut) return null;
+  if (!action?.show && !canQueue && !canMeeting && !canReschedule && !canCheckOut && !canConfirmLeft && !canCancel) return null;
 
   return (
     <>
@@ -59,7 +69,29 @@ function ReceptionHeroActions({
           {action.label}
         </LoadingButton>
       ) : null}
-      {action?.show && action.href && !action.disabled && !canQueue && !isReceiveModal ? (
+      {action?.show && isPrimaryCheckout ? (
+        <LoadingButton
+          size="md"
+          variant="reception"
+          icon={LogOut}
+          loading={checkingOut}
+          onClick={onCheckOut}
+        >
+          {action.label}
+        </LoadingButton>
+      ) : null}
+      {action?.show && isPrimaryConfirmLeft ? (
+        <LoadingButton
+          size="md"
+          variant="reception"
+          icon={LogOut}
+          loading={confirmingLeft}
+          onClick={onConfirmLeft}
+        >
+          {action.label}
+        </LoadingButton>
+      ) : null}
+      {action?.show && action.href && !action.disabled && !canQueue && !isReceiveModal && !isPrimaryCheckout && !isPrimaryConfirmLeft ? (
         <Link
           to={receptionActionHref(action, visit.id)}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors ${receptionActionButtonClass(action.tone)}`}
@@ -105,7 +137,7 @@ function ReceptionHeroActions({
           With host
         </LoadingButton>
       ) : null}
-      {canCheckOut ? (
+      {canCheckOut && !isPrimaryCheckout ? (
         <LoadingButton
           size="md"
           variant="secondary"
@@ -115,6 +147,29 @@ function ReceptionHeroActions({
           className="border-navy-200"
         >
           Check out
+        </LoadingButton>
+      ) : null}
+      {canConfirmLeft && !isPrimaryConfirmLeft ? (
+        <LoadingButton
+          size="md"
+          variant="secondary"
+          icon={LogOut}
+          loading={confirmingLeft}
+          onClick={onConfirmLeft}
+          className="border-navy-200"
+        >
+          Confirm left
+        </LoadingButton>
+      ) : null}
+      {canCancel ? (
+        <LoadingButton
+          size="md"
+          variant="secondary"
+          icon={XCircle}
+          onClick={onCancel}
+          className="border-red-200 text-red-700 hover:bg-red-50"
+        >
+          Cancel visit
         </LoadingButton>
       ) : null}
     </>
@@ -135,6 +190,11 @@ export default function ReceptionVisitDetailPage() {
   const [visitForModal, setVisitForModal] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [confirmingLeft, setConfirmingLeft] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [checkoutConfirmOpen, setCheckoutConfirmOpen] = useState(false);
+  const [confirmLeftOpen, setConfirmLeftOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [markingInMeeting, setMarkingInMeeting] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
@@ -188,13 +248,44 @@ export default function ReceptionVisitDetailPage() {
     if (!visit?.id) return;
     setCheckingOut(true);
     try {
-      await receptionApi.checkOutVisit(visit.id);
-      toast.success(`${visit.full_name || visit.visitor_name || 'Visitor'} checked out.`);
+      const result = await receptionApi.checkOutVisit(visit.id);
+      toast.success(result?.message || `${visit.full_name || visit.visitor_name || 'Visitor'} checked out.`);
+      setCheckoutConfirmOpen(false);
       setReloadKey((value) => value + 1);
     } catch (err) {
       toast.error(err.message || 'Could not check out visitor.');
     } finally {
       setCheckingOut(false);
+    }
+  };
+
+  const handleConfirmLeft = async (visit) => {
+    if (!visit?.id) return;
+    setConfirmingLeft(true);
+    try {
+      await receptionApi.markLeftPremises(visit.id);
+      toast.success(`${visit.full_name || visit.visitor_name || 'Visitor'} has left the premises.`);
+      setConfirmLeftOpen(false);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err.message || 'Could not confirm departure.');
+    } finally {
+      setConfirmingLeft(false);
+    }
+  };
+
+  const handleCancelVisit = async (visit) => {
+    if (!visit?.id) return;
+    setCancelling(true);
+    try {
+      await receptionApi.cancelVisit(visit.id);
+      toast.success(`${visit.full_name || visit.visitor_name || 'Visit'} cancelled.`);
+      setCancelOpen(false);
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      toast.error(err.message || 'Could not cancel visit.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -234,8 +325,11 @@ export default function ReceptionVisitDetailPage() {
       onReceiveAtDesk={() => setReceiveOpen(true)}
       onMarkInMeeting={() => handleMarkInMeeting(visit)}
       onReschedule={() => setRescheduleOpen(true)}
-      onCheckOut={() => handleCheckOut(visit)}
+      onCheckOut={() => setCheckoutConfirmOpen(true)}
+      onConfirmLeft={() => setConfirmLeftOpen(true)}
+      onCancel={() => setCancelOpen(true)}
       checkingOut={checkingOut}
+      confirmingLeft={confirmingLeft}
       markingInMeeting={markingInMeeting}
     />
   );
@@ -284,6 +378,35 @@ export default function ReceptionVisitDetailPage() {
               visit={visitForModal}
               submitting={rescheduling}
               onConfirm={handleRescheduleConfirm}
+            />
+            <ConfirmDialog
+              isOpen={checkoutConfirmOpen}
+              onClose={() => !checkingOut && setCheckoutConfirmOpen(false)}
+              onConfirm={() => handleCheckOut(visitForModal)}
+              title="Check out this visitor?"
+              message="Confirm the visitor is leaving and collect any issued badge."
+              confirmLabel="Check out"
+              variant="primary"
+              loading={checkingOut}
+            />
+            <ConfirmDialog
+              isOpen={confirmLeftOpen}
+              onClose={() => !confirmingLeft && setConfirmLeftOpen(false)}
+              onConfirm={() => handleConfirmLeft(visitForModal)}
+              title="Confirm they have left?"
+              message="This will close the visit and mark the visitor as off site."
+              confirmLabel="Confirm left"
+              variant="primary"
+              loading={confirmingLeft}
+            />
+            <ConfirmDialog
+              isOpen={cancelOpen}
+              onClose={() => !cancelling && setCancelOpen(false)}
+              onConfirm={() => handleCancelVisit(visitForModal)}
+              title="Cancel this visit?"
+              message="The visitor will be notified if they have a booking. This cannot be undone."
+              confirmLabel="Cancel visit"
+              loading={cancelling}
             />
           </>
         )}

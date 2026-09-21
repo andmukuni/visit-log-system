@@ -71,6 +71,11 @@ export function getGateCheckoutActionLabel(statusOrVisit) {
   return { label: 'Check out', loadingLabel: 'Checking out…' };
 }
 
+/** Reception / station can confirm a desk checkout has physically left. */
+export function isConfirmLeftEligible(statusOrVisit) {
+  return normalizeCheckoutStatus(statusOrVisit) === 'checked_out';
+}
+
 /** Visits that are no longer on the live reception desk workload for today. */
 export const VISIT_CLOSED_STATUSES = Object.freeze([
   'cancelled',

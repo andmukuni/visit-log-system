@@ -79,6 +79,10 @@ export const visitorApi = {
   }),
   checkOutVisit: (id) => apiFetch(`/admin/visits/${id}/check-out`, { method: 'POST' }),
   markLeftPremises: (id) => apiFetch(`/admin/visits/${id}/left-premises`, { method: 'POST' }),
+  cancelVisit: (id, reason) => apiFetch(`/admin/visits/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
   lookupVisit: (query, type, purpose = 'check-in') => apiFetch('/admin/visits/lookup', {
     method: 'POST',
     body: JSON.stringify({ query, type, purpose }),
@@ -359,6 +363,10 @@ export const hostApi = {
   inviteVisitor: (body) => apiFetch('/admin/host/invite', { method: 'POST', body: JSON.stringify(body) }),
   approveVisit: (id, reason) => apiFetch(`/admin/host/visits/${id}/approve`, { method: 'POST', body: JSON.stringify({ reason }) }),
   rejectVisit: (id, reason) => apiFetch(`/admin/host/visits/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  cancelVisit: (id, reason) => apiFetch(`/admin/host/visits/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
 };
 
 export const securityApi = {
@@ -643,6 +651,11 @@ export const receptionApi = {
     body: JSON.stringify(body),
   }),
   checkOutVisit: (id) => apiFetch(`/admin/reception/visits/${id}/check-out`, { method: 'POST' }),
+  markLeftPremises: (id) => apiFetch(`/admin/reception/visits/${id}/left-premises`, { method: 'POST' }),
+  cancelVisit: (id, reason) => apiFetch(`/admin/reception/visits/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
   requestApproval: (id) => apiFetch(`/admin/reception/visits/${id}/request-approval`, { method: 'POST' }),
   getSignatureBoard: () => apiFetch('/admin/reception/signature-board'),
   createSignatureRequest: (body) => apiFetch('/admin/reception/signature-requests', { method: 'POST', body: JSON.stringify(body) }),

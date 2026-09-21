@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Check, ArrowLeft } from 'lucide-react';
 import { LoadingButton, IconButton } from '../../components/ui';
@@ -32,11 +32,21 @@ export default function KioskCheckInPage() {
     }
   };
 
+  useEffect(() => {
+    if (!success) return undefined;
+    const timer = window.setTimeout(() => {
+      setSuccess(null);
+      navigate('/kiosk');
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [success, navigate]);
+
   if (success) {
     return (
       <div className="text-center bg-white/5 rounded-2xl p-10 border border-green-500/30">
         <h2 className="text-2xl font-bold text-green-300 mb-4">You&apos;re checked in</h2>
         <p className="text-white/80 mb-2">Your pass code: <strong className="text-white">{success.passCode}</strong></p>
+        <p className="text-white/50 text-sm">This screen clears automatically.</p>
         {success.badgeNumber && <p className="text-white/70">Badge: {success.badgeNumber}</p>}
         <div className="mt-8 flex justify-center">
           <IconButton

@@ -187,9 +187,9 @@ export const VISIT_TRANSITIONS = {
   // Host can approve pre-arrival (approved/expected) or accept a reception-queued visitor (in_meeting).
   pending_approval: ['approved', 'expected', 'waiting', 'in_meeting', 'reception_check_in', 'rejected', 'cancelled', 'checked_out', 'overdue'],
   approved: ['expected', 'arrived_at_gate', 'checked_in', 'reception_check_in', 'cancelled', 'expired'],
-  expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'queue', 'expired'],
+  expected: ['arrived_at_gate', 'reception_check_in', 'checked_in', 'waiting', 'pending_approval', 'expired', 'cancelled'],
   arrived_at_gate: ['entered_premises', 'reception_check_in', 'checked_in', 'checked_out', 'cancelled'],
-  entered_premises: ['reception_check_in', 'checked_in', 'checked_out', 'queue'],
+  entered_premises: ['reception_check_in', 'checked_in', 'checked_out', 'waiting', 'pending_approval'],
   // Desk queue sends the visitor to the host approvals list first.
   reception_check_in: ['pending_approval', 'waiting', 'in_meeting', 'checked_in', 'checked_out', 'overdue'],
   checked_in: ['pending_approval', 'waiting', 'in_meeting', 'checked_out', 'overdue', 'completed'],

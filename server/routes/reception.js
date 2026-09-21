@@ -6,7 +6,7 @@ import { notifyVisitEvent } from '../notificationService.js';
 import { requestHostApproval, isReceptionQueueVisit } from '../hostApprovalService.js';
 import { isCheckoutEligible, VISIT_CLOSED_STATUSES } from '../../shared/visitCheckout.js';
 import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
-import { exitVisitVehicles } from '../visitExit.js';
+import { exitVisitVehicles, finalizeVisitDeparture, shouldFinalizeReceptionCheckout } from '../visitExit.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
@@ -31,6 +31,7 @@ import {
   fetchWeeklyDriveInVisits,
 } from '../dashboardStats.js';
 import { markHostUnavailableForVisit, refreshHostAvailabilityAfterVisit } from '../hostAvailability.js';
+import { applyVisitCancel, VisitCancelError } from '../visitCancel.js';
 import { generateId } from '../visitorSchema.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
 import {
@@ -1395,7 +1396,78 @@ export function createReceptionRouter() {
         .catch((error) => console.warn('[reception.checkout] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
 
-      res.json({ ok: true, message: 'Visitor checked out.' });
+      if (await shouldFinalizeReceptionCheckout(pool, visitId)) {
+        await finalizeVisitDeparture(pool, { visitId, actorUserId: userId, notifyVisitor: false });
+        return res.json({ ok: true, message: 'Visitor checked out and marked completed.', completed: true });
+      }
+
+      res.json({ ok: true, message: 'Visitor checked out. Confirm they have left at the gate.', completed: false });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/visits/:id/cancel', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const visitId = req.params.id;
+      const { reason } = req.body || {};
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const result = await applyVisitCancel(pool, {
+        visit: loaded.visit,
+        actorUserId: userId,
+        reason: reason || null,
+      });
+      res.json(result);
+    } catch (error) {
+      const status = error instanceof VisitCancelError ? error.status : 500;
+      res.status(status).json({ ok: false, message: error.message });
+    }
+  });
+
+  router.post('/visits/:id/left-premises', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const visitId = req.params.id;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scopeResult = await requireUserScope(pool, userId, req.adminClaims);
+      if (!scopeResult.ok) {
+        return res.status(scopeResult.status).json({ ok: false, message: scopeResult.message });
+      }
+
+      const loaded = await loadReceptionVisit(visitId, scopeResult.scope, zoneReq.zoneIds);
+      if (!loaded.ok) {
+        return res.status(loaded.status).json({ ok: false, message: loaded.message });
+      }
+
+      const visit = loaded.visit;
+      if (String(visit.status || '').toLowerCase() !== 'checked_out') {
+        return res.status(400).json({ ok: false, message: 'Visit must be checked out before leaving premises.' });
+      }
+      if (!canTransition(visit.status, 'left_premises')) {
+        return res.status(400).json({ ok: false, message: 'Visit cannot be marked as left in its current state.' });
+      }
+
+      await finalizeVisitDeparture(pool, { visitId: visit.id, actorUserId: userId, notifyVisitor: false });
+      res.json({ ok: true, message: 'Visitor marked as left premises.' });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

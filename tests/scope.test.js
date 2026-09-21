@@ -41,6 +41,11 @@ describe('visit state transitions', () => {
     assert.ok(VISIT_TRANSITIONS.rejected.includes('checked_out'));
     assert.ok(VISIT_TRANSITIONS.pending_approval.includes('checked_out'));
     assert.ok(VISIT_TRANSITIONS.arrived_at_gate.includes('checked_in'));
+    assert.ok(VISIT_TRANSITIONS.expected.includes('waiting'));
+    assert.ok(VISIT_TRANSITIONS.expected.includes('pending_approval'));
+    assert.equal(VISIT_TRANSITIONS.expected.includes('queue'), false);
+    assert.equal(VISIT_TRANSITIONS.entered_premises.includes('queue'), false);
+    assert.ok(VISIT_TRANSITIONS.entered_premises.includes('waiting'));
   });
 
   it('allows kiosk/staff check-in after gate arrival', () => {

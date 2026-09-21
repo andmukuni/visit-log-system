@@ -11,6 +11,25 @@ export async function exitVisitVehicles(pool, { visitId, stationId = null } = {}
   );
 }
 
+const GATE_ARRIVAL_EVENTS = Object.freeze(['arrived_at_gate', 'entered_premises']);
+
+/** True when the visit was logged at a gate before reception checkout. */
+export async function visitHadGateArrival(pool, visitId) {
+  if (!visitId) return false;
+  const [[event]] = await pool.query(
+    `SELECT id FROM visit_events
+     WHERE visit_id = ? AND event_type IN (?, ?)
+     LIMIT 1`,
+    [visitId, ...GATE_ARRIVAL_EVENTS],
+  );
+  return Boolean(event);
+}
+
+/** Reception-only visits can complete at the desk; gate arrivals wait for confirm-left. */
+export async function shouldFinalizeReceptionCheckout(pool, visitId) {
+  return !(await visitHadGateArrival(pool, visitId));
+}
+
 /** Gate-confirm the visitor has left: left_premises, then completed. */
 export async function finalizeVisitDeparture(pool, {
   visitId,
