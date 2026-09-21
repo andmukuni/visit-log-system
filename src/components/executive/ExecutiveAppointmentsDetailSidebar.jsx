@@ -116,11 +116,11 @@ export function ExecutiveAppointmentsDetailActions({
       />
       {appointment.visit_id ? (
         <Link
-          to={`/host/register/${appointment.visit_id}`}
+          to={`/host/visitors/${appointment.visit_id}`}
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-navy-800 sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
         >
           <Edit3 size={16} aria-hidden="true" />
-          View / Edit
+          View details
         </Link>
       ) : (
         <button
@@ -129,7 +129,7 @@ export function ExecutiveAppointmentsDetailActions({
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy-900/40 px-2.5 py-2 text-xs font-semibold text-white sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm"
         >
           <Edit3 size={16} aria-hidden="true" />
-          View / Edit
+          View details
         </button>
       )}
     </div>

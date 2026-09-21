@@ -185,7 +185,7 @@ const QUICK_ACTIONS = [
     key: 'requests',
     label: 'Appointment Requests',
     icon: ClipboardList,
-    to: '/host/appointments',
+    to: '/host/approvals',
     badgeKey: 'pendingApprovals',
   },
 ];

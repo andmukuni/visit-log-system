@@ -134,6 +134,8 @@ export default function ExecutiveNewAppointmentPage() {
     navigate(returnTo);
   }, [navigate, returnTo]);
 
+  const visitId = location.state?.visitId || searchParams.get('visitId') || '';
+
   const handleSave = useCallback(async (payload) => {
     if (!payload.visitorName?.trim()) {
       toast.error('Visitor name is required.');
@@ -145,15 +147,23 @@ export default function ExecutiveNewAppointmentPage() {
     }
     setSaving(true);
     try {
-      await executiveApi.createAppointment(payload);
-      toast.success('Appointment saved.');
-      navigate('/host/appointments');
+      if (visitId) {
+        await executiveApi.rescheduleAppointment(visitId, {
+          expectedAt: payload.startAt || payload.scheduledAt || payload.expectedAt,
+          reason: payload.purpose || payload.title || 'Rescheduled by host',
+        });
+        toast.success('Appointment rescheduled.');
+      } else {
+        await executiveApi.createAppointment(payload);
+        toast.success('Appointment saved.');
+      }
+      navigate(returnTo);
     } catch (err) {
-      toast.error(err?.message || 'Could not save appointment.');
+      toast.error(err?.message || (visitId ? 'Could not reschedule appointment.' : 'Could not save appointment.'));
     } finally {
       setSaving(false);
     }
-  }, [navigate, toast]);
+  }, [navigate, returnTo, toast, visitId]);
 
   if (loading || !draft) {
     return (

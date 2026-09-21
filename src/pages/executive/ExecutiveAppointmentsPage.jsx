@@ -10,6 +10,7 @@ import ExecutiveAppointmentsTableSection, {
 import ExecutiveAppointmentsDetailSidebar, {
   ExecutiveAppointmentsDetailActions,
 } from '../../components/executive/ExecutiveAppointmentsDetailSidebar';
+import { useToast } from '../../context/ToastContext';
 import { executiveApi } from '../../utils/visitorApi';
 
 export default function ExecutiveAppointmentsPage() {
@@ -32,6 +33,7 @@ export default function ExecutiveAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const toast = useToast();
 
   const updateParams = useCallback((updates) => {
     setSearchParams((current) => {
@@ -75,11 +77,12 @@ export default function ExecutiveAppointmentsPage() {
         if (current && nextRows.some((row) => row.id === current.id)) return current;
         return nextRows[0];
       });
-    } catch {
+    } catch (err) {
       setRows([]);
       setTotal(0);
       setStats({});
       setKpis({});
+      toast.error(err.message || 'Unable to load appointments.');
     } finally {
       setLoading(false);
     }
@@ -114,6 +117,7 @@ export default function ExecutiveAppointmentsPage() {
         from: '/host/appointments',
         startAt,
         endAt,
+        visitId: appointment.visit_id,
         prefill: {
           title: appointment.title || '',
           visitorName: appointment.visitor_name || '',
@@ -141,7 +145,7 @@ export default function ExecutiveAppointmentsPage() {
     <div className="flex h-full max-h-full min-h-0 flex-col gap-2.5 overflow-hidden sm:gap-3">
       <PageHeader
         title="Appointments"
-        subtitle="View, manage and approve all appointments."
+        subtitle="View, reschedule, and cancel your appointments."
         actions={pageActions}
       />
 
@@ -217,6 +221,8 @@ export default function ExecutiveAppointmentsPage() {
         appointment={selected}
         open={mobileDetailOpen && Boolean(selected)}
         onClose={() => setMobileDetailOpen(false)}
+        onReschedule={openReschedule}
+        onCancelled={() => { void load(); }}
       />
     </div>
   );

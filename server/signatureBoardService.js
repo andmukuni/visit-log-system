@@ -131,6 +131,10 @@ export async function listSignatureRequests(pool, { siteId, page = 1, pageSize =
     `SELECT COUNT(*) AS count FROM signature_requests WHERE site_id = ? AND status IN (?, ?)`,
     [siteId, ...ACTIVE_STATUSES],
   );
+  const [[{ pendingCount }]] = await pool.query(
+    `SELECT COUNT(*) AS pendingCount FROM signature_requests WHERE site_id = ? AND status = 'pending'`,
+    [siteId],
+  );
   const [rows] = await pool.query(
     `SELECT * FROM signature_requests WHERE site_id = ? AND status IN (?, ?)
      ORDER BY created_at DESC LIMIT ? OFFSET ?`,
@@ -142,6 +146,7 @@ export async function listSignatureRequests(pool, { siteId, page = 1, pageSize =
     page: safePage,
     pageSize: safeSize,
     totalItems: Number(count),
+    pendingCount: Number(pendingCount),
   };
 }
 

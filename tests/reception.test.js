@@ -222,6 +222,16 @@ describe('reception visit action labels', () => {
     });
     assert.ok(perms.includes('reception.host.queue'));
   });
+
+  it('lets hosts and executives reschedule their own visits', () => {
+    const perms = resolveVisitRoutePermissions({
+      path: '/api/admin/visits/abc/reschedule',
+      method: 'PATCH',
+    });
+    assert.ok(perms.includes('executive.calendar'));
+    assert.ok(perms.includes('host.invite'));
+    assert.ok(perms.includes('host.visitors'));
+  });
 });
 
 describe('reception zone filters', () => {

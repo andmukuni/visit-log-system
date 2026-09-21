@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CalendarDays, Copy, ExternalLink, LogIn, QrCode, UserPlus, Users } from 'lucide-react';
 import {
   PageHeader,
@@ -60,6 +60,8 @@ function FormSection({ title, subtitle, children }) {
 export default function ReceptionCheckInPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusVisitId = searchParams.get('visit');
   const [hosts, setHosts] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [offices, setOffices] = useState([]);
@@ -73,7 +75,7 @@ export default function ReceptionCheckInPage() {
   const [expectedLoading, setExpectedLoading] = useState(false);
   const [expectedPage, setExpectedPage] = useState(1);
   const [expectedPageSize, setExpectedPageSize] = useState(10);
-  const [tab, setTab] = useState(TABS.register);
+  const [tab, setTab] = useState(() => (searchParams.get('visit') ? TABS.ready : TABS.register));
 
   const loadRef = useCallback(async () => {
     setLoading(true);
@@ -292,6 +294,7 @@ export default function ReceptionCheckInPage() {
               <GateCheckInPanel
                 mode="walk-in"
                 showPendingHeader={false}
+                highlightVisitId={focusVisitId}
                 fetchPendingVisits={(mode) => receptionApi.getCheckInAppointments(mode)}
                 pendingSubtitle="Today's appointments and gate arrivals waiting for reception"
                 pendingEmptyHint="Visitors logged at the gate (arrived at gate) and today’s appointments appear here."

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Calendar, ExternalLink, X } from 'lucide-react';
 import { Spinner, StatusBadge, VisitorTypeBadge } from '../ui';
+import { ExecutiveAppointmentsDetailActions } from './ExecutiveAppointmentsDetailSidebar';
 import { executiveApi } from '../../utils/visitorApi';
 import { formatDateTime } from '../../utils/helpers';
 import { formatLongDate } from './calendarUtils';
@@ -108,6 +109,8 @@ export default function ExecutiveAppointmentDetailPanel({
   appointment,
   open,
   onClose,
+  onReschedule,
+  onCancelled,
 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -213,7 +216,7 @@ export default function ExecutiveAppointmentDetailPanel({
           <div className="flex shrink-0 items-center gap-1">
             {appointment.visit_id && (
               <Link
-                to={`/host/register/${appointment.visit_id}`}
+                to={`/host/visitors/${appointment.visit_id}`}
                 className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                 aria-label="Open full visit page"
               >
@@ -298,6 +301,12 @@ export default function ExecutiveAppointmentDetailPanel({
             </>
           )}
         </div>
+        <ExecutiveAppointmentsDetailActions
+          appointment={appointment}
+          onReschedule={onReschedule}
+          onCancelled={onCancelled}
+          className="border-t border-gray-200"
+        />
       </aside>
     </>,
     document.body,

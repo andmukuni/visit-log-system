@@ -341,7 +341,10 @@ export function resolveVisitRoutePermissions(req) {
   if (path.includes('/approve') || path.includes('/reject')) {
     return ['host.approvals', 'security.approvals', 'station.visitors.view'];
   }
-  if (path.includes('/waiting') || path.includes('/in-meeting') || path.includes('/reschedule')) {
+  if (path.includes('/reschedule')) {
+    return ['reception.host.queue', 'executive.calendar', 'host.invite', 'host.visitors'];
+  }
+  if (path.includes('/waiting') || path.includes('/in-meeting')) {
     // Queueing to a host is reception's job, not the gate's.
     return ['reception.host.queue'];
   }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Car, Footprints, RefreshCw, User } from 'lucide-react';
+import { CalendarClock, Car, Footprints, LogIn, RefreshCw, User } from 'lucide-react';
 import { LoadingButton, VisitStatusBadge, VisitorTypeBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
 import { formatVisitHostPositionLine } from '../../components/visitors/visitorDetailUtils';
 import { formatTime, visitorDisplayName } from '../../utils/helpers';
+import { isCheckInEligible } from '../../../shared/visitCheckIn.js';
 import { visitorApi } from '../../utils/visitorApi';
 
 function FormSection({ title, subtitle, children, actions = null }) {
@@ -36,6 +37,7 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
   const isVehicle = mode === 'vehicle';
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [checkingInId, setCheckingInId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +57,19 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
     const timer = setInterval(() => { void load(); }, 60_000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const handleCheckIn = async (row) => {
+    setCheckingInId(row.id);
+    try {
+      await visitorApi.checkInVisit(row.id);
+      toast.success(`${visitorDisplayName(row, 'Visitor')} checked in.`);
+      await load();
+    } catch (err) {
+      toast.error(err.message || 'Could not check in visitor.');
+    } finally {
+      setCheckingInId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     const list = rows.filter((row) => (isVehicle ? hasVehicle(row) : !hasVehicle(row)));
@@ -128,11 +143,25 @@ export default function GateExpectedTodayPanel({ mode = 'walk-in' }) {
                       ) : null}
                     </div>
                   </div>
-                  <div className="shrink-0 text-right sm:pl-4">
-                    <p className="text-sm font-semibold text-cyan-800">{formatTime(when)}</p>
-                    <p className="text-[11px] text-navy-400">Scheduled</p>
-                    {row.pass_code ? (
-                      <p className="mt-0.5 font-mono text-[11px] text-navy-500">{row.pass_code}</p>
+                  <div className="flex shrink-0 flex-col items-end gap-2 sm:pl-4">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-cyan-800">{formatTime(when)}</p>
+                      <p className="text-[11px] text-navy-400">Scheduled</p>
+                      {row.pass_code ? (
+                        <p className="mt-0.5 font-mono text-[11px] text-navy-500">{row.pass_code}</p>
+                      ) : null}
+                    </div>
+                    {isCheckInEligible(row.status) ? (
+                      <LoadingButton
+                        type="button"
+                        size="sm"
+                        variant="reception"
+                        icon={LogIn}
+                        loading={checkingInId === row.id}
+                        onClick={() => handleCheckIn(row)}
+                      >
+                        Check in
+                      </LoadingButton>
                     ) : null}
                   </div>
                 </li>

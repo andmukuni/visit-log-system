@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
 import { hostApi } from '../../utils/visitorApi';
+import { useToast } from '../../context/ToastContext';
 import { useViewerHostId } from '../../hooks/useViewerHostId';
 
 const STATUS_OPTIONS = [
@@ -30,6 +31,7 @@ const STATUS_OPTIONS = [
 export default function HostVisitorsPage() {
   const navigate = useNavigate();
   const viewerHostId = useViewerHostId();
+  const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -42,8 +44,9 @@ export default function HostVisitorsPage() {
       if (search) params.search = search;
       if (status) params.status = status;
       setVisits(await hostApi.getVisitors(params));
-    } catch {
+    } catch (err) {
       setVisits([]);
+      toast.error(err.message || 'Unable to load visitor logs.');
     } finally {
       setLoading(false);
     }

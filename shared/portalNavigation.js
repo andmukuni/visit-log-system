@@ -124,7 +124,7 @@ export const PORTAL_NAVIGATION = {
   ],
   station: [
     { key: 'dashboard', name: 'Dashboard', to: '/station', permission: 'station.dashboard', end: true, section: 'primary' },
-    { key: 'gate-entry', name: 'Gate Checkin / Checkout', to: '/station/gate-entry', permissions: ['station.visitors.register', 'station.visitors.checkin'], section: 'primary' },
+    { key: 'gate-entry', name: 'Gate Checkin / Checkout', to: '/station/gate-entry', permissions: ['station.visitors.register', 'station.visitors.checkin', 'station.visitors.checkout'], section: 'primary' },
     { key: 'expected', name: 'Expected Arrivals', to: '/station/expected', permission: 'station.visitors.view', section: 'primary' },
     { key: 'pending', name: 'Pending Approvals', to: '/station/pending', permission: 'station.visitors.view', section: 'primary' },
     { key: 'visitor-logs', name: 'Visitor Logs', to: '/station/visitors', permission: 'station.visitors.view', section: 'primary' },
@@ -140,6 +140,7 @@ export const PORTAL_NAVIGATION = {
     { key: 'approvals', name: 'Approval Requests', to: '/host/approvals', permission: 'host.approvals', section: 'primary' },
     { key: 'on-site', name: 'Visitors On-site', to: '/host/on-site', permission: 'host.onsite', section: 'primary' },
     { key: 'contacts', name: 'My Contacts', to: '/host/contacts', permission: 'executive.contacts', section: 'primary' },
+    { key: 'notifications', name: 'Notifications', to: '/host/notifications', permissions: ['host.notifications', 'executive.dashboard'], section: 'system', badgeKey: 'notifications' },
   ],
   management: [
     { key: 'dashboard', name: 'Executive Dashboard', to: '/management', permission: 'management.dashboard', end: true, section: 'primary' },

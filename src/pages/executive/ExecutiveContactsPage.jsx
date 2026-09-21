@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader, Card, DataTable, Spinner } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
+import { useToast } from '../../context/ToastContext';
 import { executiveApi } from '../../utils/visitorApi';
 
 export default function ExecutiveContactsPage() {
+  const toast = useToast();
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -14,12 +16,13 @@ export default function ExecutiveContactsPage() {
       const params = { limit: 100 };
       if (search.trim()) params.q = search.trim();
       setContacts(await executiveApi.getContacts(params));
-    } catch {
+    } catch (err) {
       setContacts([]);
+      toast.error(err.message || 'Unable to load contacts.');
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, toast]);
 
   useEffect(() => {
     load();
@@ -68,7 +71,7 @@ export default function ExecutiveContactsPage() {
         ) : (
           <DataTable
             columns={columns}
-            rows={contacts}
+            data={contacts}
             emptyTitle="No contacts yet"
             emptyDescription="Contacts are saved automatically when you schedule appointments with guests."
           />

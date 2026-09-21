@@ -58,10 +58,11 @@ export default function ReceptionVisitorLogsPage() {
       setZoneIds(ref?.scope?.zone_ids || []);
       setZoneHostIds((ref.hosts || []).map((host) => host.id).filter(Boolean));
       setVisits(Array.isArray(rows) ? rows : []);
-    } catch {
+    } catch (err) {
       setVisits([]);
       setZoneIds([]);
       setZoneHostIds([]);
+      toast.error(err.message || 'Unable to load visitor logs.');
     } finally {
       setLoading(false);
     }

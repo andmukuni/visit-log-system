@@ -22,8 +22,9 @@ export default function HostApprovalsPage() {
     setLoading(true);
     try {
       setVisits(await hostApi.getApprovals());
-    } catch {
+    } catch (err) {
       setVisits([]);
+      toast.error(err.message || 'Unable to load approval requests.');
     } finally {
       setLoading(false);
     }

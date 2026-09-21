@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, RefreshAction, ActionToolbar } from '../../components/ui';
+import { PageHeader, RefreshAction, ActionToolbar, ConfirmDialog } from '../../components/ui';
 import ExpectedVisitorsTimeline from '../../components/reception/ExpectedVisitorsTimeline';
 import { formatExecutiveDashboardDate } from '../../components/executive/ExecutiveDashboardWidgets';
 import { periodQueryRange, normalizePeriodStart } from '../../components/executive/calendarUtils';
@@ -42,6 +42,7 @@ export default function ReceptionCalendarPage() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [checkingOutId, setCheckingOutId] = useState(null);
+  const [checkoutTarget, setCheckoutTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,19 +85,26 @@ export default function ReceptionCalendarPage() {
     setSelectedDate(normalizePeriodStart(nextDate, 'day'));
   }, []);
 
-  const handleCheckOut = useCallback(async (row) => {
+  const requestCheckOut = useCallback((row) => {
+    setCheckoutTarget(row);
+  }, []);
+
+  const handleCheckOut = useCallback(async () => {
+    const row = checkoutTarget;
+    if (!row) return;
     const visitId = row.visit_id || row.id;
     setCheckingOutId(visitId);
     try {
       await receptionApi.checkOutVisit(visitId);
       toast.success(`${row.visitor_name || 'Visitor'} checked out and marked completed.`);
+      setCheckoutTarget(null);
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not check out visitor.');
     } finally {
       setCheckingOutId(null);
     }
-  }, [load, toast]);
+  }, [checkoutTarget, load, toast]);
 
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden overscroll-none">
@@ -131,9 +139,19 @@ export default function ReceptionCalendarPage() {
         loading={loading}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
-        onCheckOut={handleCheckOut}
+        onCheckOut={requestCheckOut}
         checkingOutId={checkingOutId}
         onRefresh={load}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(checkoutTarget)}
+        onClose={() => !checkingOutId && setCheckoutTarget(null)}
+        onConfirm={handleCheckOut}
+        title="Check out this visitor?"
+        message={`${checkoutTarget?.visitor_name || 'This visitor'} will be marked checked out and the visit completed.`}
+        confirmLabel="Check out"
+        loading={Boolean(checkingOutId)}
       />
     </div>
   );

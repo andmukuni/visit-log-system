@@ -13,12 +13,17 @@ import {
   AddAction,
 } from '../../components/ui';
 import { formatDateTime } from '../../utils/helpers';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
+
+const VEHICLE_CHECKOUT_STATUSES = new Set(['on_site', 'arrived_at_gate', 'entry_approved']);
 
 export default function VehicleLogsPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { hasPermission } = useAuth();
+  const canRegister = hasPermission('station.vehicles.register');
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(null);
@@ -28,8 +33,9 @@ export default function VehicleLogsPage() {
     try {
       const rows = await visitorApi.getVehicles();
       setVehicles(rows);
-    } catch {
+    } catch (err) {
       setVehicles([]);
+      toast.error(err.message || 'Unable to load vehicle logs.');
     } finally {
       setLoading(false);
     }
@@ -70,7 +76,7 @@ export default function VehicleLogsPage() {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (_, row) => row.status === 'on_site' ? (
+      render: (_, row) => VEHICLE_CHECKOUT_STATUSES.has(row.status) ? (
         <LoadingButton
           loading={checkingOut === row.id}
           icon={LogOut}
@@ -92,7 +98,7 @@ export default function VehicleLogsPage() {
         breadcrumbs={[{ label: 'Station', to: '/station' }, { label: 'Vehicle Logs' }]}
         actions={(
           <ActionToolbar>
-            <AddAction to="/station/vehicles/new" label="New vehicle" />
+            {canRegister ? <AddAction to="/station/vehicles/new" label="New vehicle" /> : null}
             <RefreshAction onClick={load} loading={loading} />
           </ActionToolbar>
         )}

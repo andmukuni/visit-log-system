@@ -27,6 +27,57 @@ export const PORTAL_USERS = [
 ];
 
 const HOST_LINKED_ROLES = new Set(['host', 'ceo', 'dceo']);
+const RECEPTION_LINKED_ROLES = new Set(['main_reception', 'executive_reception', 'receptionist']);
+
+async function ensureReceptionistProfile(poolConn, {
+  userId,
+  name,
+  email,
+  organisationId,
+  siteId = null,
+  stationId = null,
+  departmentId = null,
+}) {
+  const [[existing]] = await poolConn.query(
+    'SELECT id, zone_id FROM receptionists WHERE user_id = ? LIMIT 1',
+    [userId],
+  );
+  const [[zone]] = await poolConn.query(
+    `SELECT z.id
+     FROM zones z
+     INNER JOIN buildings b ON b.id = z.building_id
+     INNER JOIN sites s ON s.id = b.site_id
+     WHERE s.organisation_id = ?
+     ORDER BY z.name ASC
+     LIMIT 1`,
+    [organisationId],
+  );
+  if (!zone?.id) return;
+
+  let receptionistId = existing?.id;
+  if (!receptionistId) {
+    receptionistId = generateId('rcp');
+    await poolConn.query(
+      `INSERT INTO receptionists
+        (id, organisation_id, site_id, zone_id, station_id, department_id, user_id, name, email, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [receptionistId, organisationId, siteId, zone.id, stationId, departmentId, userId, name, email],
+    );
+  } else if (!existing.zone_id) {
+    await poolConn.query('UPDATE receptionists SET zone_id = ? WHERE id = ?', [zone.id, receptionistId]);
+  }
+
+  const [[assigned]] = await poolConn.query(
+    'SELECT receptionist_id FROM receptionist_zones WHERE receptionist_id = ? AND zone_id = ? LIMIT 1',
+    [receptionistId, zone.id],
+  );
+  if (!assigned) {
+    await poolConn.query(
+      `INSERT INTO receptionist_zones (receptionist_id, zone_id, status) VALUES (?, ?, 'active')`,
+      [receptionistId, zone.id],
+    );
+  }
+}
 
 const EMPLOYEE_APPT_MARKER = '[seed:employee-schedule]';
 
@@ -77,6 +128,40 @@ function buildEmployeeAppointmentDates(from = new Date()) {
 
 function formatDateKey(date) {
   return date.toISOString().slice(0, 10);
+}
+
+export async function repairReceptionistProfiles(poolConn = pool) {
+  const [[org]] = await poolConn.query('SELECT id FROM organisations LIMIT 1');
+  if (!org?.id) return { skipped: true, reason: 'no_organisation' };
+
+  const [[site]] = await poolConn.query('SELECT id FROM sites WHERE organisation_id = ? LIMIT 1', [org.id]);
+  const [[station]] = site?.id
+    ? await poolConn.query('SELECT id FROM stations WHERE site_id = ? LIMIT 1', [site.id])
+    : [[]];
+  const [[dept]] = await poolConn.query('SELECT id FROM departments WHERE organisation_id = ? LIMIT 1', [org.id]);
+
+  const [receptionUsers] = await poolConn.query(
+    `SELECT u.id, u.name, u.email, us.department_id
+     FROM users u
+     INNER JOIN user_admin_roles uar ON uar.user_id = u.id
+     INNER JOIN admin_roles ar ON ar.id = uar.role_id
+     LEFT JOIN user_scopes us ON us.user_id = u.id
+     WHERE ar.slug IN ('main_reception', 'executive_reception', 'receptionist')`,
+  );
+
+  for (const user of receptionUsers) {
+    await ensureReceptionistProfile(poolConn, {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      organisationId: org.id,
+      siteId: site?.id || null,
+      stationId: station?.id || null,
+      departmentId: user.department_id || dept?.id || null,
+    });
+  }
+
+  return { skipped: false, repaired: receptionUsers.length };
 }
 
 export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
@@ -166,6 +251,18 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
       console.warn(`[seed] Role not found: ${portalUser.roleSlug} (${email})`);
     }
 
+    if (RECEPTION_LINKED_ROLES.has(portalUser.roleSlug)) {
+      await ensureReceptionistProfile(poolConn, {
+        userId,
+        name: portalUser.name,
+        email,
+        organisationId: org.id,
+        siteId: site?.id || null,
+        stationId: station?.id || null,
+        departmentId,
+      });
+    }
+
     if (HOST_LINKED_ROLES.has(portalUser.roleSlug)) {
       const [[existingHost]] = await poolConn.query(
         'SELECT id FROM hosts WHERE LOWER(email) = ? LIMIT 1',
@@ -180,6 +277,8 @@ export async function seedPortalUsers(poolConn = pool, { force = false } = {}) {
       }
     }
   }
+
+  await repairReceptionistProfiles(poolConn);
 
   console.log(
     `[seed] Portal users create-only (${created} created, ${skippedExisting} existing left untouched). New accounts use password: ${DEV_PORTAL_PASSWORD}`,

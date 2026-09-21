@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Car, Footprints, LogIn, Search, User } from 'lucide-react';
 import { LoadingButton, Modal, NotifyVisitorField, VisitStatusBadge } from '../../components/ui';
 import { useToast } from '../../context/ToastContext';
@@ -52,6 +52,7 @@ export default function GateCheckInPanel({
   pendingEmptyHint,
   emptyExtra,
   showPendingHeader = true,
+  highlightVisitId = '',
 }) {
   const toast = useToast();
   const isVehicle = mode === 'vehicle';
@@ -62,6 +63,7 @@ export default function GateCheckInPanel({
   const [checkingIn, setCheckingIn] = useState(null);
   const [pendingRow, setPendingRow] = useState(null);
   const [notifyVisitor, setNotifyVisitor] = useState(true);
+  const openedHighlightRef = useRef(null);
   const hasSearch = Boolean(query.trim());
 
   const loadPending = useCallback(async () => {
@@ -87,6 +89,15 @@ export default function GateCheckInPanel({
   useEffect(() => {
     onPendingCountChange?.(results.length);
   }, [results.length, onPendingCountChange]);
+
+  useEffect(() => {
+    if (!highlightVisitId || loadingPending || openedHighlightRef.current === highlightVisitId) return;
+    const match = results.find((row) => row.id === highlightVisitId);
+    if (!match) return;
+    openedHighlightRef.current = highlightVisitId;
+    setPendingRow(match);
+    setNotifyVisitor(true);
+  }, [highlightVisitId, loadingPending, results]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -245,6 +256,8 @@ export default function GateCheckInPanel({
                         }
                       }}
                       className={`grid grid-cols-1 gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5.75rem_7rem_3rem] sm:items-center sm:gap-3 ${
+                        row.id === highlightVisitId ? 'bg-cyan-50/80' : ''
+                      } ${
                         busy
                           ? 'opacity-70'
                           : rowInteractive

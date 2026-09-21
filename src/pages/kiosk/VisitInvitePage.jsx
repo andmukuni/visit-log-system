@@ -9,6 +9,7 @@ export default function VisitInvitePage() {
   const { token } = useParams();
   const toast = useToast();
   const [visit, setVisit] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -18,6 +19,7 @@ export default function VisitInvitePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await kioskApi.getInvite(token);
       setVisit(data);
@@ -32,7 +34,10 @@ export default function VisitInvitePage() {
         setConfirmed(true);
       }
     } catch (err) {
-      toast.error(err.message);
+      const status = err.status || err.statusCode;
+      setVisit(null);
+      setLoadError(status === 404 ? '' : (err.message || 'Unable to load this invitation.'));
+      if (status !== 404) toast.error(err.message || 'Unable to load this invitation.');
     } finally {
       setLoading(false);
     }
@@ -71,8 +76,19 @@ export default function VisitInvitePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-8 text-center">
         <div>
-          <h1 className="text-xl font-bold mb-2">Invitation not found</h1>
-          <p className="text-white/60">This link may have expired or already been used.</p>
+          <h1 className="text-xl font-bold mb-2">{loadError ? 'Unable to load invitation' : 'Invitation not found'}</h1>
+          <p className="text-white/60">
+            {loadError || 'This link may have expired or already been used.'}
+          </p>
+          {loadError ? (
+            <button
+              type="button"
+              onClick={load}
+              className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-gray-900"
+            >
+              Try again
+            </button>
+          ) : null}
         </div>
       </div>
     );

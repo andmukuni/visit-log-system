@@ -189,6 +189,17 @@ class ErrorBoundary extends Component {
   }
 }
 
+function HostHomePage() {
+  const { isAuthenticated, isLoading, hasPermission } = useAuth();
+  if (isLoading || !isAuthenticated) {
+    return <RouteLoader />;
+  }
+  if (hasPermission('executive.dashboard')) {
+    return <ExecutiveDashboardPage />;
+  }
+  return <HostDashboardPage />;
+}
+
 function ReceptionPortalLayout() {
   return <PortalLayout key="reception" portalId="reception" title={`${APP_NAME_SHORT} Reception`} />;
 }
@@ -591,7 +602,7 @@ export const router = createBrowserRouter([
         path: 'host',
         element: <ProtectedRoute><HostPortalLayout /></ProtectedRoute>,
         children: [
-          { index: true, element: <ExecutiveDashboardPage /> },
+          { index: true, element: <HostHomePage /> },
           { path: 'appointments', element: <ExecutiveAppointmentsPage /> },
           { path: 'appointments/new', element: <ExecutiveNewAppointmentPage /> },
           { path: 'invite', element: <HostInvitePage /> },

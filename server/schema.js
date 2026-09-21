@@ -13,6 +13,7 @@ import { ensurePlatformSchema, seedPlatformData } from './platformSchema.js';
 import { ensureAccessSchema, seedAccessData } from './accessSchema.js';
 import { ensureSettingsSchema, seedSettingsData } from './settingsSchema.js';
 import { ensureSignatureBoardSchema } from './signatureBoardService.js';
+import { repairReceptionistProfiles } from './seedPortalUsers.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -79,6 +80,7 @@ export async function bootstrapDatabase() {
   await seedDefaultAdmin();
   await seedRbac(pool);
   await seedVisitorData();
+  await repairReceptionistProfiles(pool);
   await seedOfficeHierarchy();
   await seedSecurityData();
   await seedComplianceData();

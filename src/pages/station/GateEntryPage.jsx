@@ -6,7 +6,7 @@ export default function GateEntryPage() {
       layout="kiosk"
       entryContext="gate"
       showCheckout
-      initialMode="vehicle"
+      initialMode="walk-in"
     />
   );
 }

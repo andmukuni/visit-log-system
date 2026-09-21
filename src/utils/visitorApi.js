@@ -559,6 +559,10 @@ export const executiveApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  rescheduleAppointment: (id, body = {}) => apiFetch(`/admin/visits/${id}/reschedule`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  }),
   getVisits: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/admin/executive/visits${qs ? `?${qs}` : ''}`);

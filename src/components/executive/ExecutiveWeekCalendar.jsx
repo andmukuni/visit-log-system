@@ -569,6 +569,7 @@ export default function ExecutiveWeekCalendar({
         from: '/host',
         startAt: start,
         endAt,
+        visitId: nextAppointment.visit_id,
         prefill: {
           title: nextAppointment.title || '',
           visitorName: nextAppointment.visitor_name || '',

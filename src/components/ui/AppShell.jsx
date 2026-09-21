@@ -172,7 +172,7 @@ function ShellMain({ portalId, sidebarOpen, onOpenSidebar, onCloseSidebar, isKio
             {portalId === 'admin' ? (
               <AdminOrganisationSelect compact={compactChrome} />
             ) : null}
-            {portalId === 'host' && hasPermission('host.notifications') ? (
+            {portalId === 'host' && (hasPermission('host.notifications') || hasPermission('executive.dashboard')) ? (
               <NavbarNotificationsBell compact={compactChrome} />
             ) : null}
             {portalId === 'reception' && hasPermission('reception.dashboard') ? (

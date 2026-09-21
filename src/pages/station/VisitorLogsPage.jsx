@@ -16,6 +16,8 @@ import {
 } from '../../components/ui';
 import { formatVisitHostName, getVisitHostPosition } from '../../components/visitors/visitorDetailUtils';
 import { formatDateTime, visitorDisplayName } from '../../utils/helpers';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { visitorApi } from '../../utils/visitorApi';
 
 const STATUS_OPTIONS = [
@@ -29,6 +31,9 @@ const STATUS_OPTIONS = [
 
 export default function VisitorLogsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const { hasPermission } = useAuth();
+  const canRegister = hasPermission('station.visitors.register');
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -42,8 +47,9 @@ export default function VisitorLogsPage() {
       if (status) params.status = status;
       const rows = await visitorApi.getVisits(params);
       setVisits(rows);
-    } catch {
+    } catch (err) {
       setVisits([]);
+      toast.error(err.message || 'Unable to load visitor logs.');
     } finally {
       setLoading(false);
     }
@@ -115,7 +121,7 @@ export default function VisitorLogsPage() {
         breadcrumbs={[{ label: 'Station', to: '/station' }, { label: 'Visitor Logs' }]}
         actions={(
           <ActionToolbar>
-            <AddAction to="/station/visitors/new" label="New visitor" />
+            {canRegister ? <AddAction to="/station/visitors/new" label="New visitor" /> : null}
             <RefreshAction onClick={load} loading={loading} />
           </ActionToolbar>
         )}

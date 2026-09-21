@@ -42,6 +42,7 @@ import { visitorApi } from '../../utils/visitorApi';
 import { signBoardApi } from '../../utils/signBoardApi';
 import ExecutiveVisitModal from '../reception/ExecutiveVisitModal';
 import GateCheckOutPanel from '../../pages/station/GateCheckOutPanel';
+import GateCheckInPanel from '../../pages/station/GateCheckInPanel';
 import GateExpectedTodayPanel from '../../pages/station/GateExpectedTodayPanel';
 import { LOGO_PATH } from '../../../shared/branding.js';
 
@@ -532,6 +533,7 @@ export default function GateEntryCheckInForm({
   const copy = COPY[entryContext] || COPY.gate;
   const [searchParams, setSearchParams] = useSearchParams();
   const [section, setSection] = useState(() => (showCheckout ? resolveSection(searchParams.get('tab')) : 'checkin'));
+  const [checkinKind, setCheckinKind] = useState('existing');
   const [mode, setMode] = useState(initialMode);
   useGateArrivalToasts({ enabled: showCheckout && layout === 'kiosk' });
   const [step, setStep] = useState(0);
@@ -1368,12 +1370,46 @@ export default function GateEntryCheckInForm({
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 pb-5 sm:px-8 sm:pb-6">
       <GateExpectedTodayPanel mode={mode} />
     </div>
+  ) : entryContext === 'gate' && checkinKind === 'existing' ? (
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 pb-5 sm:px-8 sm:pb-6">
+      <div className="mb-4">
+        <SegmentedControl
+          fullWidth
+          size="md"
+          value={checkinKind}
+          onChange={setCheckinKind}
+          options={[
+            { value: 'existing', label: 'Check in expected' },
+            { value: 'new', label: 'Register new' },
+          ]}
+        />
+      </div>
+      <GateCheckInPanel
+        mode={mode}
+        pendingSubtitle="Approved and expected visitors waiting at the gate"
+        pendingEmptyHint="Search a pass code, or register a new visitor if they are not booked."
+      />
+    </div>
   ) : (
     <form
       onSubmit={(e) => e.preventDefault()}
       onKeyDown={blockImplicitSubmit}
       className="flex min-h-0 flex-1 flex-col"
     >
+      {entryContext === 'gate' ? (
+        <div className="shrink-0 px-5 pt-5 sm:px-8">
+          <SegmentedControl
+            fullWidth
+            size="md"
+            value={checkinKind}
+            onChange={setCheckinKind}
+            options={[
+              { value: 'existing', label: 'Check in expected' },
+              { value: 'new', label: 'Register new' },
+            ]}
+          />
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 pb-5 sm:px-8 sm:pb-6">
         {mode === 'vehicle' ? renderVehicleStep() : renderWalkInStep()}
       </div>
@@ -1481,7 +1517,7 @@ export default function GateEntryCheckInForm({
 
       <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 pt-4 pb-4 sm:px-6 sm:pt-4 sm:pb-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-          {section === 'checkin' ? (
+          {section === 'checkin' && (entryContext !== 'gate' || checkinKind === 'new') ? (
             <div className="border-b border-navy-100 bg-navy-50/70 px-5 py-4 sm:px-8">
               <StepIndicator step={step} steps={steps} />
             </div>

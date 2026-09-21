@@ -75,6 +75,7 @@ export default function SignBoardPage() {
   const [notFound, setNotFound] = useState(false);
   const [items, setItems] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 8;
   const [loading, setLoading] = useState(true);
@@ -107,6 +108,7 @@ export default function SignBoardPage() {
       const data = await signBoardApi.getRequests(token, { page, pageSize });
       setItems(data.items);
       setTotalItems(data.totalItems);
+      setPendingCount(Number(data.pendingCount ?? data.items?.filter((row) => row.status === 'pending').length || 0));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -127,6 +129,7 @@ export default function SignBoardPage() {
     source.addEventListener('request.created', (e) => {
       const row = JSON.parse(e.data);
       setTotalItems((n) => n + 1);
+      setPendingCount((n) => n + 1);
       if (pageRef.current === 1) {
         setItems((prev) => [row, ...prev].slice(0, pageSize));
       }
@@ -135,12 +138,21 @@ export default function SignBoardPage() {
     source.addEventListener('request.updated', (e) => {
       const row = JSON.parse(e.data);
       setItems((prev) => prev.map((item) => (item.id === row.id ? row : item)));
+      if (row.status !== 'pending') {
+        setPendingCount((n) => Math.max(0, n - 1));
+      }
       setActiveRow((prev) => (prev && prev.id === row.id ? row : prev));
     });
 
     source.addEventListener('request.cancelled', (e) => {
       const { id } = JSON.parse(e.data);
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      setItems((prev) => {
+        const removed = prev.find((item) => item.id === id);
+        if (removed?.status === 'pending') {
+          setPendingCount((n) => Math.max(0, n - 1));
+        }
+        return prev.filter((item) => item.id !== id);
+      });
       setTotalItems((n) => Math.max(0, n - 1));
       setActiveRow((prev) => (prev && prev.id === id ? null : prev));
     });
@@ -178,7 +190,6 @@ export default function SignBoardPage() {
   };
 
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const pendingCount = items.filter((row) => row.status === 'pending').length;
 
   if (notFound) {
     return (
