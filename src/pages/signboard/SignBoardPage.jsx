@@ -108,7 +108,7 @@ export default function SignBoardPage() {
       const data = await signBoardApi.getRequests(token, { page, pageSize });
       setItems(data.items);
       setTotalItems(data.totalItems);
-      setPendingCount(Number(data.pendingCount ?? data.items?.filter((row) => row.status === 'pending').length || 0));
+      setPendingCount(Number(data.pendingCount ?? data.items?.filter((row) => row.status === 'pending').length ?? 0));
     } catch (err) {
       toast.error(err.message);
     } finally {
