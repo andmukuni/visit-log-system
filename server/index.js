@@ -40,6 +40,7 @@ import { waitForDatabase } from './waitForDatabase.js';
 import { retryFailedDeliveries, notifyPreArrivalReminders } from './notificationService.js';
 import { markOverdueVisits } from './visitOverdue.js';
 import { markExpiredVisits } from './visitExpire.js';
+import { autoCompleteStaleVisits } from './visitAutoComplete.js';
 import { getDeliveryConfig } from './adapters/deliveryConfig.js';
 import { APP_NAME } from '../shared/branding.js';
 
@@ -276,6 +277,7 @@ async function main() {
   startPreArrivalReminderWorker();
   startOverdueVisitWorker();
   startExpiredVisitWorker();
+  startAutoCompleteVisitWorker();
   await startHttpServer();
 }
 
@@ -339,6 +341,23 @@ function startExpiredVisitWorker() {
     }
   };
   setTimeout(tick, 12_000);
+  setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
+}
+
+function startAutoCompleteVisitWorker() {
+  const intervalMs = Number(process.env.AUTO_COMPLETE_VISIT_INTERVAL_MS || 60_000);
+  const maxHours = Number(process.env.AUTO_COMPLETE_VISIT_HOURS || 12);
+  const tick = async () => {
+    try {
+      const result = await autoCompleteStaleVisits(pool, { maxHours });
+      if (result.completed > 0) {
+        console.log(`[visits] Auto-completed ${result.completed} visit(s) after ${maxHours} hour(s)`);
+      }
+    } catch (error) {
+      console.error('[visits] Auto-complete worker error:', error.message);
+    }
+  };
+  setTimeout(tick, 15_000);
   setInterval(tick, Number.isFinite(intervalMs) && intervalMs >= 15_000 ? intervalMs : 60_000);
 }
 

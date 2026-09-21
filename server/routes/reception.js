@@ -6,7 +6,7 @@ import { notifyVisitEvent } from '../notificationService.js';
 import { requestHostApproval, isReceptionQueueVisit } from '../hostApprovalService.js';
 import { isCheckoutEligible, VISIT_CLOSED_STATUSES } from '../../shared/visitCheckout.js';
 import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
-import { exitVisitVehicles, finalizeVisitDeparture, shouldFinalizeReceptionCheckout } from '../visitExit.js';
+import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { VISIT_JOINS, VISIT_SELECT_FIELDS } from '../visitResponseService.js';
 import {
@@ -1396,12 +1396,8 @@ export function createReceptionRouter() {
         .catch((error) => console.warn('[reception.checkout] notify failed:', error.message));
       await refreshHostAvailabilityAfterVisit(pool, visit);
 
-      if (await shouldFinalizeReceptionCheckout(pool, visitId)) {
-        await finalizeVisitDeparture(pool, { visitId, actorUserId: userId, notifyVisitor: false });
-        return res.json({ ok: true, message: 'Visitor checked out and marked completed.', completed: true });
-      }
-
-      res.json({ ok: true, message: 'Visitor checked out. Confirm they have left at the gate.', completed: false });
+      await finalizeVisitDeparture(pool, { visitId, actorUserId: userId, notifyVisitor: false });
+      res.json({ ok: true, message: 'Visitor checked out and marked completed.', completed: true });
     } catch (error) {
       res.status(500).json({ ok: false, message: error.message });
     }

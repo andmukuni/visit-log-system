@@ -27,6 +27,7 @@ import { requireSecurityScopeContext, visitSecurityScopeFilterClause } from '../
 import { buildSecurityExpectedVisitorDTO } from '../visitorDto.js';
 import { auditVisitAccessDenied } from '../visitorAccessPolicy.js';
 import { markOverdueVisits } from '../visitOverdue.js';
+import { autoCompleteStaleVisits } from '../visitAutoComplete.js';
 
 /**
  * Site/building/gate scope for the logged-in security officer — elevated
@@ -156,6 +157,10 @@ export function createSecurityRouter() {
         organisationId: orgId,
         siteId: !elevated && scope.site_id ? scope.site_id : null,
       });
+      await autoCompleteStaleVisits(pool, {
+        organisationId: orgId,
+        siteId: !elevated && scope.site_id ? scope.site_id : null,
+      });
 
       res.json({
         ok: true,
@@ -254,6 +259,10 @@ export function createSecurityRouter() {
       if (!ctx.ok) return res.status(ctx.status).json({ ok: false, message: ctx.message });
 
       await markOverdueVisits(pool, {
+        organisationId: ctx.scope.organisation_id,
+        siteId: ctx.elevated ? null : ctx.scope.site_id || null,
+      });
+      await autoCompleteStaleVisits(pool, {
         organisationId: ctx.scope.organisation_id,
         siteId: ctx.elevated ? null : ctx.scope.site_id || null,
       });

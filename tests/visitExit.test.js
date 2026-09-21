@@ -67,7 +67,7 @@ describe('reception finalize after checkout', () => {
     assert.equal(await shouldFinalizeReceptionCheckout(pool, 'visit-desk-only'), true);
   });
 
-  it('keeps gate arrivals at checked_out for confirm-left', async () => {
+  it('completes the visit even when the guest arrived at a gate', async () => {
     await seedVisit(pool, {
       id: 'visit-via-gate',
       hostId: 'host-exit',
@@ -78,6 +78,6 @@ describe('reception finalize after checkout', () => {
     await writeVisitEvent(pool, { visitId: 'visit-via-gate', eventType: 'arrived_at_gate' });
 
     assert.equal(await visitHadGateArrival(pool, 'visit-via-gate'), true);
-    assert.equal(await shouldFinalizeReceptionCheckout(pool, 'visit-via-gate'), false);
+    assert.equal(await shouldFinalizeReceptionCheckout(pool, 'visit-via-gate'), true);
   });
 });

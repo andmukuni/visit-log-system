@@ -23,6 +23,7 @@ import {
 import { exitVisitVehicles, finalizeVisitDeparture } from '../visitExit.js';
 import { applyVisitCancel, VisitCancelError } from '../visitCancel.js';
 import { markOverdueVisits } from '../visitOverdue.js';
+import { autoCompleteStaleVisits } from '../visitAutoComplete.js';
 import { applyVisitReceptionCheckIn } from '../visitCheckInService.js';
 import { findWatchlistMatches } from '../watchlistService.js';
 import { notifyVisitEvent, parseAlertVisitorFlag } from '../notificationService.js';
@@ -234,6 +235,7 @@ export function createStationRouter() {
       );
 
       await markOverdueVisits(pool, { organisationId: orgId, siteId: scope.site_id || null });
+      await autoCompleteStaleVisits(pool, { organisationId: orgId, siteId: scope.site_id || null });
 
       res.json({
         ok: true,
@@ -4973,6 +4975,7 @@ export function createOrgAdminRouter() {
         orgParams,
       );
       await markOverdueVisits(pool, { organisationId: orgId || null });
+      await autoCompleteStaleVisits(pool, { organisationId: orgId || null });
       const [[overdueVisits]] = await pool.query(
         `SELECT COUNT(*) AS count FROM visits WHERE status = 'overdue'${andOrgClause}`,
         orgParams,

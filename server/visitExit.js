@@ -25,9 +25,9 @@ export async function visitHadGateArrival(pool, visitId) {
   return Boolean(event);
 }
 
-/** Reception-only visits can complete at the desk; gate arrivals wait for confirm-left. */
-export async function shouldFinalizeReceptionCheckout(pool, visitId) {
-  return !(await visitHadGateArrival(pool, visitId));
+/** Reception checkout always completes the visit, including guests who arrived at a gate. */
+export async function shouldFinalizeReceptionCheckout(_pool, _visitId) {
+  return true;
 }
 
 /** Gate-confirm the visitor has left: left_premises, then completed. */

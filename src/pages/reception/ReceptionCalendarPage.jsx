@@ -89,7 +89,7 @@ export default function ReceptionCalendarPage() {
     setCheckingOutId(visitId);
     try {
       await receptionApi.checkOutVisit(visitId);
-      toast.success(`${row.visitor_name || 'Visitor'} checked out.`);
+      toast.success(`${row.visitor_name || 'Visitor'} checked out and marked completed.`);
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not check out visitor.');

@@ -80,7 +80,7 @@ export default function ReceptionVisitorLogsPage() {
     setCheckingOutId(row.id);
     try {
       await receptionApi.checkOutVisit(row.id);
-      toast.success(`${row.full_name || 'Visitor'} checked out.`);
+      toast.success(`${row.full_name || 'Visitor'} checked out and marked completed.`);
       await load();
     } catch (err) {
       toast.error(err?.message || 'Could not check out visitor.');

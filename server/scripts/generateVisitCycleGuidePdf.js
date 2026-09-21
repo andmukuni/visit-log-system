@@ -151,9 +151,10 @@ function generate() {
     W,
   );
   y = bullets(doc, margin, y, [
-    'Reception-only visits (never logged at a gate) complete at desk checkout: checked_out then left_premises then completed in one action.',
-    'Visits that arrived at a gate stay at checked_out until gate or reception taps Confirm left.',
+    'Reception checkout always completes the visit: checked_out then left_premises then completed, including guests who arrived at a gate.',
+    'Confirm left remains available for any leftover checked_out rows from before this change.',
     'Past expected / approved bookings with a passed appointment window are marked expired by a background worker.',
+    'Any visit still open after 12 hours (from check-in, or created_at at the gate) is auto-completed: checkout, vehicles exited, then completed.',
     'Pre-arrival bookings can be cancelled by the host or reception with a confirmation dialog.',
   ], W);
 
@@ -209,7 +210,7 @@ function generate() {
   y = bullets(doc, margin, y, [
     'Host: Invite Visitor → confirm it appears on Appointments / Visitor Logs → Cancel one booking and confirm the dialog.',
     'Host: leave a second invite active so reception can receive it.',
-    'Reception: Expected tab or Visitor Logs → Check in / Receive at desk → Queue to host → Check out (confirm badge) → visit should show Completed if it never hit the gate.',
+    'Reception: Expected tab or Visitor Logs → Check in / Receive at desk → Queue to host → Check out (confirm badge) → visit should show Completed.',
     'Reception: overdue rows now offer Check out. Leftover checked_out rows offer Confirm left.',
     'Gate: Expected arrivals → check in a guest (host required) → open the visit from logs and check out or confirm left.',
     'Gate: Vehicle entry creates the visit as arrived_at_gate so it appears on occupancy and the exit list.',
@@ -220,7 +221,7 @@ function generate() {
   y = bullets(doc, margin, y, [
     'cancelled — host or reception closed a pre-arrival booking. Terminal.',
     'expired — appointment window passed and the guest never checked in. Set by the expire worker. Terminal.',
-    'checked_out — left the desk. If they came through a gate, wait for Confirm left. If they did not, the system completes the visit immediately.',
+    'checked_out — brief desk-exit step. Reception checkout immediately continues to left_premises and completed.',
     'left_premises / completed — physically off site. Occupancy and host availability are cleared.',
     'overdue — still on site past the category duration. Reception primary action is now Check out.',
     'denied is still unused. Watchlist blocks do not create a visit record yet.',
@@ -230,7 +231,8 @@ function generate() {
   y = bullets(doc, margin, y, [
     'Cancel: applyVisitCancel() in server/visitCancel.js. Host POST /admin/host/visits/:id/cancel. Reception POST /admin/reception/visits/:id/cancel. Shared helper isCancelEligible() in shared/visitCancel.js.',
     'Expire: markExpiredVisits() in server/visitExpire.js, scheduled from server/index.js (EXPIRED_VISIT_INTERVAL_MS, default 60s). Only approved / expected with a past expected_at or appointment.scheduled_at and no checked_in_at.',
-    'Reception finalize: shouldFinalizeReceptionCheckout() looks for arrived_at_gate / entered_premises events. If none, checkout calls finalizeVisitDeparture().',
+    'Auto-complete: autoCompleteStaleVisits() in server/visitAutoComplete.js. Default 12 hours (AUTO_COMPLETE_VISIT_HOURS). Also runs when security/station dashboards load.',
+    'Reception checkout always calls finalizeVisitDeparture() so the visit reaches completed at the desk.',
     'Gate vehicle insert status is arrived_at_gate (server/routes/visitor.js). Linked expected visits still transition when allowed.',
     'VISIT_TRANSITIONS no longer includes the invalid queue token. expected and entered_premises now list waiting / pending_approval (and expected can cancel).',
     'Tests: tests/visitExpire.test.js, tests/visitExit.test.js, tests/reception.test.js, tests/scope.test.js, tests/portalLock.test.js.',

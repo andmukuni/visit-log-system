@@ -81,7 +81,7 @@ const DDL = [
   `CREATE TABLE host_zones (host_id VARCHAR(90), zone_id VARCHAR(90), organisation_id VARCHAR(90), status VARCHAR(30))`,
   `CREATE TABLE receptionist_zones (receptionist_id VARCHAR(90), zone_id VARCHAR(90), organisation_id VARCHAR(90), status VARCHAR(30))`,
   `CREATE TABLE vehicles (id VARCHAR(90) PRIMARY KEY, organisation_id VARCHAR(90), visit_id VARCHAR(90),
-     plate_number VARCHAR(40), status VARCHAR(30))`,
+     plate_number VARCHAR(40), status VARCHAR(30), exited_at TIMESTAMP, exit_station_id VARCHAR(90))`,
   `CREATE TABLE expected_vehicles (id VARCHAR(90) PRIMARY KEY, visit_id VARCHAR(90), plate_number VARCHAR(40),
      status VARCHAR(30))`,
   `CREATE TABLE audit_logs (id VARCHAR(90) PRIMARY KEY, organisation_id VARCHAR(90), actor_user_id VARCHAR(90),
