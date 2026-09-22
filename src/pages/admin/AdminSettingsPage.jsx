@@ -1222,13 +1222,13 @@ export default function AdminSettingsPage() {
                         placeholder={settings?.sms?.airtel_password_set ? 'Leave blank to keep existing password' : ''}
                       />
                       <FormField
-                        label="Sender ID"
+                        label="Header ID"
                         name="sender_id"
                         value={smsForm.sender_id}
                         onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
-                        placeholder="SMS HEADER"
+                        placeholder="WGVL"
                         maxLength={11}
-                        helpText="The header approved on your Airtel account. Not the sample text SMS HEADER. Max 11 characters, no spaces."
+                        helpText="The SMS header approved on your Airtel account. Sent as headerId. Max 11 characters, no spaces."
                       />
                       <FormField
                         label="Sub-account ID"

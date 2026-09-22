@@ -45,11 +45,12 @@ describe('airtelSmsClient', () => {
     assert.equal(calls[0].init.headers.Authorization, `Basic ${Buffer.from('api-user:api-pass').toString('base64')}`);
     assert.deepEqual(JSON.parse(calls[0].init.body), {
       customerId: 'cust-1',
+      headerId: 'WGVL',
       senderId: 'WGVL',
       sourceAddress: 'WGVL',
       destinationAddress: ['260971234567'],
       message: 'Hello',
-      metaData: { subAccountId: 'sub-1' },
+      metaData: { subAccountId: 'sub-1', headerId: 'WGVL' },
     });
   });
 

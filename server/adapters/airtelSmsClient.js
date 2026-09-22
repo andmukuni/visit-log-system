@@ -33,7 +33,7 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
 
   if (!customerId) throw new Error('Airtel Customer ID is required.');
   if (!username || !password) throw new Error('Airtel username and password are required.');
-  if (!senderId) throw new Error('Airtel Sender ID is required.');
+  if (!senderId) throw new Error('Airtel Header ID is required.');
   if (!subAccountId) throw new Error('Airtel sub-account ID is required.');
   if (!destination) throw new Error('Recipient phone number is required.');
   if (!text) throw new Error('SMS message is required.');
@@ -52,11 +52,12 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
       },
       body: JSON.stringify({
         customerId,
+        headerId: senderId,
         senderId,
         sourceAddress: senderId,
         destinationAddress: [destination],
         message: text,
-        metaData: { subAccountId },
+        metaData: { subAccountId, headerId: senderId },
       }),
     },
   };

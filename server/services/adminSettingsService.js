@@ -658,7 +658,7 @@ export async function updateSmsSettings(claims, payload = {}) {
       || !next.sender_id
       || !resolveAirtelSubAccountId(next.airtel_username, next.airtel_sub_account_id)
     )) {
-      throw new Error('Airtel Customer ID, username, password, and Sender ID are required when SMS is enabled.');
+      throw new Error('Airtel Customer ID, username, password, and Header ID are required when SMS is enabled.');
     }
   }
 
