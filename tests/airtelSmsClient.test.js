@@ -8,6 +8,7 @@ const config = {
   airtel_username: 'api-user',
   airtel_password: 'api-pass',
   sender_id: 'WGVL',
+  airtel_header_id: 'hdr-9f3c2a',
   airtel_sub_account_id: 'sub-1',
   airtel_message_type: 'default',
 };
@@ -45,13 +46,25 @@ describe('airtelSmsClient', () => {
     assert.equal(calls[0].init.headers.Authorization, `Basic ${Buffer.from('api-user:api-pass').toString('base64')}`);
     assert.deepEqual(JSON.parse(calls[0].init.body), {
       customerId: 'cust-1',
-      headerId: 'WGVL',
+      headerId: 'hdr-9f3c2a',
       senderId: 'WGVL',
       sourceAddress: 'WGVL',
       destinationAddress: ['260971234567'],
       message: 'Hello',
-      metaData: { subAccountId: 'sub-1', headerId: 'WGVL' },
+      metaData: { subAccountId: 'sub-1', headerId: 'hdr-9f3c2a' },
     });
+  });
+
+  it('sends a long portal header id separately from the short sender name', () => {
+    const headerId = '675342c0-d23f-4a2e-ac59-0841c5c4d8fc';
+    const request = buildAirtelSmsRequest(
+      { ...config, airtel_header_id: headerId, sender_id: 'Wonderful' },
+      { phone: '0971234567', message: 'Hello' },
+    );
+    const body = JSON.parse(request.init.body);
+    assert.equal(body.headerId, headerId);
+    assert.equal(body.senderId, 'Wonderful');
+    assert.equal(body.metaData.headerId, headerId);
   });
 
   it('uses the username with hyphens when sub-account ID is blank', () => {

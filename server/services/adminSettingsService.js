@@ -82,6 +82,7 @@ export const DEFAULT_SMS = {
   airtel_username: '',
   airtel_password: '',
   airtel_sub_account_id: '',
+  airtel_header_id: '',
   airtel_message_type: 'default',
 };
 
@@ -280,13 +281,15 @@ function envSmsConfig() {
     const username = String(process.env.AIRTEL_USERNAME || '').trim();
     const password = String(process.env.AIRTEL_PASSWORD || '');
     const senderId = String(process.env.AIRTEL_SENDER_ID || '').trim();
+    const headerId = String(process.env.AIRTEL_HEADER_ID || '').trim() || senderId;
     const subAccountId = resolveAirtelSubAccountId(username, process.env.AIRTEL_SUB_ACCOUNT_ID);
-    if (!customerId || !username || !password || !senderId || !subAccountId) return null;
+    if (!customerId || !username || !password || !headerId || !subAccountId) return null;
     const messageType = String(process.env.AIRTEL_MESSAGE_TYPE || 'default').toLowerCase() === 'flash' ? 'flash' : 'default';
     return {
       enabled: true,
       provider: 'airtel',
       sender_id: senderId,
+      airtel_header_id: headerId,
       airtel_base_url: String(process.env.AIRTEL_SMS_BASE_URL || DEFAULT_SMS.airtel_base_url).trim(),
       airtel_customer_id: customerId,
       airtel_username: username,
@@ -320,7 +323,7 @@ export function isSmsConfigured(config) {
       config.airtel_customer_id
       && config.airtel_username
       && config.airtel_password
-      && config.sender_id
+      && (config.airtel_header_id || config.sender_id)
       && resolveAirtelSubAccountId(config.airtel_username, config.airtel_sub_account_id),
     );
   }
@@ -356,6 +359,7 @@ function maskSmsForClient(stored, effective) {
     airtel_username: stored.airtel_username || '',
     airtel_password_set: Boolean(stored.airtel_password),
     airtel_sub_account_id: stored.airtel_sub_account_id || '',
+    airtel_header_id: stored.airtel_header_id || '',
     airtel_message_type: stored.airtel_message_type === 'flash' ? 'flash' : 'default',
     configured: isSmsConfigured(effective),
     source: effective.source,
@@ -618,6 +622,7 @@ export async function updateSmsSettings(claims, payload = {}) {
   if (payload.airtel_customer_id !== undefined) next.airtel_customer_id = String(payload.airtel_customer_id || '').trim();
   if (payload.airtel_username !== undefined) next.airtel_username = String(payload.airtel_username || '').trim();
   if (payload.airtel_sub_account_id !== undefined) next.airtel_sub_account_id = String(payload.airtel_sub_account_id || '').trim();
+  if (payload.airtel_header_id !== undefined) next.airtel_header_id = String(payload.airtel_header_id || '').trim();
   if (payload.airtel_message_type !== undefined) {
     const messageType = String(payload.airtel_message_type || 'default').toLowerCase();
     if (!['default', 'flash'].includes(messageType)) {
@@ -655,7 +660,7 @@ export async function updateSmsSettings(claims, payload = {}) {
       !next.airtel_customer_id
       || !next.airtel_username
       || !next.airtel_password
-      || !next.sender_id
+      || !(next.airtel_header_id || next.sender_id)
       || !resolveAirtelSubAccountId(next.airtel_username, next.airtel_sub_account_id)
     )) {
       throw new Error('Airtel Customer ID, username, password, and Header ID are required when SMS is enabled.');

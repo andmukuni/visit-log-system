@@ -26,14 +26,16 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
   const customerId = String(config.airtel_customer_id || '').trim();
   const username = String(config.airtel_username || '').trim();
   const password = String(config.airtel_password || '');
-  const senderId = String(config.sender_id || '').trim();
+  const senderName = String(config.sender_id || '').trim();
+  const headerId = String(config.airtel_header_id || '').trim() || senderName;
+  const senderId = senderName || headerId;
   const subAccountId = resolveAirtelSubAccountId(username, config.airtel_sub_account_id);
   const destination = normalizeZmPhone(phone);
   const text = String(message || '');
 
   if (!customerId) throw new Error('Airtel Customer ID is required.');
   if (!username || !password) throw new Error('Airtel username and password are required.');
-  if (!senderId) throw new Error('Airtel Header ID is required.');
+  if (!headerId) throw new Error('Airtel Header ID is required.');
   if (!subAccountId) throw new Error('Airtel sub-account ID is required.');
   if (!destination) throw new Error('Recipient phone number is required.');
   if (!text) throw new Error('SMS message is required.');
@@ -52,12 +54,12 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
       },
       body: JSON.stringify({
         customerId,
-        headerId: senderId,
+        headerId,
         senderId,
         sourceAddress: senderId,
         destinationAddress: [destination],
         message: text,
-        metaData: { subAccountId, headerId: senderId },
+        metaData: { subAccountId, headerId },
       }),
     },
   };

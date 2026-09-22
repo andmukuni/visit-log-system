@@ -310,6 +310,7 @@ export default function AdminSettingsPage() {
         airtel_username: data?.sms?.airtel_username || '',
         airtel_password: '',
         airtel_sub_account_id: data?.sms?.airtel_sub_account_id || '',
+        airtel_header_id: data?.sms?.airtel_header_id || '',
         airtel_message_type: data?.sms?.airtel_message_type || 'default',
       });
       setPushForm({
@@ -1223,12 +1224,20 @@ export default function AdminSettingsPage() {
                       />
                       <FormField
                         label="Header ID"
+                        name="airtel_header_id"
+                        value={smsForm.airtel_header_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_header_id: e.target.value })}
+                        placeholder="Header id from Airtel technical settings"
+                        helpText="Copy the SMS header id from Airtel IQ technical settings. This is sent as headerId and is not limited to 11 characters."
+                      />
+                      <FormField
+                        label="Sender name"
                         name="sender_id"
                         value={smsForm.sender_id}
                         onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
-                        placeholder="WGVL"
+                        placeholder="Wonderful"
                         maxLength={11}
-                        helpText="The SMS header approved on your Airtel account. Sent as headerId. Max 11 characters, no spaces."
+                        helpText="The name recipients see. Max 11 characters, no spaces. Leave blank to reuse the Header ID."
                       />
                       <FormField
                         label="Sub-account ID"

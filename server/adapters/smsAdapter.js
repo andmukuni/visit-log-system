@@ -65,6 +65,7 @@ export async function sendSms({ to, body }) {
         twilio_from: envConfig.twilio.from,
         access_id: envConfig.ontech?.accessId || '',
         sender_id: envConfig.ontech?.senderId || envConfig.airtel?.senderId || '',
+        airtel_header_id: envConfig.airtel?.headerId || '',
         base_url: envConfig.ontech?.baseUrl || '',
         airtel_base_url: envConfig.airtel?.baseUrl || '',
         airtel_customer_id: envConfig.airtel?.customerId || '',

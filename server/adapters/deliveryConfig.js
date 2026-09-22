@@ -50,6 +50,7 @@ export function getSmsConfig() {
     username: process.env.AIRTEL_USERNAME || '',
     password: process.env.AIRTEL_PASSWORD || '',
     senderId: process.env.AIRTEL_SENDER_ID || '',
+    headerId: process.env.AIRTEL_HEADER_ID || '',
     subAccountId: process.env.AIRTEL_SUB_ACCOUNT_ID || '',
     messageType: String(process.env.AIRTEL_MESSAGE_TYPE || 'default').toLowerCase() === 'flash' ? 'flash' : 'default',
   };
@@ -58,7 +59,7 @@ export function getSmsConfig() {
     || (provider === 'twilio' && Boolean(twilio.accountSid && twilio.authToken && twilio.from))
     || (provider === 'ontech' && Boolean(ontech.accessId && ontech.senderId))
     || (provider === 'airtel' && Boolean(
-      airtel.customerId && airtel.username && airtel.password && airtel.senderId
+      airtel.customerId && airtel.username && airtel.password && (airtel.headerId || airtel.senderId)
       && (airtel.subAccountId || airtel.username.replace(/_/g, '-')),
     ));
 
