@@ -891,7 +891,11 @@ export default function GateEntryCheckInForm({
         checkInSignature,
         notifyVisitor: notifyChoiceEnabled ? notifyVisitor : undefined,
       });
-      toast.success(copy.successWalkIn(visit));
+      toast.success(
+        visit?.matched_existing_visitor
+          ? `Matched existing visitor. Pass code: ${visit?.pass_code || '—'}`
+          : copy.successWalkIn(visit),
+      );
       resetForm();
       onSuccess?.({ kind: 'walk-in', visit });
     } catch (err) {
@@ -928,7 +932,11 @@ export default function GateEntryCheckInForm({
         checkInSignature,
         notifyVisitor: notifyChoiceEnabled ? notifyVisitor : undefined,
       });
-      toast.success(copy.successVehicle(result));
+      toast.success(
+        result?.matchedExistingVisitor
+          ? 'Matched existing visitor and logged the vehicle.'
+          : copy.successVehicle(result),
+      );
       resetForm();
       onSuccess?.({ kind: 'vehicle', result });
     } catch (err) {

@@ -64,6 +64,7 @@ const ReceptionApprovalsPage = lazy(() => import('./pages/reception/ReceptionApp
 const ReceptionHostQueuePage = lazy(() => import('./pages/reception/ReceptionHostQueuePage'));
 const ReceptionHostAvailabilityPage = lazy(() => import('./pages/reception/ReceptionHostAvailabilityPage'));
 const ReceptionVisitorLogsPage = lazy(() => import('./pages/reception/ReceptionVisitorLogsPage'));
+const ReceptionVisitorsDirectoryPage = lazy(() => import('./pages/reception/ReceptionVisitorsDirectoryPage'));
 const ReceptionVisitDetailPage = lazy(() => import('./pages/reception/ReceptionVisitDetailPage'));
 const ReceptionOccupancyPage = lazy(() => import('./pages/reception/ReceptionOccupancyPage'));
 const ReceptionBadgesPage = lazy(() => import('./pages/reception/ReceptionBadgesPage'));
@@ -358,6 +359,7 @@ export const router = createBrowserRouter([
           { path: 'approvals', element: <ReceptionApprovalsPage /> },
           { path: 'host-queue', element: <ReceptionHostQueuePage /> },
           { path: 'hosts', element: <ReceptionHostAvailabilityPage /> },
+          { path: 'directory', element: <ReceptionVisitorsDirectoryPage /> },
           { path: 'visitors', element: <ReceptionVisitorLogsPage /> },
           { path: 'visitors/:id', element: <ReceptionVisitDetailPage /> },
           { path: 'badges', element: <ReceptionBadgesPage /> },

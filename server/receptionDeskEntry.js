@@ -6,6 +6,7 @@ import { notifyVisitEvent, parseAlertVisitorFlag } from './notificationService.j
 import { VISIT_SELECT_FIELDS, VISIT_JOINS, formatVisitResponse } from './visitResponseService.js';
 import { permissionsFromRequest } from './classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from './accessSchema.js';
+import { findOrCreateVisitor } from './visitorMatch.js';
 import { lookupNrc, getDojahIntegrationStatus, isDojahUnavailableError } from './services/dojahService.js';
 import {
   assertTargetInReceptionZones,
@@ -158,36 +159,16 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     };
   }
 
-  let visitorId = null;
-  if (phone?.trim()) {
-    const [[existing]] = await pool.query(
-      `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-      [organisationId, phone.trim()],
-    );
-    visitorId = existing?.id;
-  }
-
-  if (!visitorId) {
-    visitorId = generateId('vis');
-    await pool.query(
-      `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        visitorId,
-        organisationId,
-        resolvedFullName,
-        phone?.trim() || null,
-        email?.trim() || null,
-        company?.trim() || null,
-      ],
-    );
-  } else {
-    await pool.query(
-      `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
-       WHERE id = ?`,
-      [resolvedFullName, email?.trim() || null, company?.trim() || null, visitorId],
-    );
-  }
+  const visitorRecord = await findOrCreateVisitor(pool, {
+    organisationId,
+    fullName: resolvedFullName,
+    phone,
+    email,
+    company,
+    idType,
+    idNumber,
+  });
+  const visitorId = visitorRecord.id;
 
   await upsertVisitorContactDetails(pool, visitorId, { idType, idNumber });
 
@@ -272,10 +253,12 @@ export async function registerWalkInAtReceptionDesk(pool, req, body = {}) {
     [visitId],
   );
   const perms = permissionsFromRequest(req);
+  const data = await formatVisitResponse(pool, visit, perms, { actorUserId: userId });
+  if (visitorRecord.matched) data.matched_existing_visitor = true;
   return {
     ok: true,
     status: 201,
-    data: await formatVisitResponse(pool, visit, perms, { actorUserId: userId }),
+    data,
   };
 }
 
@@ -340,6 +323,7 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
   const visitZoneId = (hostId ? await resolveHostZoneId(pool, hostId) : null) || zoneReq.zoneIds[0];
   const plate = plateNumber.trim().toUpperCase();
   let visitId = null;
+  let matchedExistingVisitor = false;
 
   if (driverName?.trim() || hostId || purpose?.trim()) {
     const watchlistMatches = await findWatchlistMatches(pool, organisationId, {
@@ -355,28 +339,14 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
       };
     }
 
-    let visitorId = null;
-    if (phone?.trim()) {
-      const [[existing]] = await pool.query(
-        `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-        [organisationId, phone.trim()],
-      );
-      visitorId = existing?.id;
-    }
-    if (!visitorId) {
-      visitorId = generateId('vis');
-      await pool.query(
-        `INSERT INTO visitors (id, organisation_id, full_name, phone, company)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          visitorId,
-          organisationId,
-          driverName?.trim() || 'Vehicle driver',
-          phone?.trim() || null,
-          company?.trim() || null,
-        ],
-      );
-    }
+    const visitorRecord = await findOrCreateVisitor(pool, {
+      organisationId,
+      fullName: driverName?.trim() || 'Vehicle driver',
+      phone,
+      company,
+    });
+    const visitorId = visitorRecord.id;
+    matchedExistingVisitor = visitorRecord.matched;
 
     visitId = generateId('visit');
     const passCode = generatePassCode();
@@ -507,6 +477,6 @@ export async function registerVehicleAtReceptionDesk(pool, req, body = {}) {
   return {
     ok: true,
     status: 201,
-    data: { vehicle, visitId, entryId, matchedExpected: Boolean(expected?.id) },
+    data: { vehicle, visitId, entryId, matchedExpected: Boolean(expected?.id), matchedExistingVisitor },
   };
 }

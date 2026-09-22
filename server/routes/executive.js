@@ -12,6 +12,7 @@ import { requireHostContext, hostVisitFilter } from '../scopeService.js';
 import { resolveHostZoneId } from '../receptionistService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertHostContact, upsertVisitorContactDetails } from '../accessSchema.js';
+import { findExistingVisitor } from '../visitorMatch.js';
 import { visitOnSitePredicate } from '../../shared/visitOnSite.js';
 
 function normalizeNrc(value) {
@@ -499,12 +500,12 @@ export function createExecutiveRouter() {
         return res.status(400).json({ ok: false, message: 'Invalid site for this organisation.' });
       }
 
-      let visitorId = null;
-      const [[existing]] = await pool.query(
-        `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-        [ctx.scope.organisation_id, phoneNorm],
-      );
-      visitorId = existing?.id || null;
+      const existing = await findExistingVisitor(pool, {
+        organisationId: ctx.scope.organisation_id,
+        phone: phoneNorm,
+        idNumber: nrc || idNumber,
+      });
+      let visitorId = existing?.id || null;
 
       const maskedNrc = maskNrc(nrc);
       if (!visitorId) {

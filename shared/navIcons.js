@@ -33,6 +33,7 @@ export const NAV_ICONS = {
   approvals: 'Clock',
   exceptions: 'AlertTriangle',
   visitors: 'Users',
+  directory: 'IdCard',
   vehicles: 'Car',
   contractors: 'HardHat',
   watchlist: 'EyeOff',

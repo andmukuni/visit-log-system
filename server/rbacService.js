@@ -204,6 +204,7 @@ export function resolveRouteAdminPermission(req) {
   if (path.includes('/reception/request-approval')) return 'reception.approvals.track';
   if (path.includes('/reception/occupancy')) return 'reception.occupancy';
   if (path.includes('/reception/register')) return 'reception.visitors.register';
+  if (path.includes('/reception/directory')) return 'reception.visitors.view';
   // The reception visit routes are nested as /reception/visits/:id/<action>, so
   // the flat '/reception/queue-host' style checks above never matched them and
   // they fell through to the generic '/visits' handler, which demands

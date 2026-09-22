@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
   --color-navy-50: #f0f4f8;
   --color-navy-100: #d9e2ec;
@@ -136,26 +134,10 @@ html[data-portal='executive'] {
   }
 }
 
-.dark {
-  color-scheme: dark;
-  --app-bg: #0a1929;
-  --app-surface: #102a43;
-  --app-surface-muted: #243b53;
-  --app-surface-hover: #334e68;
-  --app-text: #f0f4f8;
-  --app-text-secondary: #bcccdc;
-  --app-text-muted: #829ab1;
-  --app-border: #334e68;
-  --app-border-strong: #486581;
-  --app-border-card: color-mix(in srgb, var(--app-text) 7%, transparent);
-  --app-border-card-divider: color-mix(in srgb, var(--app-text) 4%, transparent);
-  --app-input-bg: #243b53;
-  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-
 html {
   scroll-behavior: smooth;
   font-size: 87.5%; /* 14px base */
+  color-scheme: light;
 }
 
 html[data-kiosk='gate-entry'] {
@@ -177,112 +159,6 @@ body {
   background-color: var(--app-bg);
   color: var(--app-text);
   transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-/* ─── Dark mode: remap common Tailwind utility classes app-wide ─── */
-.dark .bg-white { background-color: var(--app-surface); }
-.dark .bg-navy-50 { background-color: var(--app-bg); }
-.dark .bg-navy-100 { background-color: var(--app-surface-hover); }
-.dark .bg-gray-50,
-.dark .bg-gray-100,
-.dark .bg-slate-50,
-.dark .bg-slate-100 { background-color: var(--app-surface-muted); }
-
-.dark .text-navy-900,
-.dark .text-\[\#141D45\] { color: var(--app-text); }
-.dark .text-navy-800 { color: color-mix(in srgb, var(--app-text) 94%, transparent); }
-.dark .text-navy-700 { color: var(--app-text-secondary); }
-.dark .text-navy-600,
-.dark .text-navy-500 { color: var(--app-text-muted); }
-.dark .text-gray-600,
-.dark .text-gray-700 { color: var(--app-text-secondary); }
-.dark .text-gray-400,
-.dark .text-gray-500 { color: var(--app-text-muted); }
-
-.dark .border-navy-50,
-.dark .border-navy-100,
-.dark .border-navy-200 { border-color: var(--app-border); }
-.dark .border-gray-100,
-.dark .border-gray-200 { border-color: var(--app-border); }
-
-.dark .divide-navy-100 > :not([hidden]) ~ :not([hidden]),
-.dark .divide-navy-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: var(--app-border);
-}
-
-/* Cards: softer borders in dark mode (admin + client) */
-.dark .app-card {
-  border-color: var(--app-border-card) !important;
-}
-
-.dark .app-card :is(.border-b, .border-t, .border-l, .border-r).border-navy-50,
-.dark .app-card :is(.border-b, .border-t, .border-l, .border-r).border-navy-100,
-.dark .app-card :is(.border-b, .border-t, .border-l, .border-r).border-navy-200 {
-  border-color: var(--app-border-card-divider) !important;
-}
-
-.dark .app-card.divide-navy-50 > :not([hidden]) ~ :not([hidden]),
-.dark .app-card.divide-navy-100 > :not([hidden]) ~ :not([hidden]),
-.dark .app-card.divide-navy-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: var(--app-border-card-divider);
-}
-
-.dark :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-3xl).border-navy-100:not([class*="border-emerald"]):not([class*="border-green"]):not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-cyan-2"]),
-.dark :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-3xl).border.border-navy-100:not([class*="border-emerald"]):not([class*="border-green"]):not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-cyan-2"]) {
-  border-color: var(--app-border-card);
-}
-
-.dark :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-3xl).border-navy-100 :is(.border-b, .border-t).border-navy-100,
-.dark :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-3xl).border.border-navy-100 :is(.border-b, .border-t).border-navy-100 {
-  border-color: var(--app-border-card-divider);
-}
-
-.dark .shadow-sm,
-.dark .shadow-md,
-.dark .shadow-lg,
-.dark .shadow-xl {
-  box-shadow: var(--app-shadow);
-}
-
-.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
-.dark textarea,
-.dark select {
-  background-color: var(--app-input-bg);
-  color: var(--app-text);
-  border-color: var(--app-border);
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: var(--app-text-muted);
-}
-
-.dark .hover\:bg-navy-50:hover,
-.dark .hover\:bg-navy-100:hover {
-  background-color: var(--app-surface-hover);
-}
-
-.dark .hover\:bg-gray-100:hover {
-  background-color: var(--app-surface-hover);
-}
-
-.dark .hover\:text-navy-700:hover,
-.dark .hover\:text-navy-800:hover {
-  color: var(--app-text);
-}
-
-.dark .hover\:text-gray-700:hover {
-  color: var(--app-text);
-}
-
-/* Keep intentional dark chrome (navbar, footer, admin sidebar) unchanged */
-.dark .theme-fixed,
-.dark .theme-fixed * {
-  color-scheme: dark;
-}
-
-.dark .bg-\[\#f0f2f5\] {
-  background-color: var(--app-bg) !important;
 }
 
 /* Fade-in-up animation for hero elements */

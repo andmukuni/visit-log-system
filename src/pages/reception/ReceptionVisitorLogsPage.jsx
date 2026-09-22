@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReceptionVisitRowActions from '../../components/reception/ReceptionVisitRowActions';
 import {
   PageHeader,
@@ -35,12 +35,13 @@ const STATUS_OPTIONS = [
 
 export default function ReceptionVisitorLogsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
   const [visits, setVisits] = useState([]);
   const [zoneIds, setZoneIds] = useState([]);
   const [zoneHostIds, setZoneHostIds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [status, setStatus] = useState('');
   const [checkingOutId, setCheckingOutId] = useState(null);
 
@@ -124,7 +125,7 @@ export default function ReceptionVisitorLogsPage() {
       <PageHeader
         title="Visitor Logs"
         subtitle="Only visitors and hosts in your assigned zone"
-        breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Visitors' }]}
+        breadcrumbs={[{ label: 'Reception', to: '/reception' }, { label: 'Visitor logs' }]}
         actions={(
           <ActionToolbar>
             <AddAction to="/reception/register" label="Register walk-in" />

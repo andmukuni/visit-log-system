@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../db.js';
 import { generateId } from '../visitorSchema.js';
+import { findOrCreateVisitor } from '../visitorMatch.js';
 import { getUserScope, writeAuditLog, writeVisitEvent, generatePassCode } from '../auditService.js';
 import {
   requireUserScope,
@@ -469,36 +470,16 @@ export function createStationRouter() {
         });
       }
 
-      let visitorId = null;
-      if (phone?.trim()) {
-        const [[existing]] = await pool.query(
-          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-          [organisationId, phone.trim()],
-        );
-        visitorId = existing?.id;
-      }
-
-      if (!visitorId) {
-        visitorId = generateId('vis');
-        await pool.query(
-          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            visitorId,
-            organisationId,
-            resolvedFullName,
-            phone?.trim() || null,
-            email?.trim() || null,
-            company?.trim() || null,
-          ],
-        );
-      } else {
-        await pool.query(
-          `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
-           WHERE id = ?`,
-          [resolvedFullName, email?.trim() || null, company?.trim() || null, visitorId],
-        );
-      }
+      const visitorRecord = await findOrCreateVisitor(pool, {
+        organisationId,
+        fullName: resolvedFullName,
+        phone,
+        email,
+        company,
+        idType,
+        idNumber,
+      });
+      const visitorId = visitorRecord.id;
 
       await upsertVisitorContactDetails(pool, visitorId, { idType, idNumber, actorUserId: userId, organisationId });
 
@@ -577,10 +558,9 @@ export function createStationRouter() {
         [visitId],
       );
       const perms = permissionsFromRequest(req);
-      res.status(201).json({
-        ok: true,
-        data: await formatVisitResponse(pool, visit, perms, { actorUserId: userId }),
-      });
+      const data = await formatVisitResponse(pool, visit, perms, { actorUserId: userId });
+      if (visitorRecord.matched) data.matched_existing_visitor = true;
+      res.status(201).json({ ok: true, data });
     } catch (error) {
       console.error('[gate-entry/walk-in]', error);
       res.status(500).json({ ok: false, message: error.message || 'Gate entry failed.' });
@@ -645,28 +625,13 @@ export function createStationRouter() {
           });
         }
 
-        let visitorId = null;
-        if (phone?.trim()) {
-          const [[existing]] = await pool.query(
-            `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-            [organisationId, phone.trim()],
-          );
-          visitorId = existing?.id;
-        }
-        if (!visitorId) {
-          visitorId = generateId('vis');
-          await pool.query(
-            `INSERT INTO visitors (id, organisation_id, full_name, phone, company)
-             VALUES (?, ?, ?, ?, ?)`,
-            [
-              visitorId,
-              organisationId,
-              driverName?.trim() || 'Vehicle driver',
-              phone?.trim() || null,
-              company?.trim() || null,
-            ],
-          );
-        }
+        const visitorRecord = await findOrCreateVisitor(pool, {
+          organisationId,
+          fullName: driverName?.trim() || 'Vehicle driver',
+          phone,
+          company,
+        });
+        const visitorId = visitorRecord.id;
 
         visitId = generateId('visit');
         const passCode = generatePassCode();
@@ -1124,29 +1089,16 @@ export function createVisitsRouter() {
         }
       }
 
-      let visitorId = null;
-      if (phone) {
-        const [[existing]] = await pool.query(
-          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-          [scope.organisation_id, phone.trim()],
-        );
-        visitorId = existing?.id;
-      }
-
-      if (!visitorId) {
-        visitorId = generateId('vis');
-        await pool.query(
-          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [visitorId, scope.organisation_id, fullName.trim(), phone?.trim() || null, email?.trim() || null, company?.trim() || null],
-        );
-      } else {
-        await pool.query(
-          `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
-           WHERE id = ?`,
-          [fullName.trim(), email?.trim() || null, company?.trim() || null, visitorId],
-        );
-      }
+      const visitorRecord = await findOrCreateVisitor(pool, {
+        organisationId: scope.organisation_id,
+        fullName,
+        phone,
+        email,
+        company,
+        idType,
+        idNumber,
+      });
+      const visitorId = visitorRecord.id;
 
       await upsertVisitorContactDetails(pool, visitorId, {
         idType,

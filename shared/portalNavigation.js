@@ -114,6 +114,7 @@ export const PORTAL_NAVIGATION = {
   reception: [
     { key: 'dashboard', name: 'Dashboard', to: '/reception', permission: 'reception.dashboard', end: true, section: 'primary' },
     { key: 'visitor-logs', name: 'Visitor Logs', to: '/reception/visitors', permission: 'reception.visitors.view', section: 'primary', badgeKey: 'visitor_logs' },
+    { key: 'directory', name: 'Visitors', to: '/reception/directory', permission: 'reception.visitors.view', section: 'primary' },
     { key: 'calendar', name: 'Calendar', to: '/reception/calendar', permission: 'reception.calendar', section: 'primary', isPrimaryRoute: true },
     { key: 'check-in', name: 'Check-in Desk', to: '/reception/check-in', permission: 'reception.visitors.checkin', section: 'primary' },
     { key: 'approvals', name: 'Pending Approvals', to: '/reception/approvals', permission: 'reception.approvals.track', section: 'primary' },

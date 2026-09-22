@@ -15,6 +15,7 @@ import {
 } from '../scopeService.js';
 import { assertCanAssignCategory, permissionsFromRequest } from '../classificationService.js';
 import { createAppointmentForVisit, upsertVisitorContactDetails } from '../accessSchema.js';
+import { findExistingVisitor } from '../visitorMatch.js';
 import { filterAssignableCategories } from '../../shared/visitorPrivacy.js';
 import { applyVisitListMasking } from '../visitResponseService.js';
 import { normalizeHostAvailability } from '../hostAvailability.js';
@@ -345,12 +346,12 @@ export function createHostRouter() {
         return res.status(400).json({ ok: false, message: 'Invalid site for this organisation.' });
       }
 
-      let visitorId = null;
-      const [[existing]] = await pool.query(
-        `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-        [ctx.scope.organisation_id, phoneNorm],
-      );
-      visitorId = existing?.id || null;
+      const existing = await findExistingVisitor(pool, {
+        organisationId: ctx.scope.organisation_id,
+        phone: phoneNorm,
+        idNumber: nrc || idNumber,
+      });
+      let visitorId = existing?.id || null;
 
       const maskedNrc = maskNrc(nrc);
       if (!visitorId) {

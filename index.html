@@ -17,23 +17,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>Visitors Log System</title>
-    <script>
-      (function () {
-        try {
-          var pref = localStorage.getItem('mm_color_scheme') || 'system';
-          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          var root = document.documentElement;
-          if (dark) {
-            root.classList.add('dark');
-            root.dataset.theme = 'dark';
-            root.style.colorScheme = 'dark';
-          } else {
-            root.dataset.theme = 'light';
-            root.style.colorScheme = 'light';
-          }
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

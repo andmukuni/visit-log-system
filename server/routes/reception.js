@@ -15,6 +15,7 @@ import {
   registerVehicleAtReceptionDesk,
 } from '../receptionDeskEntry.js';
 import { CHECK_IN_ELIGIBLE_STATUSES } from '../../shared/visitCheckIn.js';
+import { findOrCreateVisitor } from '../visitorMatch.js';
 import { getDojahIntegrationStatus, isDojahUnavailableError } from '../services/dojahService.js';
 import {
   getOrCreateBoardForSite,
@@ -896,6 +897,62 @@ export function createReceptionRouter() {
     res.json({ ok: true, message: `Visit updated to ${toStatus}.` });
   }
 
+  router.get('/directory', async (req, res) => {
+    try {
+      const userId = req.adminClaims?.sub;
+      const zoneReq = await requireReceptionZoneContext(pool, userId);
+      if (!zoneReq.ok) {
+        return res.status(zoneReq.status).json({ ok: false, message: zoneReq.message });
+      }
+
+      const scope = await getUserScope(pool, userId);
+      if (!scope?.organisation_id) {
+        return res.json({ ok: true, data: [] });
+      }
+
+      const zone = visitZoneFilterClause(zoneReq.zoneIds);
+      const search = String(req.query.search || req.query.q || '').trim();
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      const params = [scope.organisation_id, ...zone.params];
+      let searchSql = '';
+      if (search) {
+        searchSql = ` AND (
+          LOWER(v.full_name) LIKE ?
+          OR LOWER(COALESCE(v.phone, '')) LIKE ?
+          OR LOWER(COALESCE(v.company, '')) LIKE ?
+          OR LOWER(COALESCE(v.email, '')) LIKE ?
+        )`;
+        const like = `%${search.toLowerCase()}%`;
+        params.push(like, like, like, like);
+      }
+      params.push(limit);
+
+      const [rows] = await pool.query(
+        `SELECT v.id,
+                MAX(v.full_name) AS full_name,
+                MAX(v.phone) AS phone,
+                MAX(v.email) AS email,
+                MAX(v.company) AS company,
+                MAX(v.id_number_masked) AS id_number_masked,
+                COUNT(vis.id) AS visit_count,
+                MAX(vis.created_at) AS last_visit_at
+         FROM visitors v
+         INNER JOIN visits vis ON vis.visitor_id = v.id
+         LEFT JOIN hosts h ON h.id = vis.host_id
+         ${ZONE_OFFICE_JOINS}
+         WHERE vis.organisation_id = ?${zone.sql}${searchSql}
+         GROUP BY v.id
+         ORDER BY last_visit_at DESC
+         LIMIT ?`,
+        params,
+      );
+
+      res.json({ ok: true, data: rows });
+    } catch (error) {
+      res.status(500).json({ ok: false, message: error.message });
+    }
+  });
+
   router.get('/visits', async (req, res) => {
     try {
       const userId = req.adminClaims?.sub;
@@ -1578,36 +1635,16 @@ export function createReceptionRouter() {
         }
       }
 
-      let visitorId = null;
-      if (phone) {
-        const [[existing]] = await pool.query(
-          `SELECT id FROM visitors WHERE organisation_id = ? AND phone = ? LIMIT 1`,
-          [scope.organisation_id, phone.trim()],
-        );
-        visitorId = existing?.id || null;
-      }
-
-      if (!visitorId) {
-        visitorId = generateId('vis');
-        await pool.query(
-          `INSERT INTO visitors (id, organisation_id, full_name, phone, email, company)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            visitorId,
-            scope.organisation_id,
-            fullName.trim(),
-            phone?.trim() || null,
-            email?.trim() || null,
-            company?.trim() || null,
-          ],
-        );
-      } else {
-        await pool.query(
-          `UPDATE visitors SET full_name = ?, email = COALESCE(?, email), company = COALESCE(?, company), updated_at = NOW()
-           WHERE id = ?`,
-          [fullName.trim(), email?.trim() || null, company?.trim() || null, visitorId],
-        );
-      }
+      const visitorRecord = await findOrCreateVisitor(pool, {
+        organisationId: scope.organisation_id,
+        fullName,
+        phone,
+        email,
+        company,
+        idType,
+        idNumber,
+      });
+      const visitorId = visitorRecord.id;
 
       await upsertVisitorContactDetails(pool, visitorId, {
         idType,

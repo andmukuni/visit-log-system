@@ -585,6 +585,12 @@ export const executiveApi = {
 export const receptionApi = {
   getDashboard: () => apiFetch('/admin/reception/dashboard'),
   getNavCounts: () => apiFetch('/admin/reception/nav-counts'),
+  getDirectory: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    ).toString();
+    return apiFetch(`/admin/reception/directory${qs ? `?${qs}` : ''}`);
+  },
   getVisits: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')),
