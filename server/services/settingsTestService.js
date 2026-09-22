@@ -8,6 +8,7 @@ import {
   resolveSmtpPass,
 } from './adminSettingsService.js';
 import { sendOntechSms, normalizeZmPhone } from '../adapters/ontechSmsClient.js';
+import { sendAirtelSms } from '../adapters/airtelSmsClient.js';
 import { resolveEmailFromName } from '../adapters/emailAdapter.js';
 import { APP_NAME } from '../../shared/branding.js';
 import pool from '../db.js';
@@ -135,13 +136,15 @@ export async function testSmsConnection({ phone, message } = {}) {
     result = await sendTwilioTestSms(config, { phone: testPhone, message: testMessage });
   } else if (provider === 'ontech') {
     result = await sendOntechTestSms(config, { phone: testPhone, message: testMessage });
+  } else if (provider === 'airtel') {
+    result = await sendAirtelSms(config, { phone: testPhone, message: testMessage });
   } else {
     const err = new Error(`Unsupported SMS provider: ${provider}`);
     err.status = 400;
     throw err;
   }
 
-  const deliveredTo = provider === 'ontech' ? normalizeZmPhone(testPhone) : testPhone;
+  const deliveredTo = provider === 'ontech' || provider === 'airtel' ? normalizeZmPhone(testPhone) : testPhone;
   return {
     message: `Test SMS sent via ${result.provider} to ${deliveredTo}.`,
     provider: result.provider,

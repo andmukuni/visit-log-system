@@ -305,6 +305,12 @@ export default function AdminSettingsPage() {
         base_url: data?.sms?.base_url || 'https://bulksms.ontech.co.zm/smsservice',
         access_id: '',
         sender_id: data?.sms?.sender_id || '',
+        airtel_base_url: data?.sms?.airtel_base_url || 'https://www.airtel.co.zm/gateway/v1',
+        airtel_customer_id: data?.sms?.airtel_customer_id || '',
+        airtel_username: data?.sms?.airtel_username || '',
+        airtel_password: '',
+        airtel_sub_account_id: data?.sms?.airtel_sub_account_id || '',
+        airtel_message_type: data?.sms?.airtel_message_type || 'default',
       });
       setPushForm({
         enabled: data?.push?.enabled || false,
@@ -535,9 +541,10 @@ export default function AdminSettingsPage() {
       const payload = { ...smsForm };
       if (!payload.twilio_auth_token) delete payload.twilio_auth_token;
       if (!payload.access_id) delete payload.access_id;
+      if (!payload.airtel_password) delete payload.airtel_password;
       await settingsApi.updateSms(payload);
       toast.success('SMS settings saved.');
-      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '', access_id: '' }));
+      setSmsForm((prev) => ({ ...prev, twilio_auth_token: '', access_id: '', airtel_password: '' }));
       await load();
     } catch (err) {
       toast.error(err.message || 'Could not save SMS settings.');
@@ -1155,11 +1162,11 @@ export default function AdminSettingsPage() {
             <IntegrationStatusBanner
               icon={MessageSquare}
               title="SMS provider"
-              description="Send visit alerts and reminders via Twilio, Ontech, or console logging."
+              description="Send visit alerts through the Airtel Zambia gateway, or another configured provider."
               configured={settings?.sms?.configured}
               enabled={smsForm.enabled}
               source={settings?.sms?.source ? `${settings.sms.source} (${settings?.sms?.provider || 'console'})` : undefined}
-              envVars="SMS_* / ONTECH_* / TWILIO_*"
+              envVars="SMS_* / AIRTEL_* / ONTECH_* / TWILIO_*"
             />
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -1178,11 +1185,72 @@ export default function AdminSettingsPage() {
                     value={smsForm.provider}
                     onChange={(e) => setSmsForm({ ...smsForm, provider: e.target.value })}
                     options={[
+                      { value: 'airtel', label: 'Airtel Zambia' },
                       { value: 'console', label: 'Console (log only)' },
-                      { value: 'twilio', label: 'Twilio' },
                       { value: 'ontech', label: 'Ontech (Zambia)' },
+                      { value: 'twilio', label: 'Twilio' },
                     ]}
                   />
+
+                  {smsForm.provider === 'airtel' && (
+                    <>
+                      <FormField
+                        label="Gateway URL"
+                        name="airtel_base_url"
+                        value={smsForm.airtel_base_url}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_base_url: e.target.value })}
+                        placeholder="https://www.airtel.co.zm/gateway/v1"
+                      />
+                      <FormField
+                        label="Customer ID"
+                        name="airtel_customer_id"
+                        value={smsForm.airtel_customer_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_customer_id: e.target.value })}
+                      />
+                      <FormField
+                        label="Username"
+                        name="airtel_username"
+                        value={smsForm.airtel_username}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_username: e.target.value })}
+                      />
+                      <FormField
+                        label="Password"
+                        name="airtel_password"
+                        type="password"
+                        value={smsForm.airtel_password}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_password: e.target.value })}
+                        placeholder={settings?.sms?.airtel_password_set ? 'Leave blank to keep existing password' : ''}
+                      />
+                      <FormField
+                        label="Sender ID"
+                        name="sender_id"
+                        value={smsForm.sender_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
+                        placeholder="SMS HEADER"
+                        maxLength={11}
+                        helpText="The registered SMS header. Max 11 characters."
+                      />
+                      <FormField
+                        label="Sub-account ID"
+                        name="airtel_sub_account_id"
+                        value={smsForm.airtel_sub_account_id}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_sub_account_id: e.target.value })}
+                        helpText="Sent as metaData.subAccountId."
+                      />
+                      <FormField
+                        label="Message type"
+                        name="airtel_message_type"
+                        type="select"
+                        value={smsForm.airtel_message_type || 'default'}
+                        onChange={(e) => setSmsForm({ ...smsForm, airtel_message_type: e.target.value })}
+                        options={[
+                          { value: 'default', label: 'Default SMS' },
+                          { value: 'flash', label: 'Flash SMS' },
+                        ]}
+                        helpText="Default uses sendDefaultSms. Flash uses sendFlashSms."
+                      />
+                    </>
+                  )}
 
                   {smsForm.provider === 'twilio' && (
                     <>

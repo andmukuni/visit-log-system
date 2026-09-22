@@ -76,6 +76,12 @@ export const DEFAULT_SMS = {
   base_url: 'https://bulksms.ontech.co.zm/smsservice',
   access_id: '',
   sender_id: '',
+  airtel_base_url: 'https://www.airtel.co.zm/gateway/v1',
+  airtel_customer_id: '',
+  airtel_username: '',
+  airtel_password: '',
+  airtel_sub_account_id: '',
+  airtel_message_type: 'default',
 };
 
 const DEFAULT_PUSH = {
@@ -268,6 +274,28 @@ function envSmsConfig() {
     };
   }
 
+  if (provider === 'airtel') {
+    const customerId = String(process.env.AIRTEL_CUSTOMER_ID || '').trim();
+    const username = String(process.env.AIRTEL_USERNAME || '').trim();
+    const password = String(process.env.AIRTEL_PASSWORD || '');
+    const senderId = String(process.env.AIRTEL_SENDER_ID || '').trim();
+    const subAccountId = String(process.env.AIRTEL_SUB_ACCOUNT_ID || '').trim();
+    if (!customerId || !username || !password || !senderId || !subAccountId) return null;
+    const messageType = String(process.env.AIRTEL_MESSAGE_TYPE || 'default').toLowerCase() === 'flash' ? 'flash' : 'default';
+    return {
+      enabled: true,
+      provider: 'airtel',
+      sender_id: senderId,
+      airtel_base_url: String(process.env.AIRTEL_SMS_BASE_URL || DEFAULT_SMS.airtel_base_url).trim(),
+      airtel_customer_id: customerId,
+      airtel_username: username,
+      airtel_password: password,
+      airtel_sub_account_id: subAccountId,
+      airtel_message_type: messageType,
+      source: 'env',
+    };
+  }
+
   if (provider === 'console') {
     return { ...DEFAULT_SMS, enabled: true, provider: 'console', source: 'env' };
   }
@@ -285,6 +313,15 @@ export function isSmsConfigured(config) {
   }
   if (provider === 'ontech') {
     return Boolean(resolveOntechApiKey(config) && config.sender_id);
+  }
+  if (provider === 'airtel') {
+    return Boolean(
+      config.airtel_customer_id
+      && config.airtel_username
+      && config.airtel_password
+      && config.sender_id
+      && config.airtel_sub_account_id,
+    );
   }
   return false;
 }
@@ -313,6 +350,12 @@ function maskSmsForClient(stored, effective) {
     base_url: stored.base_url || DEFAULT_SMS.base_url,
     access_id_set: Boolean(stored.access_id),
     sender_id: stored.sender_id || '',
+    airtel_base_url: stored.airtel_base_url || DEFAULT_SMS.airtel_base_url,
+    airtel_customer_id: stored.airtel_customer_id || '',
+    airtel_username: stored.airtel_username || '',
+    airtel_password_set: Boolean(stored.airtel_password),
+    airtel_sub_account_id: stored.airtel_sub_account_id || '',
+    airtel_message_type: stored.airtel_message_type === 'flash' ? 'flash' : 'default',
     configured: isSmsConfigured(effective),
     source: effective.source,
   };
@@ -543,8 +586,8 @@ export async function updateSmsSettings(claims, payload = {}) {
   if (payload.enabled !== undefined) next.enabled = Boolean(payload.enabled);
   if (payload.provider !== undefined) {
     const provider = String(payload.provider || 'console').toLowerCase();
-    if (!['console', 'twilio', 'ontech'].includes(provider)) {
-      throw new Error('SMS provider must be console, twilio, or ontech.');
+    if (!['console', 'twilio', 'ontech', 'airtel'].includes(provider)) {
+      throw new Error('SMS provider must be console, twilio, ontech, or airtel.');
     }
     next.provider = provider;
   }
@@ -558,10 +601,31 @@ export async function updateSmsSettings(claims, payload = {}) {
   }
   if (payload.sender_id !== undefined) {
     const senderId = String(payload.sender_id || '').trim();
-    if (senderId.length > 11) {
-      throw new Error('Ontech Sender ID must be 11 characters or fewer.');
+    const providerForSender = String(payload.provider || next.provider || 'console').toLowerCase();
+    if ((providerForSender === 'ontech' || providerForSender === 'airtel') && senderId.length > 11) {
+      throw new Error('Sender ID must be 11 characters or fewer.');
     }
     next.sender_id = senderId;
+  }
+  if (payload.airtel_base_url !== undefined) {
+    const baseUrl = String(payload.airtel_base_url || DEFAULT_SMS.airtel_base_url).trim().replace(/\/$/, '');
+    if (baseUrl && !/^https?:\/\/.+/i.test(baseUrl)) {
+      throw new Error('Airtel gateway URL must start with http:// or https://.');
+    }
+    next.airtel_base_url = baseUrl || DEFAULT_SMS.airtel_base_url;
+  }
+  if (payload.airtel_customer_id !== undefined) next.airtel_customer_id = String(payload.airtel_customer_id || '').trim();
+  if (payload.airtel_username !== undefined) next.airtel_username = String(payload.airtel_username || '').trim();
+  if (payload.airtel_sub_account_id !== undefined) next.airtel_sub_account_id = String(payload.airtel_sub_account_id || '').trim();
+  if (payload.airtel_message_type !== undefined) {
+    const messageType = String(payload.airtel_message_type || 'default').toLowerCase();
+    if (!['default', 'flash'].includes(messageType)) {
+      throw new Error('Airtel message type must be default or flash.');
+    }
+    next.airtel_message_type = messageType;
+  }
+  if (payload.airtel_password !== undefined && String(payload.airtel_password) !== '') {
+    next.airtel_password = String(payload.airtel_password);
   }
   if (payload.base_url !== undefined) {
     let baseUrl = String(payload.base_url || DEFAULT_SMS.base_url).trim().replace(/\/$/, '');
@@ -585,6 +649,15 @@ export async function updateSmsSettings(claims, payload = {}) {
     }
     if (provider === 'ontech' && (!resolveOntechApiKey(next) || !next.sender_id)) {
       throw new Error('Ontech API key and Sender ID are required when SMS is enabled.');
+    }
+    if (provider === 'airtel' && (
+      !next.airtel_customer_id
+      || !next.airtel_username
+      || !next.airtel_password
+      || !next.sender_id
+      || !next.airtel_sub_account_id
+    )) {
+      throw new Error('Airtel Customer ID, username, password, Sender ID, and sub-account ID are required when SMS is enabled.');
     }
   }
 

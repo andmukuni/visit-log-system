@@ -1,5 +1,6 @@
 import { getSmsConfig } from './deliveryConfig.js';
 import { sendOntechSms } from './ontechSmsClient.js';
+import { sendAirtelSms } from './airtelSmsClient.js';
 import { getEffectiveSmsConfig, isSmsConfigured } from '../services/adminSettingsService.js';
 
 async function sendViaConsole({ to, body }) {
@@ -63,8 +64,14 @@ export async function sendSms({ to, body }) {
         twilio_auth_token: envConfig.twilio.authToken,
         twilio_from: envConfig.twilio.from,
         access_id: envConfig.ontech?.accessId || '',
-        sender_id: envConfig.ontech?.senderId || '',
+        sender_id: envConfig.ontech?.senderId || envConfig.airtel?.senderId || '',
         base_url: envConfig.ontech?.baseUrl || '',
+        airtel_base_url: envConfig.airtel?.baseUrl || '',
+        airtel_customer_id: envConfig.airtel?.customerId || '',
+        airtel_username: envConfig.airtel?.username || '',
+        airtel_password: envConfig.airtel?.password || '',
+        airtel_sub_account_id: envConfig.airtel?.subAccountId || '',
+        airtel_message_type: envConfig.airtel?.messageType || 'default',
         source: 'env',
       };
     }
@@ -77,6 +84,8 @@ export async function sendSms({ to, body }) {
       return sendViaTwilio({ to, body }, config);
     case 'ontech':
       return sendOntechSms(config, { phone: to, message: body });
+    case 'airtel':
+      return sendAirtelSms(config, { phone: to, message: body });
     case 'console':
     default:
       return sendViaConsole({ to, body });
@@ -96,7 +105,7 @@ export async function getSmsProviderStatus() {
     return {
       provider: config.provider,
       configured: config.configured,
-      from: config.twilio.from || config.ontech?.senderId || null,
+      from: config.twilio.from || config.ontech?.senderId || config.airtel?.senderId || null,
     };
   }
 }

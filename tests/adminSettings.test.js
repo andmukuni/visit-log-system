@@ -58,5 +58,25 @@ describe('admin settings defaults', () => {
       sender_id: '',
       source: 'database',
     }), false);
+    assert.equal(isSmsConfigured({
+      enabled: true,
+      provider: 'airtel',
+      airtel_customer_id: 'cust',
+      airtel_username: 'user',
+      airtel_password: 'secret',
+      sender_id: 'WGVL',
+      airtel_sub_account_id: 'sub',
+      source: 'database',
+    }), true);
+    assert.equal(isSmsConfigured({
+      enabled: true,
+      provider: 'airtel',
+      airtel_customer_id: 'cust',
+      airtel_username: 'user',
+      airtel_password: '',
+      sender_id: 'WGVL',
+      airtel_sub_account_id: 'sub',
+      source: 'database',
+    }), false);
   });
 });
