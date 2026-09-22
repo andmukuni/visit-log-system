@@ -35,36 +35,34 @@ describe('airtelSmsClient', () => {
     const calls = [];
     global.fetch = async (url, init) => {
       calls.push({ url, init });
-      return { ok: true, status: 200, text: async () => JSON.stringify({ messageId: 'msg-1' }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ messageRequestId: 'msg-1' }) };
     };
 
     const result = await sendAirtelSms(config, { phone: '0971234567', message: 'Hello' });
     assert.equal(result.provider, 'airtel');
     assert.equal(result.messageId, 'msg-1');
-    assert.equal(result.destination, '260971234567');
+    assert.equal(result.destination, '0971234567');
     assert.equal(calls[0].url, 'https://www.airtel.co.zm/gateway/v1/sendDefaultSms');
     assert.equal(calls[0].init.headers.Authorization, `Basic ${Buffer.from('api-user:api-pass').toString('base64')}`);
     assert.deepEqual(JSON.parse(calls[0].init.body), {
       customerId: 'cust-1',
-      headerId: 'hdr-9f3c2a',
       senderId: 'WGVL',
-      sourceAddress: 'WGVL',
-      destinationAddress: ['260971234567'],
+      destinationAddress: ['0971234567'],
       message: 'Hello',
-      metaData: { subAccountId: 'sub-1', headerId: 'hdr-9f3c2a' },
+      metaData: { subAccountId: 'sub-1' },
     });
   });
 
-  it('sends a long portal header id separately from the short sender name', () => {
-    const headerId = '675342c0-d23f-4a2e-ac59-0841c5c4d8fc';
-    const request = buildAirtelSmsRequest(
-      { ...config, airtel_header_id: headerId, sender_id: 'Wonderful' },
-      { phone: '0971234567', message: 'Hello' },
+  it('rejects a 200 response that does not include a message id', async () => {
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => '{}',
+    });
+    await assert.rejects(
+      () => sendAirtelSms(config, { phone: '0971234567', message: 'Hello' }),
+      /did not return a message id/,
     );
-    const body = JSON.parse(request.init.body);
-    assert.equal(body.headerId, headerId);
-    assert.equal(body.senderId, 'Wonderful');
-    assert.equal(body.metaData.headerId, headerId);
   });
 
   it('uses the username with hyphens when sub-account ID is blank', () => {
@@ -105,6 +103,6 @@ describe('airtelSmsClient', () => {
       { phone: '+260971234567', message: 'Flash' },
     );
     assert.equal(request.url, 'https://www.airtel.co.zm/gateway/v1/sendFlashSms');
-    assert.equal(request.destination, '260971234567');
+    assert.equal(request.destination, '0971234567');
   });
 });

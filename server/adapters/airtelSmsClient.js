@@ -8,6 +8,15 @@ import { normalizeZmPhone } from './ontechSmsClient.js';
 
 export const DEFAULT_AIRTEL_BASE_URL = 'https://www.airtel.co.zm/gateway/v1';
 
+/** Airtel Zambia delivers to local numbers that start with 0, such as 0973790404. */
+export function toAirtelDestination(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (/^0\d{9}$/.test(digits)) return digits;
+  const intl = normalizeZmPhone(phone);
+  if (/^260\d{9}$/.test(intl)) return `0${intl.slice(3)}`;
+  return digits;
+}
+
 /** Airtel shows the sub-account as the username, with underscores instead of hyphens. */
 export function resolveAirtelSubAccountId(username, subAccountId) {
   const explicit = String(subAccountId || '').trim();
@@ -30,7 +39,7 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
   const headerId = String(config.airtel_header_id || '').trim() || senderName;
   const senderId = senderName || headerId;
   const subAccountId = resolveAirtelSubAccountId(username, config.airtel_sub_account_id);
-  const destination = normalizeZmPhone(phone);
+  const destination = toAirtelDestination(phone);
   const text = String(message || '');
 
   if (!customerId) throw new Error('Airtel Customer ID is required.');
@@ -54,12 +63,10 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
       },
       body: JSON.stringify({
         customerId,
-        headerId,
         senderId,
-        sourceAddress: senderId,
         destinationAddress: [destination],
         message: text,
-        metaData: { subAccountId, headerId },
+        metaData: { subAccountId },
       }),
     },
   };
@@ -111,13 +118,18 @@ export async function sendAirtelSms(config, payload) {
     }
   }
   const errorMessage = typeof data?.errorMessage === 'string' ? data.errorMessage.trim() : '';
-  if (!res.ok || data?.success === false || errorMessage) {
+  const incorrectNumbers = Array.isArray(data?.incorrectNum) && data.incorrectNum.length;
+  const messageId = data?.messageRequestId || data?.messageId || data?.message_id || data?.id || data?.transactionId || data?.requestId || '';
+  if (!res.ok || data?.success === false || errorMessage || incorrectNumbers) {
     throw new Error(describeAirtelError(res.status, data, rawText));
+  }
+  if (!messageId) {
+    throw new Error('Airtel did not return a message id, so the SMS was not accepted.');
   }
 
   return {
     provider: 'airtel',
-    messageId: data?.messageId || data?.message_id || data?.id || data?.transactionId || data?.requestId || `airtel-${Date.now()}`,
+    messageId,
     destination,
     raw: data,
   };

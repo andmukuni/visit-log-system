@@ -146,7 +146,7 @@ export async function testSmsConnection({ phone, message } = {}) {
 
   const deliveredTo = provider === 'ontech' || provider === 'airtel' ? normalizeZmPhone(testPhone) : testPhone;
   return {
-    message: `Test SMS sent via ${result.provider} to ${deliveredTo}.`,
+    message: `Test SMS accepted by ${result.provider} for ${result.destination || deliveredTo}${result.messageId ? ` (${result.messageId})` : ''}.`,
     provider: result.provider,
     messageId: result.messageId,
   };
