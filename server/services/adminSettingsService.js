@@ -6,6 +6,7 @@ import {
   VISITOR_NOTIFICATION_KEYS,
   DEFAULT_SMS_ENABLED_KEYS,
 } from '../../shared/notificationCategories.js';
+import { resolveAirtelSubAccountId } from '../adapters/airtelSmsClient.js';
 
 export const SETTING_KEYS = {
   NOTIFICATIONS: 'notifications',
@@ -279,7 +280,7 @@ function envSmsConfig() {
     const username = String(process.env.AIRTEL_USERNAME || '').trim();
     const password = String(process.env.AIRTEL_PASSWORD || '');
     const senderId = String(process.env.AIRTEL_SENDER_ID || '').trim();
-    const subAccountId = String(process.env.AIRTEL_SUB_ACCOUNT_ID || '').trim();
+    const subAccountId = resolveAirtelSubAccountId(username, process.env.AIRTEL_SUB_ACCOUNT_ID);
     if (!customerId || !username || !password || !senderId || !subAccountId) return null;
     const messageType = String(process.env.AIRTEL_MESSAGE_TYPE || 'default').toLowerCase() === 'flash' ? 'flash' : 'default';
     return {
@@ -320,7 +321,7 @@ export function isSmsConfigured(config) {
       && config.airtel_username
       && config.airtel_password
       && config.sender_id
-      && config.airtel_sub_account_id,
+      && resolveAirtelSubAccountId(config.airtel_username, config.airtel_sub_account_id),
     );
   }
   return false;
@@ -655,9 +656,9 @@ export async function updateSmsSettings(claims, payload = {}) {
       || !next.airtel_username
       || !next.airtel_password
       || !next.sender_id
-      || !next.airtel_sub_account_id
+      || !resolveAirtelSubAccountId(next.airtel_username, next.airtel_sub_account_id)
     )) {
-      throw new Error('Airtel Customer ID, username, password, Sender ID, and sub-account ID are required when SMS is enabled.');
+      throw new Error('Airtel Customer ID, username, password, and Sender ID are required when SMS is enabled.');
     }
   }
 

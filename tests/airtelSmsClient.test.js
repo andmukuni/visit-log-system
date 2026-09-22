@@ -52,6 +52,17 @@ describe('airtelSmsClient', () => {
     });
   });
 
+  it('uses the username with hyphens when sub-account ID is blank', () => {
+    const request = buildAirtelSmsRequest(
+      { ...config, airtel_username: 'aaaaaaaa_bbbb_4ccc_8ddd_eeeeeeeeeeee', airtel_sub_account_id: '' },
+      { phone: '0971234567', message: 'Hello' },
+    );
+    assert.equal(
+      JSON.parse(request.init.body).metaData.subAccountId,
+      'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    );
+  });
+
   it('uses the flash endpoint when message type is flash', () => {
     const request = buildAirtelSmsRequest(
       { ...config, airtel_message_type: 'flash' },

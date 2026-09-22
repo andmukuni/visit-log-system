@@ -57,7 +57,10 @@ export function getSmsConfig() {
   const configured = provider === 'console'
     || (provider === 'twilio' && Boolean(twilio.accountSid && twilio.authToken && twilio.from))
     || (provider === 'ontech' && Boolean(ontech.accessId && ontech.senderId))
-    || (provider === 'airtel' && Boolean(airtel.customerId && airtel.username && airtel.password && airtel.senderId && airtel.subAccountId));
+    || (provider === 'airtel' && Boolean(
+      airtel.customerId && airtel.username && airtel.password && airtel.senderId
+      && (airtel.subAccountId || airtel.username.replace(/_/g, '-')),
+    ));
 
   return { provider, twilio, ontech, airtel, configured };
 }

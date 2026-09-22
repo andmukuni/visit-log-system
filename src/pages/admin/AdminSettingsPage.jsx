@@ -1235,7 +1235,7 @@ export default function AdminSettingsPage() {
                         name="airtel_sub_account_id"
                         value={smsForm.airtel_sub_account_id}
                         onChange={(e) => setSmsForm({ ...smsForm, airtel_sub_account_id: e.target.value })}
-                        helpText="Sent as metaData.subAccountId."
+                        helpText="Optional. Leave blank to use your username with hyphens instead of underscores."
                       />
                       <FormField
                         label="Message type"

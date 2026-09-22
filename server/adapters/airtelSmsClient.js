@@ -8,6 +8,13 @@ import { normalizeZmPhone } from './ontechSmsClient.js';
 
 export const DEFAULT_AIRTEL_BASE_URL = 'https://www.airtel.co.zm/gateway/v1';
 
+/** Airtel shows the sub-account as the username, with underscores instead of hyphens. */
+export function resolveAirtelSubAccountId(username, subAccountId) {
+  const explicit = String(subAccountId || '').trim();
+  if (explicit) return explicit;
+  return String(username || '').trim().replace(/_/g, '-');
+}
+
 export function resolveAirtelEndpoint(baseUrl, messageType) {
   let root = String(baseUrl || DEFAULT_AIRTEL_BASE_URL).trim().replace(/\/$/, '');
   root = root.replace(/\/send(?:Default|Flash)Sms$/i, '');
@@ -20,7 +27,7 @@ export function buildAirtelSmsRequest(config, { phone, message }) {
   const username = String(config.airtel_username || '').trim();
   const password = String(config.airtel_password || '');
   const senderId = String(config.sender_id || '').trim();
-  const subAccountId = String(config.airtel_sub_account_id || '').trim();
+  const subAccountId = resolveAirtelSubAccountId(username, config.airtel_sub_account_id);
   const destination = normalizeZmPhone(phone);
   const text = String(message || '');
 
