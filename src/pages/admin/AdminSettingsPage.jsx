@@ -1228,7 +1228,7 @@ export default function AdminSettingsPage() {
                         onChange={(e) => setSmsForm({ ...smsForm, sender_id: e.target.value })}
                         placeholder="SMS HEADER"
                         maxLength={11}
-                        helpText="The registered SMS header. Max 11 characters."
+                        helpText="The header approved on your Airtel account. Not the sample text SMS HEADER. Max 11 characters, no spaces."
                       />
                       <FormField
                         label="Sub-account ID"

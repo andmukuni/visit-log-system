@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAirtelSmsRequest, resolveAirtelEndpoint, sendAirtelSms } from '../server/adapters/airtelSmsClient.js';
+import { buildAirtelSmsRequest, describeAirtelError, resolveAirtelEndpoint, sendAirtelSms } from '../server/adapters/airtelSmsClient.js';
 
 const config = {
   airtel_base_url: 'https://www.airtel.co.zm/gateway/v1',
@@ -34,7 +34,7 @@ describe('airtelSmsClient', () => {
     const calls = [];
     global.fetch = async (url, init) => {
       calls.push({ url, init });
-      return { ok: true, status: 200, json: async () => ({ messageId: 'msg-1' }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ messageId: 'msg-1' }) };
     };
 
     const result = await sendAirtelSms(config, { phone: '0971234567', message: 'Hello' });
@@ -46,6 +46,7 @@ describe('airtelSmsClient', () => {
     assert.deepEqual(JSON.parse(calls[0].init.body), {
       customerId: 'cust-1',
       senderId: 'WGVL',
+      sourceAddress: 'WGVL',
       destinationAddress: ['260971234567'],
       message: 'Hello',
       metaData: { subAccountId: 'sub-1' },
@@ -60,6 +61,27 @@ describe('airtelSmsClient', () => {
     assert.equal(
       JSON.parse(request.init.body).metaData.subAccountId,
       'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    );
+  });
+
+  it('surfaces Airtel errorMessage and field errors', async () => {
+    assert.equal(
+      describeAirtelError(400, { errorMessage: 'Invalid sender id' }, ''),
+      'Invalid sender id',
+    );
+    assert.match(
+      describeAirtelError(400, { errors: [{ field: 'sourceAddress', defaultMessage: 'must not be null' }] }, ''),
+      /sourceAddress: must not be null/,
+    );
+
+    global.fetch = async () => ({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ errorMessage: 'Sender ID is not approved' }),
+    });
+    await assert.rejects(
+      () => sendAirtelSms(config, { phone: '0971234567', message: 'Hello' }),
+      /Sender ID is not approved/,
     );
   });
 
